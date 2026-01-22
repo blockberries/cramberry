@@ -331,6 +331,16 @@ func (w *Writer) WriteFixed64(v uint64) {
 	w.buf = wire.AppendFixed64(w.buf, v)
 }
 
+// WriteSFixed32 writes a signed fixed 32-bit value (little-endian).
+func (w *Writer) WriteSFixed32(v int32) {
+	w.WriteFixed32(uint32(v))
+}
+
+// WriteSFixed64 writes a signed fixed 64-bit value (little-endian).
+func (w *Writer) WriteSFixed64(v int64) {
+	w.WriteFixed64(uint64(v))
+}
+
 // WriteString writes a length-prefixed string.
 func (w *Writer) WriteString(s string) {
 	if !w.checkWrite() {
@@ -652,6 +662,16 @@ func SizeOfUvarint(v uint64) int {
 // SizeOfSvarint returns the encoded size of a signed varint.
 func SizeOfSvarint(v int64) int {
 	return wire.SvarintSize(v)
+}
+
+// SizeOfSFixed32 returns the encoded size of a signed fixed 32-bit value.
+func SizeOfSFixed32(_ int32) int {
+	return Fixed32Size
+}
+
+// SizeOfSFixed64 returns the encoded size of a signed fixed 64-bit value.
+func SizeOfSFixed64(_ int64) int {
+	return Fixed64Size
 }
 
 // Suppress unused import warning

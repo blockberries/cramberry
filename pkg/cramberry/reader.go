@@ -292,6 +292,16 @@ func (r *Reader) ReadFixed64() uint64 {
 	return v
 }
 
+// ReadSFixed32 reads a signed fixed 32-bit value (little-endian).
+func (r *Reader) ReadSFixed32() int32 {
+	return int32(r.ReadFixed32())
+}
+
+// ReadSFixed64 reads a signed fixed 64-bit value (little-endian).
+func (r *Reader) ReadSFixed64() int64 {
+	return int64(r.ReadFixed64())
+}
+
 // ReadFloat32 reads a 32-bit floating point number.
 func (r *Reader) ReadFloat32() float32 {
 	if !r.ensure(Float32Size) {

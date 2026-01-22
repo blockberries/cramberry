@@ -255,6 +255,62 @@ func TestReadFixed64(t *testing.T) {
 	}
 }
 
+func TestReadSFixed32(t *testing.T) {
+	tests := []struct {
+		value int32
+	}{
+		{0},
+		{1},
+		{-1},
+		{math.MinInt32},
+		{math.MaxInt32},
+		{-12345},
+		{12345},
+	}
+
+	for _, tc := range tests {
+		w := NewWriter()
+		w.WriteSFixed32(tc.value)
+
+		r := NewReader(w.Bytes())
+		got := r.ReadSFixed32()
+		if r.Err() != nil {
+			t.Errorf("ReadSFixed32 error: %v", r.Err())
+		}
+		if got != tc.value {
+			t.Errorf("ReadSFixed32 = %d, want %d", got, tc.value)
+		}
+	}
+}
+
+func TestReadSFixed64(t *testing.T) {
+	tests := []struct {
+		value int64
+	}{
+		{0},
+		{1},
+		{-1},
+		{math.MinInt64},
+		{math.MaxInt64},
+		{-123456789012345},
+		{123456789012345},
+	}
+
+	for _, tc := range tests {
+		w := NewWriter()
+		w.WriteSFixed64(tc.value)
+
+		r := NewReader(w.Bytes())
+		got := r.ReadSFixed64()
+		if r.Err() != nil {
+			t.Errorf("ReadSFixed64 error: %v", r.Err())
+		}
+		if got != tc.value {
+			t.Errorf("ReadSFixed64 = %d, want %d", got, tc.value)
+		}
+	}
+}
+
 func TestReadFloat(t *testing.T) {
 	// Test round-trip
 	w := NewWriter()

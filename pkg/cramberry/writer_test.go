@@ -243,6 +243,50 @@ func TestWriteFixed64(t *testing.T) {
 	}
 }
 
+func TestWriteSFixed32(t *testing.T) {
+	tests := []struct {
+		value    int32
+		expected []byte
+	}{
+		{0, []byte{0, 0, 0, 0}},
+		{1, []byte{1, 0, 0, 0}},
+		{-1, []byte{0xFF, 0xFF, 0xFF, 0xFF}},
+		{-2147483648, []byte{0x00, 0x00, 0x00, 0x80}}, // math.MinInt32
+		{2147483647, []byte{0xFF, 0xFF, 0xFF, 0x7F}},  // math.MaxInt32
+	}
+
+	for _, tc := range tests {
+		w := NewWriter()
+		w.WriteSFixed32(tc.value)
+		data := w.Bytes()
+		if !bytes.Equal(data, tc.expected) {
+			t.Errorf("WriteSFixed32(%d) = %v, want %v", tc.value, data, tc.expected)
+		}
+	}
+}
+
+func TestWriteSFixed64(t *testing.T) {
+	tests := []struct {
+		value    int64
+		expected []byte
+	}{
+		{0, []byte{0, 0, 0, 0, 0, 0, 0, 0}},
+		{1, []byte{1, 0, 0, 0, 0, 0, 0, 0}},
+		{-1, []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}},
+		{-9223372036854775808, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80}}, // math.MinInt64
+		{9223372036854775807, []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F}},  // math.MaxInt64
+	}
+
+	for _, tc := range tests {
+		w := NewWriter()
+		w.WriteSFixed64(tc.value)
+		data := w.Bytes()
+		if !bytes.Equal(data, tc.expected) {
+			t.Errorf("WriteSFixed64(%d) = %v, want %v", tc.value, data, tc.expected)
+		}
+	}
+}
+
 func TestWriteFloat32(t *testing.T) {
 	w := NewWriter()
 	w.WriteFloat32(3.14)
@@ -646,6 +690,8 @@ func TestSizeOf(t *testing.T) {
 		{"Uvarint_max", SizeOfUvarint(math.MaxUint64), 10},
 		{"Svarint_0", SizeOfSvarint(0), 1},
 		{"Svarint_neg", SizeOfSvarint(-1000000), 3},
+		{"SFixed32", SizeOfSFixed32(-1), 4},
+		{"SFixed64", SizeOfSFixed64(-1), 8},
 	}
 
 	for _, tc := range tests {
