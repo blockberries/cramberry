@@ -192,6 +192,12 @@ func encodeMap(w *Writer, v reflect.Value) error {
 		return w.Err()
 	}
 
+	// Validate that the key type is supported for encoding
+	keyType := v.Type().Key()
+	if !isValidMapKeyType(keyType) {
+		return NewEncodeError("unsupported map key type "+keyType.String()+" in "+v.Type().String()+"; map keys must be string, integer, float, or bool", nil)
+	}
+
 	keys := v.MapKeys()
 	n := len(keys)
 	w.WriteMapHeader(n)
@@ -452,4 +458,26 @@ func sortMapKeys(keys []reflect.Value) []reflect.Value {
 		})
 	}
 	return keys
+}
+
+// isValidMapKeyType checks if a type is valid as a map key for Cramberry encoding.
+// Valid key types are: string, all integer types, float types, and bool.
+// Complex types, slices, maps, arrays, structs, pointers, and interfaces are not
+// supported as map keys because they cannot be reliably serialized and sorted
+// for deterministic encoding.
+func isValidMapKeyType(t reflect.Type) bool {
+	switch t.Kind() {
+	case reflect.String:
+		return true
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return true
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return true
+	case reflect.Float32, reflect.Float64:
+		return true
+	case reflect.Bool:
+		return true
+	default:
+		return false
+	}
 }

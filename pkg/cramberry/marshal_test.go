@@ -760,3 +760,73 @@ func TestPolymorphicUnregisteredType(t *testing.T) {
 		t.Error("Expected error for unregistered type")
 	}
 }
+
+func TestMarshalMapKeyValidation(t *testing.T) {
+	// Valid key types should succeed
+	t.Run("string keys", func(t *testing.T) {
+		m := map[string]int{"a": 1, "b": 2}
+		_, err := Marshal(m)
+		if err != nil {
+			t.Errorf("string keys should be valid: %v", err)
+		}
+	})
+
+	t.Run("int keys", func(t *testing.T) {
+		m := map[int]string{1: "a", 2: "b"}
+		_, err := Marshal(m)
+		if err != nil {
+			t.Errorf("int keys should be valid: %v", err)
+		}
+	})
+
+	t.Run("int32 keys", func(t *testing.T) {
+		m := map[int32]string{1: "a", 2: "b"}
+		_, err := Marshal(m)
+		if err != nil {
+			t.Errorf("int32 keys should be valid: %v", err)
+		}
+	})
+
+	t.Run("bool keys", func(t *testing.T) {
+		m := map[bool]string{true: "yes", false: "no"}
+		_, err := Marshal(m)
+		if err != nil {
+			t.Errorf("bool keys should be valid: %v", err)
+		}
+	})
+
+	t.Run("float64 keys", func(t *testing.T) {
+		m := map[float64]string{1.5: "a", 2.5: "b"}
+		_, err := Marshal(m)
+		if err != nil {
+			t.Errorf("float64 keys should be valid: %v", err)
+		}
+	})
+
+	// Invalid key types should fail
+	t.Run("struct keys", func(t *testing.T) {
+		type Key struct{ X int }
+		m := map[Key]string{{X: 1}: "a", {X: 2}: "b"}
+		_, err := Marshal(m)
+		if err == nil {
+			t.Error("struct keys should be rejected")
+		}
+	})
+
+	t.Run("array keys", func(t *testing.T) {
+		m := map[[2]int]string{{1, 2}: "a", {3, 4}: "b"}
+		_, err := Marshal(m)
+		if err == nil {
+			t.Error("array keys should be rejected")
+		}
+	})
+
+	t.Run("pointer keys", func(t *testing.T) {
+		a, b := 1, 2
+		m := map[*int]string{&a: "a", &b: "b"}
+		_, err := Marshal(m)
+		if err == nil {
+			t.Error("pointer keys should be rejected")
+		}
+	})
+}
