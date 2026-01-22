@@ -1,5 +1,11 @@
 /**
  * Wire types used in the Cramberry encoding format.
+ *
+ * Note: Wire types 3 and 4 are intentionally skipped and reserved.
+ * In Protocol Buffers, these values were used for the deprecated
+ * "start group" (3) and "end group" (4) wire types. Cramberry skips
+ * these values to maintain partial compatibility with protobuf tooling
+ * and to reserve them for potential future use.
  */
 export enum WireType {
   /** Variable-length unsigned integer (LEB128) */
@@ -8,6 +14,7 @@ export enum WireType {
   Fixed64 = 1,
   /** Length-prefixed bytes */
   Bytes = 2,
+  // Wire types 3 and 4 are reserved (see enum documentation)
   /** Fixed 32-bit value (little-endian) */
   Fixed32 = 5,
   /** ZigZag-encoded signed integer */

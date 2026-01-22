@@ -32,7 +32,12 @@ const (
 	WireTypeRef WireType = 7
 )
 
-// Wire type 3 and 4 are reserved (used in older protobuf for deprecated groups).
+// Note on wire type values:
+// Wire types 3 and 4 are intentionally skipped and reserved. In Protocol Buffers,
+// these values were used for the deprecated "start group" (3) and "end group" (4)
+// wire types. Cramberry skips these values to maintain partial compatibility with
+// protobuf tooling and to reserve them for potential future use. Any data encoded
+// with wire types 3 or 4 should be treated as invalid.
 
 // String returns a human-readable name for the wire type.
 func (w WireType) String() string {
