@@ -2226,7 +2226,7 @@ const file_benchmark_schemas_messages_proto_rawDesc = "" +
 	"\x12EVENT_TYPE_UPDATED\x10\x01\x12\x16\n" +
 	"\x12EVENT_TYPE_DELETED\x10\x02\x12\x15\n" +
 	"\x11EVENT_TYPE_VIEWED\x10\x03\x12\x15\n" +
-	"\x11EVENT_TYPE_SHARED\x10\x04B:Z8github.com/cramberry/cramberry-go/benchmark/gen/protobufb\x06proto3"
+	"\x11EVENT_TYPE_SHARED\x10\x04B:Z8github.com/blockberries/cramberry/benchmark/gen/protobufb\x06proto3"
 
 var (
 	file_benchmark_schemas_messages_proto_rawDescOnce sync.Once

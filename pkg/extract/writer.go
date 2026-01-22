@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cramberry/cramberry-go/pkg/schema"
+	"github.com/blockberries/cramberry/pkg/schema"
 )
 
 // Extractor extracts schemas from Go packages.

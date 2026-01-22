@@ -179,7 +179,7 @@ cramberry/
 
 #### Task 1.1.2: Go Module Initialization
 ```bash
-go mod init github.com/cramberry/cramberry-go
+go mod init github.com/blockberries/cramberry
 ```
 
 #### Task 1.1.3: Makefile Setup
@@ -3548,7 +3548,7 @@ git tag v1.0.0
 git push origin v1.0.0
 
 # Module will be available at
-# github.com/cramberry/cramberry-go
+# github.com/blockberries/cramberry
 ```
 
 #### Task 12.3.2: npm Package
@@ -3590,7 +3590,7 @@ Build matrix:
 
 ```bash
 # Go install
-go install github.com/cramberry/cramberry-go/cmd/cramberry@latest
+go install github.com/blockberries/cramberry/cmd/cramberry@latest
 
 # Homebrew
 brew install cramberry/tap/cramberry

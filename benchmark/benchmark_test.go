@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	cramgen "github.com/cramberry/cramberry-go/benchmark/gen/cramberry"
-	pb "github.com/cramberry/cramberry-go/benchmark/gen/protobuf"
+	cramgen "github.com/blockberries/cramberry/benchmark/gen/cramberry"
+	pb "github.com/blockberries/cramberry/benchmark/gen/protobuf"
 	"google.golang.org/protobuf/proto"
 )
 

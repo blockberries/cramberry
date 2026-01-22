@@ -4,7 +4,7 @@
 package cramgen
 
 import (
-	"github.com/cramberry/cramberry-go/pkg/cramberry"
+	"github.com/blockberries/cramberry/pkg/cramberry"
 )
 
 

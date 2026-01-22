@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/cramberry/cramberry-go/pkg/schema"
+	"github.com/blockberries/cramberry/pkg/schema"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )

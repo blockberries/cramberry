@@ -3,7 +3,7 @@ package cramberry
 import (
 	"unsafe"
 
-	"github.com/cramberry/cramberry-go/internal/wire"
+	"github.com/blockberries/cramberry/internal/wire"
 )
 
 // Reader provides efficient binary decoding with position tracking.

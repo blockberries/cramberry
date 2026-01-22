@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/cramberry/cramberry-go/pkg/cramberry"
+	"github.com/blockberries/cramberry/pkg/cramberry"
 )
 
 // Shape is an interface for different shapes.

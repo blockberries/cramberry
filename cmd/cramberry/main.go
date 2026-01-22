@@ -49,10 +49,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cramberry/cramberry-go/pkg/codegen"
-	"github.com/cramberry/cramberry-go/pkg/cramberry"
-	"github.com/cramberry/cramberry-go/pkg/extract"
-	"github.com/cramberry/cramberry-go/pkg/schema"
+	"github.com/blockberries/cramberry/pkg/codegen"
+	"github.com/blockberries/cramberry/pkg/cramberry"
+	"github.com/blockberries/cramberry/pkg/extract"
+	"github.com/blockberries/cramberry/pkg/schema"
 )
 
 func main() {

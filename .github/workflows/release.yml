@@ -63,9 +63,9 @@ jobs:
 
             echo "Building for $GOOS/$GOARCH..."
             GOOS=$GOOS GOARCH=$GOARCH go build \
-              -ldflags "-X github.com/cramberry/cramberry-go/pkg/cramberry.Version=${{ steps.version.outputs.VERSION }} \
-                        -X github.com/cramberry/cramberry-go/pkg/cramberry.GitCommit=${{ github.sha }} \
-                        -X github.com/cramberry/cramberry-go/pkg/cramberry.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              -ldflags "-X github.com/blockberries/cramberry/pkg/cramberry.Version=${{ steps.version.outputs.VERSION }} \
+                        -X github.com/blockberries/cramberry/pkg/cramberry.GitCommit=${{ github.sha }} \
+                        -X github.com/blockberries/cramberry/pkg/cramberry.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
               -o "dist/${output}" \
               ./cmd/cramberry
           done

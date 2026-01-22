@@ -3,7 +3,7 @@
 
 package benchmark;
 
-option go_package = "github.com/cramberry/cramberry-go/benchmark/gen/cramberry";
+option go_package = "github.com/blockberries/cramberry/benchmark/gen/cramberry";
 
 // ========================================
 // Enums

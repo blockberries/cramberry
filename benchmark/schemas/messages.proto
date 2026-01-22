@@ -5,7 +5,7 @@ syntax = "proto3";
 
 package benchmark;
 
-option go_package = "github.com/cramberry/cramberry-go/benchmark/gen/protobuf";
+option go_package = "github.com/blockberries/cramberry/benchmark/gen/protobuf";
 
 // ========================================
 // Enums

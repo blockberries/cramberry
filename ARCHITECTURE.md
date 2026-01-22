@@ -911,7 +911,7 @@ package models
 
 import (
     "io"
-    cramberry "github.com/cramberry/cramberry-go"
+    cramberry "github.com/blockberries/cramberry"
 )
 
 // --- Type: Order ---
@@ -1459,7 +1459,7 @@ Supported compression algorithms:
 ### 11.1 Package Structure
 
 ```
-github.com/cramberry/cramberry-go/
+github.com/blockberries/cramberry/
 ├── cramberry.go           # Core types and interfaces
 ├── registry.go            # Type registration
 ├── writer.go              # Encoding implementation

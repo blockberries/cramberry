@@ -5,7 +5,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/cramberry/cramberry-go/internal/wire"
+	"github.com/blockberries/cramberry/internal/wire"
 )
 
 // StreamWriter writes Cramberry-encoded data to an io.Writer.

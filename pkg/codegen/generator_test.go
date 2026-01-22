@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cramberry/cramberry-go/pkg/schema"
+	"github.com/blockberries/cramberry/pkg/schema"
 )
 
 func TestGoGeneratorSimpleMessage(t *testing.T) {
@@ -335,12 +335,12 @@ func TestGoGeneratorOptions(t *testing.T) {
 
 func TestCaseConversions(t *testing.T) {
 	tests := []struct {
-		input    string
-		pascal   string
-		camel    string
-		snake    string
-		upper    string
-		kebab    string
+		input  string
+		pascal string
+		camel  string
+		snake  string
+		upper  string
+		kebab  string
 	}{
 		{"foo", "Foo", "foo", "foo", "FOO", "foo"},
 		{"fooBar", "FooBar", "fooBar", "foo_bar", "FOO_BAR", "foo-bar"},

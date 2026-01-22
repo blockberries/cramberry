@@ -121,7 +121,7 @@ func TestExtractorConfig(t *testing.T) {
 
 // TestExtractToString tests extraction from a simple test package.
 func TestExtractToString(t *testing.T) {
-	result, err := ExtractToString([]string{"github.com/cramberry/cramberry-go/pkg/extract/testdata"}, DefaultConfig())
+	result, err := ExtractToString([]string{"github.com/blockberries/cramberry/pkg/extract/testdata"}, DefaultConfig())
 	if err != nil {
 		t.Fatalf("ExtractToString() error = %v", err)
 	}
@@ -158,7 +158,7 @@ func TestExtractWithPrivate(t *testing.T) {
 		IncludePrivate:   true,
 		DetectInterfaces: true,
 	}
-	result, err := ExtractToString([]string{"github.com/cramberry/cramberry-go/pkg/extract/testdata"}, cfg)
+	result, err := ExtractToString([]string{"github.com/blockberries/cramberry/pkg/extract/testdata"}, cfg)
 	if err != nil {
 		t.Fatalf("ExtractToString() error = %v", err)
 	}
@@ -175,7 +175,7 @@ func TestExtractWithPatterns(t *testing.T) {
 		IncludePatterns:  []string{"User*"},
 		DetectInterfaces: true,
 	}
-	result, err := ExtractToString([]string{"github.com/cramberry/cramberry-go/pkg/extract/testdata"}, cfg)
+	result, err := ExtractToString([]string{"github.com/blockberries/cramberry/pkg/extract/testdata"}, cfg)
 	if err != nil {
 		t.Fatalf("ExtractToString() error = %v", err)
 	}
@@ -195,7 +195,7 @@ func TestExtractWithExclude(t *testing.T) {
 		ExcludePatterns:  []string{"Admin"},
 		DetectInterfaces: true,
 	}
-	result, err := ExtractToString([]string{"github.com/cramberry/cramberry-go/pkg/extract/testdata"}, cfg)
+	result, err := ExtractToString([]string{"github.com/blockberries/cramberry/pkg/extract/testdata"}, cfg)
 	if err != nil {
 		t.Fatalf("ExtractToString() error = %v", err)
 	}
@@ -214,7 +214,7 @@ func TestExtractor(t *testing.T) {
 	extractor := NewExtractor(DefaultConfig())
 	cfg := &ExtractorConfig{
 		Config:   DefaultConfig(),
-		Patterns: []string{"github.com/cramberry/cramberry-go/pkg/extract/testdata"},
+		Patterns: []string{"github.com/blockberries/cramberry/pkg/extract/testdata"},
 		Package:  "custompackage",
 	}
 
@@ -264,7 +264,7 @@ func TestParseTypeIDFromDoc(t *testing.T) {
 }
 
 func TestUintBasedEnumDetection(t *testing.T) {
-	result, err := ExtractToString([]string{"github.com/cramberry/cramberry-go/pkg/extract/testdata"}, DefaultConfig())
+	result, err := ExtractToString([]string{"github.com/blockberries/cramberry/pkg/extract/testdata"}, DefaultConfig())
 	if err != nil {
 		t.Fatalf("ExtractToString() error = %v", err)
 	}
@@ -356,7 +356,7 @@ func TestEmptyInterfaceDetection(t *testing.T) {
 	// Test that empty interfaces are NOT included by default
 	t.Run("ExcludedByDefault", func(t *testing.T) {
 		cfg := DefaultConfig()
-		result, err := ExtractToString([]string{"github.com/cramberry/cramberry-go/pkg/extract/testdata"}, cfg)
+		result, err := ExtractToString([]string{"github.com/blockberries/cramberry/pkg/extract/testdata"}, cfg)
 		if err != nil {
 			t.Fatalf("ExtractToString() error = %v", err)
 		}
@@ -378,7 +378,7 @@ func TestEmptyInterfaceDetection(t *testing.T) {
 			IncludeEmptyInterfaces: true,
 			DetectInterfaces:       true,
 		}
-		result, err := ExtractToString([]string{"github.com/cramberry/cramberry-go/pkg/extract/testdata"}, cfg)
+		result, err := ExtractToString([]string{"github.com/blockberries/cramberry/pkg/extract/testdata"}, cfg)
 		if err != nil {
 			t.Fatalf("ExtractToString() error = %v", err)
 		}
@@ -398,9 +398,9 @@ func TestEmptyInterfaceDetection(t *testing.T) {
 func TestTypeIDAutoAssignment(t *testing.T) {
 	// Create test types with and without explicit type IDs
 	types := map[string]*TypeInfo{
-		"pkg.Dog": {Name: "Dog", TypeID: 128}, // Explicit type ID
-		"pkg.Cat": {Name: "Cat", TypeID: 0},   // No type ID, should be auto-assigned
-		"pkg.Bird": {Name: "Bird", TypeID: 0}, // No type ID, should be auto-assigned
+		"pkg.Dog":  {Name: "Dog", TypeID: 128}, // Explicit type ID
+		"pkg.Cat":  {Name: "Cat", TypeID: 0},   // No type ID, should be auto-assigned
+		"pkg.Bird": {Name: "Bird", TypeID: 0},  // No type ID, should be auto-assigned
 	}
 
 	interfaces := map[string]*InterfaceInfo{

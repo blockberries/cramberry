@@ -15,7 +15,7 @@ A high-performance, compact binary serialization format for Go with code generat
 ## Installation
 
 ```bash
-go get github.com/cramberry/cramberry-go
+go get github.com/blockberries/cramberry
 ```
 
 ## Quick Start
@@ -27,7 +27,7 @@ package main
 
 import (
     "fmt"
-    "github.com/cramberry/cramberry-go/pkg/cramberry"
+    "github.com/blockberries/cramberry/pkg/cramberry"
 )
 
 type User struct {

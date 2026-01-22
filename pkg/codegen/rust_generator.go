@@ -6,7 +6,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/cramberry/cramberry-go/pkg/schema"
+	"github.com/blockberries/cramberry/pkg/schema"
 )
 
 // RustGenerator generates Rust code from schemas.

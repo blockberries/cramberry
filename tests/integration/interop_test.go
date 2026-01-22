@@ -12,8 +12,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/cramberry/cramberry-go/pkg/cramberry"
-	"github.com/cramberry/cramberry-go/tests/integration/gen"
+	"github.com/blockberries/cramberry/pkg/cramberry"
+	interop "github.com/blockberries/cramberry/tests/integration/gen"
 )
 
 // TestData contains all the test cases used for cross-runtime verification.

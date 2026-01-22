@@ -23,9 +23,9 @@ COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 # Linker flags for version info
-LDFLAGS := -X github.com/cramberry/cramberry-go/pkg/cramberry.Version=$(VERSION) \
-           -X github.com/cramberry/cramberry-go/pkg/cramberry.GitCommit=$(COMMIT) \
-           -X github.com/cramberry/cramberry-go/pkg/cramberry.BuildDate=$(BUILD_DATE)
+LDFLAGS := -X github.com/blockberries/cramberry/pkg/cramberry.Version=$(VERSION) \
+           -X github.com/blockberries/cramberry/pkg/cramberry.GitCommit=$(COMMIT) \
+           -X github.com/blockberries/cramberry/pkg/cramberry.BuildDate=$(BUILD_DATE)
 
 # Default target
 all: fmt vet lint test build
