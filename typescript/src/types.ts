@@ -43,6 +43,12 @@ export const MaxVarint32 = 0xffffffff;
 export const MaxVarint64 = BigInt("0xffffffffffffffff");
 
 /**
+ * Signed 64-bit integer bounds.
+ */
+export const MinInt64 = BigInt("-9223372036854775808"); // -2^63
+export const MaxInt64 = BigInt("9223372036854775807"); // 2^63 - 1
+
+/**
  * Encode a field tag from field number and wire type.
  */
 export function encodeTag(fieldNumber: number, wireType: WireType): number {
@@ -68,8 +74,14 @@ export function zigzagEncode(n: number): number {
 
 /**
  * Encode a signed bigint using ZigZag encoding.
+ * @throws RangeError if n is outside the valid 64-bit signed integer range
  */
 export function zigzagEncode64(n: bigint): bigint {
+  if (n < MinInt64 || n > MaxInt64) {
+    throw new RangeError(
+      `BigInt value ${n} is outside valid 64-bit signed integer range [${MinInt64}, ${MaxInt64}]`
+    );
+  }
   return (n << 1n) ^ (n >> 63n);
 }
 

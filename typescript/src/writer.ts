@@ -1,4 +1,3 @@
-import { BufferOverflowError } from "./errors";
 import { WireType, TypeID, encodeTag, zigzagEncode, zigzagEncode64 } from "./types";
 
 const INITIAL_CAPACITY = 256;

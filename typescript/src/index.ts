@@ -29,6 +29,8 @@ export {
   FieldTag,
   MaxVarint32,
   MaxVarint64,
+  MinInt64,
+  MaxInt64,
   encodeTag,
   decodeTag,
   zigzagEncode,
@@ -50,10 +52,12 @@ export {
 } from "./errors";
 
 // Writer
-export { Writer } from "./writer";
+import { Writer } from "./writer";
+export { Writer };
 
 // Reader
-export { Reader } from "./reader";
+import { Reader } from "./reader";
+export { Reader };
 
 // Registry
 export {
