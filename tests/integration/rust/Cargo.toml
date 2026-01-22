@@ -1,0 +1,11 @@
+[package]
+name = "cramberry-integration-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cramberry = { path = "../../../rust" }
+serde = { version = "1.0", features = ["derive"] }
+
+[dev-dependencies]
+hex = "0.4"

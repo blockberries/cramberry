@@ -1,0 +1,73 @@
+// Interoperability test schema
+// Used to verify encoding/decoding compatibility across Go, TypeScript, and Rust
+
+package interop;
+
+/// Status enum for testing enum serialization.
+enum Status {
+    UNKNOWN = 0;
+    ACTIVE = 1;
+    INACTIVE = 2;
+    PENDING = 3;
+}
+
+/// ScalarTypes tests all scalar type serialization.
+message ScalarTypes {
+    bool bool_val = 1;
+    int32 int32_val = 2;
+    int64 int64_val = 3;
+    uint32 uint32_val = 4;
+    uint64 uint64_val = 5;
+    float32 float32_val = 6;
+    float64 float64_val = 7;
+    string string_val = 8;
+    bytes bytes_val = 9;
+}
+
+/// RepeatedTypes tests repeated field serialization.
+message RepeatedTypes {
+    repeated int32 int32_list = 1;
+    repeated string string_list = 2;
+    repeated bytes bytes_list = 3;
+}
+
+/// NestedMessage tests nested message serialization.
+message NestedMessage {
+    string name = 1;
+    int32 value = 2;
+}
+
+/// ComplexTypes tests complex type serialization.
+message ComplexTypes {
+    Status status = 1;
+    *NestedMessage optional_nested = 2;
+    NestedMessage required_nested = 3;
+    repeated NestedMessage nested_list = 4;
+    map[string]int32 string_int_map = 5;
+    map[int32]string int_string_map = 6;
+}
+
+/// EdgeCases tests edge case values.
+message EdgeCases {
+    int32 zero_int = 1;
+    int32 negative_one = 2;
+    int32 max_int32 = 3;
+    int32 min_int32 = 4;
+    int64 max_int64 = 5;
+    int64 min_int64 = 6;
+    uint32 max_uint32 = 7;
+    uint64 max_uint64 = 8;
+    string empty_string = 9;
+    string unicode_string = 10;
+    bytes empty_bytes = 11;
+}
+
+/// AllFieldNumbers tests various field numbers including large ones.
+message AllFieldNumbers {
+    int32 field_1 = 1;
+    int32 field_15 = 15;
+    int32 field_16 = 16;
+    int32 field_127 = 127;
+    int32 field_128 = 128;
+    int32 field_1000 = 1000;
+}

@@ -41,8 +41,10 @@ gen/
 
 # Rust
 rust/target/
+tests/integration/rust/target/
 
 # TypeScript/Node
 typescript/node_modules/
 typescript/dist/
 typescript/*.tsbuildinfo
+tests/integration/ts/node_modules/

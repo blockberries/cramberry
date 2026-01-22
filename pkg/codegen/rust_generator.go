@@ -57,11 +57,15 @@ func (c *rustContext) funcMap() template.FuncMap {
 		"rustInterfaceType": c.rustInterfaceType,
 		"rustFieldName":     c.rustFieldName,
 		"rustEnumValueName": c.rustEnumValueName,
+		"rustWireType":      c.rustWireType,
+		"rustWriteField":    c.rustWriteField,
+		"rustReadField":     c.rustReadField,
 		"comment":           c.rustComment,
 		"toCamel":           ToCamelCase,
 		"toPascal":          ToPascalCase,
 		"toSnake":           ToSnakeCase,
 		"generateComments":  func() bool { return c.Options.GenerateComments },
+		"generateMarshal":   func() bool { return c.Options.GenerateMarshal },
 		"hasSerde":          func() bool { return c.Options.GenerateJSON },
 	}
 }
@@ -196,6 +200,251 @@ func (c *rustContext) rustComment(text string) string {
 	return strings.Join(result, "\n")
 }
 
+// rustWireType returns the wire type constant for a field type.
+// This matches Go's getWireType behavior for cross-runtime compatibility.
+func (c *rustContext) rustWireType(f *schema.Field) string {
+	return c.rustWireTypeForType(f.Type)
+}
+
+func (c *rustContext) rustWireTypeForType(t schema.TypeRef) string {
+	switch typ := t.(type) {
+	case *schema.ScalarType:
+		switch typ.Name {
+		case "bool", "int8", "int16", "int32", "int",
+			"uint8", "uint16", "uint32", "uint",
+			"int64", "uint64":
+			return "WireType::Varint"
+		case "float32":
+			return "WireType::Fixed32"
+		case "float64":
+			return "WireType::Fixed64"
+		case "string", "bytes":
+			return "WireType::Bytes"
+		default:
+			return "WireType::Bytes"
+		}
+	case *schema.NamedType:
+		// Named types (enums, messages) - enums are varint, messages are bytes
+		for _, e := range c.Schema.Enums {
+			if e.Name == typ.Name {
+				return "WireType::Varint"
+			}
+		}
+		return "WireType::Bytes"
+	case *schema.ArrayType, *schema.MapType:
+		return "WireType::Bytes"
+	case *schema.PointerType:
+		return "WireType::TypeRef"
+	default:
+		return "WireType::Bytes"
+	}
+}
+
+// rustWriteField generates the code to write a field value.
+func (c *rustContext) rustWriteField(f *schema.Field) string {
+	fieldName := "msg." + ToSnakeCase(f.Name)
+	return c.rustWriteValue(f.Type, fieldName, f.Repeated)
+}
+
+// rustWriteValueForSubWriter generates write code using sub_writer instead of writer
+func (c *rustContext) rustWriteValueForSubWriter(t schema.TypeRef, value string) string {
+	switch typ := t.(type) {
+	case *schema.ScalarType:
+		switch typ.Name {
+		case "bool":
+			return fmt.Sprintf("sub_writer.write_bool(*%s)", value)
+		case "int8", "int16", "int32", "int":
+			return fmt.Sprintf("sub_writer.write_svarint(*%s)", value)
+		case "uint8", "uint16", "uint32", "uint":
+			return fmt.Sprintf("sub_writer.write_varint(*%s)", value)
+		case "int64":
+			return fmt.Sprintf("sub_writer.write_svarint64(*%s)", value)
+		case "uint64":
+			return fmt.Sprintf("sub_writer.write_varint64(*%s)", value)
+		case "float32":
+			return fmt.Sprintf("sub_writer.write_float32(*%s)", value)
+		case "float64":
+			return fmt.Sprintf("sub_writer.write_float64(*%s)", value)
+		case "string":
+			return fmt.Sprintf("sub_writer.write_string(%s)", value)
+		case "bytes":
+			return fmt.Sprintf("sub_writer.write_length_prefixed_bytes(%s)", value)
+		default:
+			return fmt.Sprintf("sub_writer.write_string(%s)", value)
+		}
+	case *schema.NamedType:
+		// Check if it's an enum
+		for _, e := range c.Schema.Enums {
+			if e.Name == typ.Name {
+				return fmt.Sprintf("sub_writer.write_svarint(*%s as i32)", value)
+			}
+		}
+		// It's a message
+		return fmt.Sprintf("encode_%s(&mut sub_writer, %s)", ToSnakeCase(typ.Name), value)
+	default:
+		return fmt.Sprintf("sub_writer.write_string(&format!(\"{:?}\", %s))", value)
+	}
+}
+
+func (c *rustContext) rustWriteValue(t schema.TypeRef, value string, repeated bool) string {
+	if repeated {
+		elemType := t
+		if arr, ok := t.(*schema.ArrayType); ok {
+			elemType = arr.Element
+		}
+		elemWrite := c.rustWriteValueForSubWriter(elemType, "elem")
+		return fmt.Sprintf(`{
+        let mut sub_writer = Writer::new();
+        sub_writer.write_varint(%s.len() as u32)?;
+        for elem in &%s {
+            %s?;
+        }
+        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+    }`, value, value, elemWrite)
+	}
+
+	switch typ := t.(type) {
+	case *schema.ScalarType:
+		switch typ.Name {
+		case "bool":
+			return fmt.Sprintf("writer.write_bool(%s)", value)
+		case "int8", "int16", "int32", "int":
+			return fmt.Sprintf("writer.write_svarint(%s)", value)
+		case "uint8", "uint16", "uint32", "uint":
+			return fmt.Sprintf("writer.write_varint(%s)", value)
+		case "int64":
+			return fmt.Sprintf("writer.write_svarint64(%s)", value)
+		case "uint64":
+			return fmt.Sprintf("writer.write_varint64(%s)", value)
+		case "float32":
+			return fmt.Sprintf("writer.write_float32(%s)", value)
+		case "float64":
+			return fmt.Sprintf("writer.write_float64(%s)", value)
+		case "string":
+			return fmt.Sprintf("writer.write_string(&%s)", value)
+		case "bytes":
+			return fmt.Sprintf("writer.write_length_prefixed_bytes(&%s)", value)
+		default:
+			return fmt.Sprintf("writer.write_string(&%s)", value)
+		}
+	case *schema.NamedType:
+		// Check if it's an enum
+		for _, e := range c.Schema.Enums {
+			if e.Name == typ.Name {
+				return fmt.Sprintf("writer.write_svarint(%s as i32)", value)
+			}
+		}
+		// It's a message
+		return fmt.Sprintf("encode_%s(writer, &%s)", ToSnakeCase(typ.Name), value)
+	case *schema.ArrayType:
+		return c.rustWriteValue(typ.Element, value, true)
+	case *schema.MapType:
+		keyWrite := c.rustWriteValueForSubWriter(typ.Key, "k")
+		valWrite := c.rustWriteValueForSubWriter(typ.Value, "v")
+		return fmt.Sprintf(`{
+        let mut sub_writer = Writer::new();
+        sub_writer.write_varint(%s.len() as u32)?;
+        for (k, v) in &%s {
+            %s?;
+            %s?;
+        }
+        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+    }`, value, value, keyWrite, valWrite)
+	case *schema.PointerType:
+		innerWrite := c.rustWriteValue(typ.Element, "inner", false)
+		return fmt.Sprintf(`if let Some(inner) = &%s {
+        %s
+    } else {
+        Ok(())
+    }`, value, innerWrite)
+	default:
+		return fmt.Sprintf("writer.write_string(&format!(\"{:?}\", %s))", value)
+	}
+}
+
+// rustReadField generates the code to read a field value.
+func (c *rustContext) rustReadField(f *schema.Field) string {
+	return c.rustReadValue(f.Type, f.Repeated)
+}
+
+func (c *rustContext) rustReadValue(t schema.TypeRef, repeated bool) string {
+	if repeated {
+		elemType := t
+		if arr, ok := t.(*schema.ArrayType); ok {
+			elemType = arr.Element
+		}
+		elemRead := c.rustReadValue(elemType, false)
+		return fmt.Sprintf(`{
+            let data = reader.read_length_prefixed_bytes()?;
+            let mut sub_reader = Reader::new(data);
+            let len = sub_reader.read_varint()? as usize;
+            let mut result = Vec::with_capacity(len);
+            for _ in 0..len {
+                result.push(%s);
+            }
+            result
+        }`, elemRead)
+	}
+
+	switch typ := t.(type) {
+	case *schema.ScalarType:
+		switch typ.Name {
+		case "bool":
+			return "reader.read_bool()?"
+		case "int8", "int16", "int32", "int":
+			return "reader.read_svarint()?"
+		case "uint8", "uint16", "uint32", "uint":
+			return "reader.read_varint()?"
+		case "int64":
+			return "reader.read_svarint64()?"
+		case "uint64":
+			return "reader.read_varint64()?"
+		case "float32":
+			return "reader.read_float32()?"
+		case "float64":
+			return "reader.read_float64()?"
+		case "string":
+			return "reader.read_string()?.to_string()"
+		case "bytes":
+			return "reader.read_length_prefixed_bytes()?.to_vec()"
+		default:
+			return "reader.read_string()?.to_string()"
+		}
+	case *schema.NamedType:
+		// Check if it's an enum
+		for _, e := range c.Schema.Enums {
+			if e.Name == typ.Name {
+				enumType := c.rustEnumType(e)
+				return fmt.Sprintf("%s::from_i32(reader.read_svarint()?).unwrap_or(%s::%s)", enumType, enumType, ToPascalCase(e.Values[0].Name))
+			}
+		}
+		// It's a message
+		return fmt.Sprintf("decode_%s(reader)?", ToSnakeCase(typ.Name))
+	case *schema.ArrayType:
+		return c.rustReadValue(typ.Element, true)
+	case *schema.MapType:
+		keyRead := c.rustReadValue(typ.Key, false)
+		valRead := c.rustReadValue(typ.Value, false)
+		return fmt.Sprintf(`{
+            let data = reader.read_length_prefixed_bytes()?;
+            let mut sub_reader = Reader::new(data);
+            let len = sub_reader.read_varint()? as usize;
+            let mut result = std::collections::HashMap::with_capacity(len);
+            for _ in 0..len {
+                let k = %s;
+                let v = %s;
+                result.insert(k, v);
+            }
+            result
+        }`, keyRead, valRead)
+	case *schema.PointerType:
+		innerRead := c.rustReadValue(typ.Element, false)
+		return fmt.Sprintf("Some(Box::new(%s))", innerRead)
+	default:
+		return "reader.read_string()?.to_string()"
+	}
+}
+
 func init() {
 	Register(NewRustGenerator())
 }
@@ -204,15 +453,17 @@ const rustTemplate = `// Code generated by cramberry. DO NOT EDIT.
 // Source: {{.Schema.Position.Filename}}
 
 {{if hasSerde}}use serde::{Deserialize, Serialize};
+{{end}}{{if generateMarshal}}use cramberry::{Reader, Result, WireType, Writer};
 {{end}}
 {{$ctx := .}}
 {{range $enum := .Schema.Enums}}
 {{if generateComments}}{{range $enum.Comments}}{{if .IsDoc}}{{comment .Text}}
 {{end}}{{end}}{{end -}}
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 {{if hasSerde}}#[derive(Serialize, Deserialize)]
 {{end}}#[repr(i32)]
 pub enum {{rustEnumType $enum}} {
+#[default]
 {{- range $enum.Values}}
 {{if generateComments}}{{range .Comments}}{{if .IsDoc}}    {{comment .Text}}
 {{end}}{{end}}{{end -}}
@@ -235,7 +486,7 @@ impl {{rustEnumType $enum}} {
 {{range $msg := .Schema.Messages}}
 {{if generateComments}}{{range $msg.Comments}}{{if .IsDoc}}{{comment .Text}}
 {{end}}{{end}}{{end -}}
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 {{if hasSerde}}#[derive(Serialize, Deserialize)]
 {{end}}pub struct {{rustMessageType $msg}} {
 {{- range $msg.Fields}}
@@ -245,7 +496,56 @@ impl {{rustEnumType $enum}} {
 {{end}}    pub {{rustFieldName .}}: {{rustFieldType .}},
 {{- end}}
 }
+{{if generateMarshal}}
+/// Encodes a {{rustMessageType $msg}} to the writer.
+pub fn encode_{{toSnake $msg.Name}}(writer: &mut Writer, msg: &{{rustMessageType $msg}}) -> Result<()> {
+    // Write field count
+    writer.write_varint({{len $msg.Fields}})?;
+{{range $msg.Fields}}
+    // Field {{.Number}}: {{.Name}}
+    writer.write_tag({{.Number}}, {{rustWireType .}})?;
+    {{rustWriteField .}}?;
+{{end}}
+    Ok(())
+}
 
+/// Decodes a {{rustMessageType $msg}} from the reader.
+pub fn decode_{{toSnake $msg.Name}}(reader: &mut Reader) -> Result<{{rustMessageType $msg}}> {
+    let field_count = reader.read_varint()?;
+{{- range $msg.Fields}}
+    let mut {{rustFieldName .}}: {{rustFieldType .}} = Default::default();
+{{- end}}
+
+    for _ in 0..field_count {
+        let tag = reader.read_tag()?;
+        match tag.field_number {
+{{- range $msg.Fields}}
+            {{.Number}} => {{rustFieldName .}} = {{rustReadField .}},
+{{- end}}
+            _ => reader.skip_field(tag.wire_type)?,
+        }
+    }
+
+    Ok({{rustMessageType $msg}} {
+{{- range $msg.Fields}}
+        {{rustFieldName .}},
+{{- end}}
+    })
+}
+
+/// Marshals a {{rustMessageType $msg}} to bytes.
+pub fn marshal_{{toSnake $msg.Name}}(msg: &{{rustMessageType $msg}}) -> Result<Vec<u8>> {
+    let mut writer = Writer::new();
+    encode_{{toSnake $msg.Name}}(&mut writer, msg)?;
+    Ok(writer.into_bytes())
+}
+
+/// Unmarshals a {{rustMessageType $msg}} from bytes.
+pub fn unmarshal_{{toSnake $msg.Name}}(data: &[u8]) -> Result<{{rustMessageType $msg}}> {
+    let mut reader = Reader::new(data);
+    decode_{{toSnake $msg.Name}}(&mut reader)
+}
+{{end}}
 {{end}}
 {{range $iface := .Schema.Interfaces}}
 {{if generateComments}}{{range $iface.Comments}}{{if .IsDoc}}{{comment .Text}}
