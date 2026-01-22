@@ -144,6 +144,12 @@ func (c *TypeCollector) collectType(typeName *types.TypeName, pkgPath string, do
 			IsExported: typeName.Exported(),
 		}
 
+		// Parse @typeID annotation from doc comment
+		typeID, hasTypeID := parseTypeIDFromDoc(doc)
+		if hasTypeID {
+			info.TypeID = typeID
+		}
+
 		// Collect fields
 		for i := 0; i < t.NumFields(); i++ {
 			field := t.Field(i)
@@ -308,11 +314,17 @@ func (c *TypeCollector) parseTag(tag string, defaultNum int) *StructTag {
 					st.FieldNum = num
 				}
 			} else {
-				switch part {
-				case "omitempty":
+				switch {
+				case part == "omitempty":
 					st.OmitEmpty = true
-				case "required":
+				case part == "required":
 					st.Required = true
+				case strings.HasPrefix(part, "typeID:"):
+					// Parse typeID:N format
+					if num, err := strconv.ParseUint(strings.TrimPrefix(part, "typeID:"), 10, 32); err == nil && num > 0 {
+						st.TypeID = uint32(num)
+						st.HasTypeID = true
+					}
 				}
 			}
 		}
@@ -361,6 +373,26 @@ func matchGlob(pattern, name string) bool {
 	regexPattern := "^" + strings.ReplaceAll(regexp.QuoteMeta(pattern), `\*`, `.*`) + "$"
 	matched, _ := regexp.MatchString(regexPattern, name)
 	return matched
+}
+
+// parseTypeIDFromDoc extracts a @typeID:N annotation from doc comments.
+// Returns the type ID and true if found, otherwise 0 and false.
+func parseTypeIDFromDoc(doc string) (uint32, bool) {
+	// Look for @typeID:N or @cramberry:typeID=N patterns
+	patterns := []string{
+		`@typeID:(\d+)`,
+		`@cramberry:typeID=(\d+)`,
+	}
+
+	for _, pattern := range patterns {
+		re := regexp.MustCompile(pattern)
+		if matches := re.FindStringSubmatch(doc); len(matches) > 1 {
+			if num, err := strconv.ParseUint(matches[1], 10, 32); err == nil && num > 0 {
+				return uint32(num), true
+			}
+		}
+	}
+	return 0, false
 }
 
 func (c *TypeCollector) typeToString(t types.Type) string {

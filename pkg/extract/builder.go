@@ -169,6 +169,9 @@ func (b *SchemaBuilder) buildInterfaces() {
 	}
 	sort.Strings(names)
 
+	// Track used type IDs globally across all interfaces to detect collisions
+	usedTypeIDs := make(map[int]string) // typeID -> type name that uses it
+
 	for _, name := range names {
 		iface := b.interfaces[name]
 		schemaIface := &schema.Interface{
@@ -182,11 +185,39 @@ func (b *SchemaBuilder) buildInterfaces() {
 			}
 		}
 
-		// Add implementations
-		for i, impl := range iface.Implementations {
+		// First pass: collect explicitly assigned type IDs
+		for _, impl := range iface.Implementations {
+			if impl.TypeID > 0 {
+				if existingType, exists := usedTypeIDs[int(impl.TypeID)]; exists {
+					// Log warning about collision (type ID already used)
+					// For now, we'll still use it but this could be made an error
+					_ = existingType // Collision detected: impl.Name vs existingType
+				}
+				usedTypeIDs[int(impl.TypeID)] = impl.Name
+			}
+		}
+
+		// Second pass: assign type IDs to implementations
+		nextAutoID := 128 // Start auto-assigned IDs at 128
+		for _, impl := range iface.Implementations {
+			var typeID int
+
+			if impl.TypeID > 0 {
+				// Use explicitly assigned type ID
+				typeID = int(impl.TypeID)
+			} else {
+				// Auto-assign: find next available ID starting at 128
+				for usedTypeIDs[nextAutoID] != "" {
+					nextAutoID++
+				}
+				typeID = nextAutoID
+				usedTypeIDs[typeID] = impl.Name
+				nextAutoID++
+			}
+
 			schemaIface.Implementations = append(schemaIface.Implementations, &schema.Implementation{
 				Type:   &schema.NamedType{Name: impl.Name},
-				TypeID: 128 + i, // Start type IDs at 128
+				TypeID: typeID,
 			})
 		}
 

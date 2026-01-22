@@ -229,3 +229,89 @@ func TestExtractor(t *testing.T) {
 		t.Errorf("Package name = %q, want %q", s.Package.Name, "custompackage")
 	}
 }
+
+func TestParseTypeIDFromDoc(t *testing.T) {
+	tests := []struct {
+		doc         string
+		expectID    uint32
+		expectFound bool
+	}{
+		{"@typeID:128", 128, true},
+		{"@typeID:256", 256, true},
+		{"@typeID:1", 1, true},
+		{"Some comment with @typeID:200 in the middle", 200, true},
+		{"@cramberry:typeID=150", 150, true},
+		{"Multi-line\n@typeID:300\ncomment", 300, true},
+		{"No type ID annotation", 0, false},
+		{"@typeID:0", 0, false}, // 0 is not valid
+		{"@typeID:", 0, false},
+		{"@typeID:invalid", 0, false},
+		{"@typeID:-1", 0, false}, // Negative not valid
+		{"", 0, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.doc, func(t *testing.T) {
+			id, found := parseTypeIDFromDoc(tt.doc)
+			if found != tt.expectFound {
+				t.Errorf("parseTypeIDFromDoc(%q) found = %v, want %v", tt.doc, found, tt.expectFound)
+			}
+			if id != tt.expectID {
+				t.Errorf("parseTypeIDFromDoc(%q) id = %d, want %d", tt.doc, id, tt.expectID)
+			}
+		})
+	}
+}
+
+func TestTypeIDAutoAssignment(t *testing.T) {
+	// Create test types with and without explicit type IDs
+	types := map[string]*TypeInfo{
+		"pkg.Dog": {Name: "Dog", TypeID: 128}, // Explicit type ID
+		"pkg.Cat": {Name: "Cat", TypeID: 0},   // No type ID, should be auto-assigned
+		"pkg.Bird": {Name: "Bird", TypeID: 0}, // No type ID, should be auto-assigned
+	}
+
+	interfaces := map[string]*InterfaceInfo{
+		"pkg.Animal": {
+			Name:            "Animal",
+			Implementations: []*TypeInfo{types["pkg.Dog"], types["pkg.Cat"], types["pkg.Bird"]},
+		},
+	}
+
+	builder := NewSchemaBuilder(types, interfaces, nil)
+	schema, err := builder.Build("pkg")
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+
+	if len(schema.Interfaces) != 1 {
+		t.Fatalf("Expected 1 interface, got %d", len(schema.Interfaces))
+	}
+
+	animal := schema.Interfaces[0]
+	if len(animal.Implementations) != 3 {
+		t.Fatalf("Expected 3 implementations, got %d", len(animal.Implementations))
+	}
+
+	// Check type IDs
+	typeIDs := make(map[int]string)
+	for _, impl := range animal.Implementations {
+		typeName := impl.Type.Name
+		if existingType, exists := typeIDs[impl.TypeID]; exists {
+			t.Errorf("Type ID collision: %s and %s both have typeID %d", typeName, existingType, impl.TypeID)
+		}
+		typeIDs[impl.TypeID] = typeName
+
+		// Dog should have explicit ID 128
+		if typeName == "Dog" && impl.TypeID != 128 {
+			t.Errorf("Dog should have typeID 128, got %d", impl.TypeID)
+		}
+	}
+
+	// All type IDs should be >= 128 (auto-assigned start at 128)
+	for id, name := range typeIDs {
+		if id < 128 {
+			t.Errorf("Type %s has typeID %d, but auto-assigned IDs should be >= 128", name, id)
+		}
+	}
+}

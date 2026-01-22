@@ -111,6 +111,8 @@ type StructTag struct {
 	Required   bool
 	Skip       bool
 	Deprecated string
+	TypeID     uint32 // For interface implementation type identification
+	HasTypeID  bool   // True if TypeID was explicitly set
 }
 
 // extractDoc extracts documentation from an AST node.
