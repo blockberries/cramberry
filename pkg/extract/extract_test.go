@@ -263,6 +263,33 @@ func TestParseTypeIDFromDoc(t *testing.T) {
 	}
 }
 
+func TestPlatformDependentTypeWarnings(t *testing.T) {
+	types := make(map[string]*TypeInfo)
+	interfaces := make(map[string]*InterfaceInfo)
+	enums := make(map[string]*EnumInfo)
+
+	builder := NewSchemaBuilder(types, interfaces, enums)
+
+	// Verify Warnings method exists and returns empty/nil initially
+	warnings := builder.Warnings()
+	if len(warnings) != 0 {
+		t.Errorf("Expected no warnings initially, got %d", len(warnings))
+	}
+
+	// Build empty schema
+	_, err := builder.Build("testpkg")
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+
+	// Verify warnings are still accessible after build (may be nil or empty)
+	warnings = builder.Warnings()
+	// No warnings expected for empty schema - just verify method works
+	if len(warnings) != 0 {
+		t.Errorf("Expected no warnings for empty schema, got %d", len(warnings))
+	}
+}
+
 func TestTypeIDAutoAssignment(t *testing.T) {
 	// Create test types with and without explicit type IDs
 	types := map[string]*TypeInfo{

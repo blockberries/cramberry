@@ -14,6 +14,7 @@ type SchemaBuilder struct {
 	interfaces map[string]*InterfaceInfo
 	enums      map[string]*EnumInfo
 	schema     *schema.Schema
+	warnings   []string
 }
 
 // NewSchemaBuilder creates a new schema builder.
@@ -22,7 +23,18 @@ func NewSchemaBuilder(types map[string]*TypeInfo, interfaces map[string]*Interfa
 		types:      types,
 		interfaces: interfaces,
 		enums:      enums,
+		warnings:   nil,
 	}
+}
+
+// Warnings returns any warnings generated during schema building.
+func (b *SchemaBuilder) Warnings() []string {
+	return b.warnings
+}
+
+// addWarning records a warning message.
+func (b *SchemaBuilder) addWarning(msg string) {
+	b.warnings = append(b.warnings, msg)
 }
 
 // Build constructs a schema from the collected types.
@@ -300,7 +312,12 @@ func (b *SchemaBuilder) basicTypeToSchemaType(t *types.Basic) schema.TypeRef {
 		return &schema.ScalarType{Name: "int8"}
 	case types.Int16:
 		return &schema.ScalarType{Name: "int16"}
-	case types.Int32, types.Int:
+	case types.Int:
+		// Warn about platform-dependent int type
+		b.addWarning("type 'int' is platform-dependent (32 or 64 bits); " +
+			"mapped to int32, consider using explicit int32 or int64 for cross-platform compatibility")
+		return &schema.ScalarType{Name: "int32"}
+	case types.Int32:
 		return &schema.ScalarType{Name: "int32"}
 	case types.Int64:
 		return &schema.ScalarType{Name: "int64"}
@@ -308,7 +325,12 @@ func (b *SchemaBuilder) basicTypeToSchemaType(t *types.Basic) schema.TypeRef {
 		return &schema.ScalarType{Name: "uint8"}
 	case types.Uint16:
 		return &schema.ScalarType{Name: "uint16"}
-	case types.Uint32, types.Uint:
+	case types.Uint:
+		// Warn about platform-dependent uint type
+		b.addWarning("type 'uint' is platform-dependent (32 or 64 bits); " +
+			"mapped to uint32, consider using explicit uint32 or uint64 for cross-platform compatibility")
+		return &schema.ScalarType{Name: "uint32"}
+	case types.Uint32:
 		return &schema.ScalarType{Name: "uint32"}
 	case types.Uint64:
 		return &schema.ScalarType{Name: "uint64"}
