@@ -1,16 +1,15 @@
 # Cramberry
 
-A high-performance, compact binary serialization format for Go with code generation support for Go, TypeScript, and Rust.
+A high-performance binary serialization library for Go with code generation for Go, TypeScript, and Rust.
 
 ## Features
 
-- **Compact**: 37-65% smaller than JSON encoding
-- **Fast**: 2.7-3x faster deserialization than JSON
-- **Deterministic**: Maps are sorted for reproducible encoding
-- **Type-safe**: Strong type system with schema validation
-- **Polymorphic**: Amino-style interface serialization with type registry
-- **Streaming**: Efficient streaming encoder/decoder for large data
-- **Multi-language**: Code generation for Go, TypeScript, and Rust
+- **Fast** - 1.5-2.6x faster decoding than Protocol Buffers
+- **Compact** - Comparable size to Protobuf, 2-3x smaller than JSON
+- **Deterministic** - Sorted map keys for reproducible encoding
+- **Polymorphic** - Amino-style interface serialization with type registry
+- **Streaming** - Efficient streaming encoder/decoder for large data
+- **Multi-language** - Code generation for Go, TypeScript, and Rust
 
 ## Installation
 
@@ -19,8 +18,6 @@ go get github.com/blockberries/cramberry
 ```
 
 ## Quick Start
-
-### Basic Usage
 
 ```go
 package main
@@ -55,9 +52,7 @@ func main() {
 }
 ```
 
-### Struct Tags
-
-Cramberry uses struct tags to specify field numbers and options:
+## Struct Tags
 
 ```go
 type Message struct {
@@ -68,12 +63,11 @@ type Message struct {
 }
 ```
 
-### Polymorphic Types
+## Polymorphic Types
 
-Cramberry supports polymorphic serialization through a type registry:
+Cramberry supports interface serialization through a type registry:
 
 ```go
-// Define interface and implementations
 type Animal interface {
     Speak() string
 }
@@ -88,47 +82,59 @@ type Cat struct {
 }
 func (c *Cat) Speak() string { return "Meow!" }
 
-// Register types
+// Register types (auto-assigns IDs starting at 128)
 cramberry.MustRegister[Dog]()
 cramberry.MustRegister[Cat]()
 
-// Use in a container struct
+// Use in a container
 type Zoo struct {
     Animals []Animal `cramberry:"1"`
 }
 ```
 
-### Streaming
+## Streaming
 
-For large data or multiple messages:
+For large data or network streams:
 
 ```go
-// Writing multiple messages
+// Writing
 sw := cramberry.NewStreamWriter(conn)
 for _, msg := range messages {
-    if err := sw.WriteDelimited(&msg); err != nil {
-        return err
-    }
+    sw.WriteDelimited(&msg)
 }
 sw.Flush()
 
-// Reading multiple messages
+// Reading
 it := cramberry.NewMessageIterator(conn)
 var msg MyMessage
 for it.Next(&msg) {
     process(msg)
 }
-if err := it.Err(); err != nil {
-    return err
-}
+```
+
+## Options
+
+Control encoding behavior with options:
+
+```go
+// Default: V2 format, deterministic, UTF-8 validation
+data, _ := cramberry.Marshal(v)
+
+// Fast: Skip validation, non-deterministic maps
+data, _ := cramberry.MarshalWithOptions(v, cramberry.FastOptions)
+
+// Secure: Conservative limits for untrusted input
+data, _ := cramberry.MarshalWithOptions(v, cramberry.SecureOptions)
+
+// Strict: Reject unknown fields
+err := cramberry.UnmarshalWithOptions(data, &v, cramberry.StrictOptions)
 ```
 
 ## Schema Language
 
-Cramberry includes a schema definition language for defining message types:
+Define types in `.cram` schema files:
 
 ```cramberry
-// user.cram
 package example;
 
 enum Status {
@@ -137,147 +143,129 @@ enum Status {
     SUSPENDED = 2;
 }
 
-message Address {
-    street: string = 1;
-    city: string = 2;
-    country: string = 3;
-}
-
 message User {
     id: int64 = 1 [required];
     name: string = 2;
     email: string = 3;
     status: Status = 4;
-    address: *Address = 5;  // optional pointer
-    tags: []string = 6;     // repeated
+    tags: []string = 5;
+    metadata: map[string]string = 6;
 }
 
-interface Person {
+interface Principal {
     User = 128;
     Admin = 129;
 }
 ```
 
-### Code Generation
+## Code Generation
 
-Generate code from schema files:
+Generate type-safe code from schemas:
 
 ```bash
-# Generate Go code
+# Go
 cramberry generate -lang go -out ./gen ./schemas/*.cram
 
-# Generate TypeScript code
+# TypeScript
 cramberry generate -lang typescript -out ./gen ./schemas/*.cram
 
-# Generate Rust code
+# Rust
 cramberry generate -lang rust -out ./gen ./schemas/*.cram
 ```
 
-CLI options:
-- `-lang`: Target language (go, typescript, rust)
-- `-out`: Output directory
-- `-package`: Override package name
-- `-json`: Generate JSON serialization support (default: true)
-- `-marshal`: Generate marshal/unmarshal methods (default: true)
-- `-prefix`: Add prefix to type names
-- `-suffix`: Add suffix to type names
-- `-I`: Add import search path
+Generated code includes zero-reflection `MarshalCramberry()`/`UnmarshalCramberry()` methods for 2x+ performance improvement.
+
+## Schema Extraction
+
+Extract schemas from existing Go code:
+
+```bash
+cramberry schema ./pkg/models -out schema.cram
+```
 
 ## Wire Format
 
-### Encoding Types
+| Wire Type | Value | Used For |
+|-----------|-------|----------|
+| Varint    | 0     | uint*, bool, enum |
+| Fixed64   | 1     | int64, uint64, float64 |
+| Bytes     | 2     | string, []byte, messages |
+| Fixed32   | 5     | int32, uint32, float32 |
+| SVarint   | 6     | int* (ZigZag encoded) |
+| TypeRef   | 7     | Polymorphic type ID |
 
-| Wire Type | Value | Description |
-|-----------|-------|-------------|
-| Varint    | 0     | Variable-length unsigned integer |
-| Fixed64   | 1     | Fixed 64-bit value |
-| Bytes     | 2     | Length-prefixed bytes |
-| Fixed32   | 5     | Fixed 32-bit value |
-| SVarint   | 6     | ZigZag-encoded signed integer |
-| TypeRef   | 7     | Type ID for polymorphic values |
-
-### Type Mappings
-
-| Go Type | Wire Type | Notes |
-|---------|-----------|-------|
-| bool | Varint | 0 or 1 |
-| int8, uint8 | Fixed byte | Single byte |
-| int16, int32, int64 | SVarint | ZigZag encoded |
-| uint16, uint32, uint64 | Varint | LEB128 encoded |
-| float32 | Fixed32 | IEEE 754 |
-| float64 | Fixed64 | IEEE 754 |
-| string | Bytes | Length-prefixed UTF-8 |
-| []byte | Bytes | Length-prefixed |
-| slice | Bytes | Length + elements |
-| map | Bytes | Size + sorted key-value pairs |
-| struct | Bytes | Field count + tagged fields |
-| interface | TypeRef | Type ID + value |
+V2 wire format (default) uses compact single-byte tags for fields 1-15 and end markers instead of field count prefixes.
 
 ## Performance
 
-Benchmarks on Apple M4 Pro:
+Benchmarks on Apple M4 Pro comparing Cramberry to Protocol Buffers:
 
-### vs JSON
+### Decode Speed (Higher is Better)
 
-| Operation | Cramberry | JSON | Speedup |
-|-----------|-----------|------|---------|
-| Marshal Small | 86ns | 83ns | ~1x |
-| Marshal Large | 912ns | 836ns | ~1x |
-| Unmarshal Small | 98ns | 289ns | **3x** |
-| Unmarshal Large | 1379ns | 3704ns | **2.7x** |
+| Message Type | Cramberry | Protobuf | Speedup |
+|--------------|-----------|----------|---------|
+| SmallMessage | 27 ns | 68 ns | **2.5x faster** |
+| Metrics | 43 ns | 112 ns | **2.6x faster** |
+| Person | 387 ns | 596 ns | **1.5x faster** |
+| Document | 750 ns | 1392 ns | **1.9x faster** |
+| Batch1000 | 27 μs | 61 μs | **2.3x faster** |
 
-### Size Comparison
+### Encode Speed
 
-| Data Type | Cramberry | JSON | Reduction |
-|-----------|-----------|------|-----------|
-| Small struct | 14 bytes | 28 bytes | **50%** |
-| Medium struct | 63 bytes | 118 bytes | **47%** |
-| Large struct | 309 bytes | 490 bytes | **37%** |
-| Nested struct | 29 bytes | 83 bytes | **65%** |
+| Message Type | Cramberry | Protobuf | Comparison |
+|--------------|-----------|----------|------------|
+| SmallMessage | 47 ns | 45 ns | ~equal |
+| Document | 590 ns | 985 ns | **1.7x faster** |
+| Event | 275 ns | 536 ns | **1.9x faster** |
+
+### Memory Allocations
+
+- Single-allocation encoding pattern
+- Metrics decoding: **zero allocations**
+- 42-58% fewer allocations than Protobuf during decode
+
+### Encoded Size
+
+| Message Type | Cramberry | Protobuf | Comparison |
+|--------------|-----------|----------|------------|
+| SmallMessage | 18 B | 16 B | +12% |
+| Person | 212 B | 212 B | equal |
+| Document | 412 B | 419 B | -2% |
+| Batch1000 | 17 KB | 18 KB | -5% |
 
 ## API Reference
 
 ### Core Functions
 
 ```go
-// Marshal encodes a Go value to binary
 func Marshal(v any) ([]byte, error)
-
-// Unmarshal decodes binary data to a Go value
 func Unmarshal(data []byte, v any) error
-
-// Size returns the encoded size without allocating
-func Size(v any) int
-
-// MarshalAppend appends encoded data to existing buffer
+func MarshalWithOptions(v any, opts Options) ([]byte, error)
+func UnmarshalWithOptions(data []byte, v any, opts Options) error
 func MarshalAppend(buf []byte, v any) ([]byte, error)
+func Size(v any) int
 ```
 
 ### Type Registry
 
 ```go
-// Register a type for polymorphic encoding
-func Register[T any]() error
-func MustRegister[T any]()
-
-// Register with specific type ID
+func Register[T any]() (TypeID, error)
 func RegisterWithID[T any](id TypeID) error
-
-// Lookup types
-func (r *Registry) TypeIDFor(v any) TypeID
-func (r *Registry) TypeFor(id TypeID) (reflect.Type, bool)
+func MustRegister[T any]() TypeID
+func MustRegisterWithID[T any](id TypeID)
 ```
 
-### Writer/Reader
+### Writer/Reader (Low-Level)
 
 ```go
-// Low-level encoding
-w := cramberry.NewWriter()
+// Pooled writer for reduced allocations
+w := cramberry.GetWriter()
+defer cramberry.PutWriter(w)
 w.WriteInt32(42)
 w.WriteString("hello")
 data := w.Bytes()
 
-// Low-level decoding
+// Reader
 r := cramberry.NewReader(data)
 num := r.ReadInt32()
 str := r.ReadString()
@@ -286,93 +274,64 @@ str := r.ReadString()
 ### Streaming
 
 ```go
-// Stream writer
 sw := cramberry.NewStreamWriter(w)
 sw.WriteDelimited(&msg)
 sw.Flush()
 
-// Stream reader
 sr := cramberry.NewStreamReader(r)
 sr.ReadDelimited(&msg)
 
-// Iterator pattern
 it := cramberry.NewMessageIterator(r)
 for it.Next(&msg) { ... }
 ```
 
-## Cross-Language Support
-
-Cramberry provides runtime libraries for multiple languages:
+## Cross-Language Runtimes
 
 ### TypeScript
 
 ```typescript
-import { Writer, Reader, WireType } from '@cramberry/runtime';
+import { Writer, Reader } from '@cramberry/runtime';
 
-// Encoding
 const writer = new Writer();
 writer.writeInt32Field(1, 42);
 writer.writeStringField(2, "hello");
 const data = writer.bytes();
 
-// Decoding
 const reader = new Reader(data);
-while (reader.hasMore) {
-  const { fieldNumber, wireType } = reader.readTag();
-  switch (fieldNumber) {
-    case 1: console.log(reader.readInt32()); break;
-    case 2: console.log(reader.readString()); break;
-    default: reader.skipField(wireType);
-  }
-}
+// ... read fields
 ```
 
 ### Rust
 
 ```rust
-use cramberry::{Writer, Reader, WireType, Result};
+use cramberry::{Writer, Reader};
 
-fn main() -> Result<()> {
-    // Encoding
-    let mut writer = Writer::new();
-    writer.write_int32_field(1, 42)?;
-    writer.write_string_field(2, "hello")?;
-    let data = writer.into_bytes();
-
-    // Decoding
-    let mut reader = Reader::new(&data);
-    while reader.has_more() {
-        let tag = reader.read_tag()?;
-        match tag.field_number {
-            1 => println!("{}", reader.read_int32()?),
-            2 => println!("{}", reader.read_string()?),
-            _ => reader.skip_field(tag.wire_type)?,
-        }
-    }
-    Ok(())
-}
+let mut writer = Writer::new();
+writer.write_int32_field(1, 42)?;
+writer.write_string_field(2, "hello")?;
+let data = writer.into_bytes();
 ```
 
-### Schema Extraction
+## Cross-Language Compatibility Notes
 
-Extract Cramberry schemas from existing Go code:
-
-```bash
-# Extract schema from Go packages
-cramberry schema ./pkg/models -out schema.cram
-
-# Include unexported types
-cramberry schema -private ./...
-
-# Filter by type name patterns
-cramberry schema -include "User*" -exclude "*Internal" ./...
-```
+- `complex64/complex128` - Go only (no TypeScript/Rust support)
+- `int/uint` - Platform-dependent size; prefer explicit `int32`/`int64`
+- Map keys must be primitives (string, int, float, bool)
 
 ## Documentation
 
-- [Architecture Design](ARCHITECTURE.md)
-- [Implementation Plan](IMPLEMENTATION_PLAN.md)
+- [Architecture](ARCHITECTURE.md) - Design and implementation details
+- [Benchmarks](BENCHMARKS.md) - Full performance comparison
+
+## Development
+
+```bash
+make check    # Run all checks (format, vet, lint, test)
+make test     # Run tests with race detection
+make build    # Build CLI to bin/cramberry
+make bench    # Run benchmarks
+```
 
 ## License
 
-Apache License 2.0 - see [LICENSE](LICENSE) for details.
+Apache License 2.0
