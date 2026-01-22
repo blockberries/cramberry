@@ -1,0 +1,72 @@
+name: Benchmark
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  benchmark:
+    name: Run Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Run benchmarks
+        run: go test -bench=. -benchmem -count=5 ./... | tee bench.txt
+
+      - name: Download previous benchmark data
+        uses: actions/cache@v4
+        with:
+          path: ./cache
+          key: ${{ runner.os }}-benchmark
+
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Go Benchmarks
+          tool: 'go'
+          output-file-path: bench.txt
+          external-data-json-path: ./cache/benchmark-data.json
+          fail-on-alert: false
+          alert-threshold: '150%'
+          comment-on-alert: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Only save to cache on main branch
+          auto-push: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Comment PR with benchmark results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const benchOutput = fs.readFileSync('bench.txt', 'utf8');
+
+            // Extract just the benchmark lines
+            const benchLines = benchOutput.split('\n')
+              .filter(line => line.startsWith('Benchmark'))
+              .join('\n');
+
+            if (benchLines) {
+              const body = `## Benchmark Results\n\n\`\`\`\n${benchLines}\n\`\`\``;
+
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            }
