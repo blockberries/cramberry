@@ -270,6 +270,32 @@ func NewRegistrationError(typeName string, typeID TypeID, message string, cause 
 	}
 }
 
+// ValidationError represents a field validation failure.
+type ValidationError struct {
+	// Type is the name of the type being validated.
+	Type string
+
+	// Field is the name of the field that failed validation.
+	Field string
+
+	// Message describes what went wrong.
+	Message string
+}
+
+// Error returns a formatted error message.
+func (e *ValidationError) Error() string {
+	return fmt.Sprintf("cramberry: validate %s.%s: %s", e.Type, e.Field, e.Message)
+}
+
+// NewValidationError creates a new ValidationError.
+func NewValidationError(typeName, fieldName, message string) *ValidationError {
+	return &ValidationError{
+		Type:    typeName,
+		Field:   fieldName,
+		Message: message,
+	}
+}
+
 // WrapError wraps an error with additional context.
 // If the error is nil, nil is returned.
 func WrapError(err error, message string) error {
