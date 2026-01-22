@@ -183,14 +183,22 @@ func TestGoGeneratorModifiers(t *testing.T) {
 		t.Error("expected required tag")
 	}
 
+	// Check required scalar generates pointer (so we can distinguish nil from zero value)
+	if !strings.Contains(output, "Id *int32") {
+		t.Errorf("expected pointer for required scalar field, got: %s", output)
+	}
+
 	// Check optional generates pointer
 	if !strings.Contains(output, "Name *string") {
 		t.Errorf("expected pointer for optional field, got: %s", output)
 	}
 
-	// Check Validate method
+	// Check Validate method uses nil check
 	if !strings.Contains(output, "func (m *Request) Validate() error") {
 		t.Error("expected Validate method")
+	}
+	if !strings.Contains(output, "if m.Id == nil") {
+		t.Errorf("expected nil check for required field validation, got: %s", output)
 	}
 }
 

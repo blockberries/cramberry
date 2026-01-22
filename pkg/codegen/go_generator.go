@@ -61,6 +61,7 @@ func (c *goContext) funcMap() template.FuncMap {
 		"fieldTag":         c.fieldTag,
 		"hasRequired":      c.hasRequired,
 		"needsPointer":     c.needsPointer,
+		"isPointerField":   c.isPointerField,
 		"comment":          GoComment,
 		"indent":           Indent,
 		"toCamel":          ToCamelCase,
@@ -98,9 +99,16 @@ func (c *goContext) goFieldType(f *schema.Field) string {
 		}
 	}
 
+	// Optional fields become pointers
 	if f.Optional && !c.needsPointer(f.Type) && !f.Repeated {
 		return "*" + t
 	}
+
+	// Required scalar fields become pointers so we can distinguish nil (not set) from zero value
+	if f.Required && c.isScalarType(f.Type) && !f.Repeated {
+		return "*" + t
+	}
+
 	return t
 }
 
@@ -241,6 +249,34 @@ func (c *goContext) needsPointer(t schema.TypeRef) bool {
 	}
 }
 
+// isScalarType returns true if the type is a scalar (non-reference) type.
+func (c *goContext) isScalarType(t schema.TypeRef) bool {
+	switch typ := t.(type) {
+	case *schema.ScalarType:
+		// bytes is []byte which is a reference type
+		return typ.Name != "bytes"
+	default:
+		return false
+	}
+}
+
+// isPointerField returns true if the field will be generated as a pointer.
+func (c *goContext) isPointerField(f *schema.Field) bool {
+	if f.Repeated {
+		return false
+	}
+	if c.needsPointer(f.Type) {
+		return true
+	}
+	if f.Optional {
+		return true
+	}
+	if f.Required && c.isScalarType(f.Type) {
+		return true
+	}
+	return false
+}
+
 func init() {
 	Register(NewGoGenerator())
 }
@@ -317,7 +353,7 @@ func (m *{{goMessageType $msg}}) UnmarshalCramberry(data []byte) error {
 func (m *{{goMessageType $msg}}) Validate() error {
 {{- range $msg.Fields}}{{if .Required}}
 	// Field {{.Name}} is required
-	if m.{{goFieldName .}} == {{if eq (goFieldType .) "string"}}""{{else if eq (goFieldType .) "bool"}}false{{else}}0{{end}} {
+	if m.{{goFieldName .}} == nil {
 		return cramberry.NewValidationError("{{goMessageType $msg}}", "{{.Name}}", "required field is missing")
 	}
 {{- end}}{{end}}
