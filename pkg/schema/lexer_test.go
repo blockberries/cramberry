@@ -500,3 +500,65 @@ func TestLexerUnicodeIdentifiers(t *testing.T) {
 		t.Errorf("expected Ident '你好', got %v %q", tok3.Type, tok3.Value)
 	}
 }
+
+func TestLexerUnicodeStrings(t *testing.T) {
+	tests := []struct {
+		input string
+		value string
+	}{
+		{`"café"`, "café"},
+		{`"你好世界"`, "你好世界"},
+		{`"émoji: 🎉"`, "émoji: 🎉"},
+		{`"Привет"`, "Привет"},
+		{`"日本語"`, "日本語"},
+	}
+
+	for _, tt := range tests {
+		lexer := NewLexer("test.cramberry", tt.input)
+		tok := lexer.Next()
+		if tok.Type != TokenString {
+			t.Errorf("input %q: expected String, got %v (value: %q)", tt.input, tok.Type, tok.Value)
+			continue
+		}
+		if tok.Value != tt.value {
+			t.Errorf("input %q: expected value %q, got %q", tt.input, tt.value, tok.Value)
+		}
+	}
+}
+
+func TestLexerUnicodeColumnTracking(t *testing.T) {
+	// Test that column tracking works correctly with multi-byte characters
+	// Column should count characters (runes), not bytes
+	input := "café bar"
+
+	lexer := NewLexer("test.cramberry", input)
+
+	tok1 := lexer.Next() // café
+	if tok1.Position.Column != 1 {
+		t.Errorf("'café' column = %d, want 1", tok1.Position.Column)
+	}
+
+	tok2 := lexer.Next() // bar
+	// "café" is 4 characters + 1 space = bar should start at column 6
+	if tok2.Position.Column != 6 {
+		t.Errorf("'bar' column = %d, want 6", tok2.Position.Column)
+	}
+}
+
+func TestLexerUnicodeOffset(t *testing.T) {
+	// Test that byte offset is tracked correctly (separate from column)
+	input := "café bar"
+
+	lexer := NewLexer("test.cramberry", input)
+
+	tok1 := lexer.Next() // café
+	if tok1.Position.Offset != 0 {
+		t.Errorf("'café' offset = %d, want 0", tok1.Position.Offset)
+	}
+
+	tok2 := lexer.Next() // bar
+	// "café" is 5 bytes (c=1, a=1, f=1, é=2) + 1 space = 6 bytes
+	if tok2.Position.Offset != 6 {
+		t.Errorf("'bar' offset = %d, want 6", tok2.Position.Offset)
+	}
+}

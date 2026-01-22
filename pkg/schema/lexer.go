@@ -409,8 +409,14 @@ func (l *Lexer) scanString() Token {
 			}
 			l.advance()
 		} else {
-			sb.WriteByte(ch)
-			l.advance()
+			// Handle multi-byte UTF-8 characters correctly
+			r, size := utf8.DecodeRuneInString(l.input[l.pos:])
+			if r == utf8.RuneError && size == 1 {
+				return l.errorf("invalid UTF-8 sequence in string")
+			}
+			sb.WriteRune(r)
+			l.pos += size
+			l.column++
 		}
 	}
 
