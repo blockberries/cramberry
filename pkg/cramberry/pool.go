@@ -1,7 +1,6 @@
 package cramberry
 
 import (
-	"math/bits"
 	"sync"
 )
 
@@ -69,12 +68,6 @@ func PutBuffer(buf []byte) {
 	}
 }
 
-// GetBufferExact gets a buffer that can hold exactly n bytes.
-// Uses the smallest pool that can accommodate the size.
-func GetBufferExact(n int) []byte {
-	return GetBuffer(n)
-}
-
 // GetWriterWithHint gets a Writer with a pre-allocated buffer sized for the hint.
 // The Writer should be returned with PutWriter when done.
 func GetWriterWithHint(sizeHint int) *Writer {
@@ -83,16 +76,6 @@ func GetWriterWithHint(sizeHint int) *Writer {
 		buf:  buf,
 		opts: DefaultOptions,
 	}
-}
-
-// PutWriterBuffer returns the Writer's buffer to the pool.
-// Call this instead of PutWriter if you want to keep the Writer.
-func PutWriterBuffer(w *Writer) {
-	if w == nil || w.buf == nil {
-		return
-	}
-	PutBuffer(w.buf)
-	w.buf = nil
 }
 
 // BufferPoolStats returns statistics about buffer pool usage.
@@ -108,23 +91,4 @@ func GetBufferPoolStats() BufferPoolStats {
 		SizeClasses:  bufferSizes[:],
 		TotalClasses: len(bufferSizes),
 	}
-}
-
-// OptimalBufferSize returns the optimal buffer size for a given data size.
-// This rounds up to the nearest pool size class for efficient reuse.
-func OptimalBufferSize(dataSize int) int {
-	if dataSize <= 0 {
-		return 64
-	}
-	if dataSize > 65536 {
-		// For large buffers, round up to next power of 2
-		return 1 << bits.Len(uint(dataSize-1))
-	}
-	// Find the smallest pool that can hold the data
-	for _, size := range bufferSizes {
-		if dataSize <= size {
-			return size
-		}
-	}
-	return dataSize
 }

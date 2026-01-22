@@ -373,7 +373,7 @@ Options:`)
 	}
 
 	// Extract schema
-	extractor := extract.NewExtractor(cfg.Config)
+	extractor := extract.NewExtractor()
 	if err := extractor.ExtractAndWrite(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

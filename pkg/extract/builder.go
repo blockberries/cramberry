@@ -1,6 +1,7 @@
 package extract
 
 import (
+	"fmt"
 	"go/types"
 	"sort"
 	"strconv"
@@ -213,9 +214,10 @@ func (b *SchemaBuilder) buildInterfaces() {
 		for _, impl := range iface.Implementations {
 			if impl.TypeID > 0 {
 				if existingType, exists := usedTypeIDs[int(impl.TypeID)]; exists {
-					// Log warning about collision (type ID already used)
-					// For now, we'll still use it but this could be made an error
-					_ = existingType // Collision detected: impl.Name vs existingType
+					b.addWarning(fmt.Sprintf(
+						"type ID collision: %s and %s both use type ID %d",
+						existingType, impl.Name, impl.TypeID,
+					))
 				}
 				usedTypeIDs[int(impl.TypeID)] = impl.Name
 			}

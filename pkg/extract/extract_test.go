@@ -211,7 +211,7 @@ func TestExtractWithExclude(t *testing.T) {
 
 // TestExtractor tests the extractor directly.
 func TestExtractor(t *testing.T) {
-	extractor := NewExtractor(DefaultConfig())
+	extractor := NewExtractor()
 	cfg := &ExtractorConfig{
 		Config:   DefaultConfig(),
 		Patterns: []string{"github.com/blockberries/cramberry/pkg/extract/testdata"},

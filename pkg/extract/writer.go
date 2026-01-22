@@ -15,7 +15,7 @@ type Extractor struct {
 }
 
 // NewExtractor creates a new schema extractor.
-func NewExtractor(_ *Config) *Extractor {
+func NewExtractor() *Extractor {
 	return &Extractor{
 		loader: NewPackageLoader(),
 	}
@@ -96,19 +96,9 @@ func (e *Extractor) ExtractAndWrite(cfg *ExtractorConfig) error {
 	return writer.WriteSchema(out, s)
 }
 
-// ExtractToFile is a convenience function that extracts a schema and writes it to a file.
-func ExtractToFile(patterns []string, outputPath string, config *Config) error {
-	extractor := NewExtractor(config)
-	return extractor.ExtractAndWrite(&ExtractorConfig{
-		Config:     config,
-		Patterns:   patterns,
-		OutputPath: outputPath,
-	})
-}
-
 // ExtractToString is a convenience function that extracts a schema and returns it as a string.
 func ExtractToString(patterns []string, config *Config) (string, error) {
-	extractor := NewExtractor(config)
+	extractor := NewExtractor()
 	s, err := extractor.Extract(&ExtractorConfig{
 		Config:   config,
 		Patterns: patterns,

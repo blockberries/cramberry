@@ -133,13 +133,6 @@ func CompactTagSize(fieldNum int) int {
 	return size + 1
 }
 
-// GetWireTypeV2 returns the V2 wire type for a Go type.
-func GetWireTypeV2(_ interface{}) byte {
-	// This will be implemented based on reflect.Kind
-	// For now, return a default
-	return WireTypeV2Varint
-}
-
 // WriteCompactTag writes a compact tag to the writer.
 func (w *Writer) WriteCompactTag(fieldNum int, wireType byte) {
 	if !w.checkWrite() {
