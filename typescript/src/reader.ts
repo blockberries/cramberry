@@ -1,5 +1,8 @@
 import { BufferUnderflowError, InvalidWireTypeError, DecodeError } from "./errors";
-import { WireType, FieldTag, decodeTag, zigzagDecode, zigzagDecode64 } from "./types";
+import { WireType, TypeID, FieldTag, decodeTag, zigzagDecode, zigzagDecode64 } from "./types";
+
+// Module-level singleton to avoid repeated instantiation
+const textDecoder = new TextDecoder();
 
 /**
  * Reader decodes Cramberry data from a binary buffer.
@@ -208,8 +211,7 @@ export class Reader {
   readString(): string {
     const length = this.readVarint();
     const bytes = this.readBytes(length);
-    const decoder = new TextDecoder();
-    return decoder.decode(bytes);
+    return textDecoder.decode(bytes);
   }
 
   /**
@@ -262,5 +264,17 @@ export class Reader {
     const sub = new Reader(this.buffer.subarray(this.pos, this.pos + length));
     this.pos += length;
     return sub;
+  }
+
+  /**
+   * Reads a type reference (for polymorphic types).
+   * Returns the type ID and a sub-reader for the value data.
+   * Format: [type_id: varint] [data_length: varint] [data: bytes]
+   */
+  readTypeRef(): { typeId: TypeID; reader: Reader } {
+    const typeId = this.readVarint();
+    const length = this.readVarint();
+    const reader = this.subReader(length);
+    return { typeId, reader };
   }
 }

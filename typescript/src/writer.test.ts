@@ -143,4 +143,43 @@ describe('Writer', () => {
       expect(reader.readFloat64()).toBeCloseTo(Math.PI, 10);
     });
   });
+
+  describe('typeRef', () => {
+    it('writes and reads typeRef', () => {
+      // Create some value data
+      const valueWriter = new Writer();
+      valueWriter.writeString('polymorphic value');
+      const valueData = valueWriter.bytes();
+
+      // Write a typeRef field
+      const writer = new Writer();
+      writer.writeTypeRefField(1, 128, valueData);
+      const data = writer.bytes();
+
+      // Read it back
+      const reader = new Reader(data);
+      const tag = reader.readTag();
+      expect(tag.fieldNumber).toBe(1);
+      expect(tag.wireType).toBe(WireType.TypeRef);
+
+      const { typeId, reader: subReader } = reader.readTypeRef();
+      expect(typeId).toBe(128);
+      expect(subReader.readString()).toBe('polymorphic value');
+    });
+
+    it('writes typeRef without field tag', () => {
+      const valueWriter = new Writer();
+      valueWriter.writeVarint(42);
+      const valueData = valueWriter.bytes();
+
+      const writer = new Writer();
+      writer.writeTypeRef(256, valueData);
+      const data = writer.bytes();
+
+      const reader = new Reader(data);
+      const { typeId, reader: subReader } = reader.readTypeRef();
+      expect(typeId).toBe(256);
+      expect(subReader.readVarint()).toBe(42);
+    });
+  });
 });

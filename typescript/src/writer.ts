@@ -1,8 +1,11 @@
 import { BufferOverflowError } from "./errors";
-import { WireType, encodeTag, zigzagEncode, zigzagEncode64 } from "./types";
+import { WireType, TypeID, encodeTag, zigzagEncode, zigzagEncode64 } from "./types";
 
 const INITIAL_CAPACITY = 256;
 const GROWTH_FACTOR = 2;
+
+// Module-level singleton to avoid repeated instantiation
+const textEncoder = new TextEncoder();
 
 /**
  * Writer encodes Cramberry data into a binary buffer.
@@ -196,8 +199,7 @@ export class Writer {
    * Writes a length-prefixed string.
    */
   writeString(value: string): void {
-    const encoder = new TextEncoder();
-    const bytes = encoder.encode(value);
+    const bytes = textEncoder.encode(value);
     this.writeVarint(bytes.length);
     this.writeBytes(bytes);
   }
@@ -280,5 +282,22 @@ export class Writer {
   writeBytesField(fieldNumber: number, value: Uint8Array): void {
     this.writeTag(fieldNumber, WireType.Bytes);
     this.writeLengthPrefixedBytes(value);
+  }
+
+  /**
+   * Writes a type reference (for polymorphic types).
+   * Format: [type_id: varint] [data_length: varint] [data: bytes]
+   */
+  writeTypeRef(typeId: TypeID, data: Uint8Array): void {
+    this.writeVarint(typeId);
+    this.writeLengthPrefixedBytes(data);
+  }
+
+  /**
+   * Writes a tagged field with a type reference value.
+   */
+  writeTypeRefField(fieldNumber: number, typeId: TypeID, data: Uint8Array): void {
+    this.writeTag(fieldNumber, WireType.TypeRef);
+    this.writeTypeRef(typeId, data);
   }
 }
