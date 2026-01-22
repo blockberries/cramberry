@@ -37,3 +37,12 @@ tmp/
 *.gen.go
 *.gen.ts
 *.gen.rs
+gen/
+
+# Rust
+rust/target/
+
+# TypeScript/Node
+typescript/node_modules/
+typescript/dist/
+typescript/*.tsbuildinfo
