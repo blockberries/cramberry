@@ -263,6 +263,29 @@ func TestParseTypeIDFromDoc(t *testing.T) {
 	}
 }
 
+func TestUintBasedEnumDetection(t *testing.T) {
+	result, err := ExtractToString([]string{"github.com/cramberry/cramberry-go/pkg/extract/testdata"}, DefaultConfig())
+	if err != nil {
+		t.Fatalf("ExtractToString() error = %v", err)
+	}
+
+	// Check that both int-based and uint-based enums are detected
+	if !strings.Contains(result, "Status") {
+		t.Error("result should contain 'Status' enum (int-based)")
+	}
+	if !strings.Contains(result, "Priority") {
+		t.Error("result should contain 'Priority' enum (uint8-based)")
+	}
+
+	// Verify enum values are present (using the actual Go constant names)
+	if !strings.Contains(result, "StatusUnknown") || !strings.Contains(result, "StatusActive") {
+		t.Error("result should contain Status enum values")
+	}
+	if !strings.Contains(result, "PriorityLow") || !strings.Contains(result, "PriorityHigh") {
+		t.Error("result should contain Priority enum values")
+	}
+}
+
 func TestFieldNumberCollisionWarning(t *testing.T) {
 	// Create types with field number collision
 	types := map[string]*TypeInfo{

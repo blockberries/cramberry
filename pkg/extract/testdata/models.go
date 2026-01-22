@@ -10,6 +10,15 @@ const (
 	StatusInactive
 )
 
+// Priority represents a priority level using uint.
+type Priority uint8
+
+const (
+	PriorityLow    Priority = 0
+	PriorityMedium Priority = 1
+	PriorityHigh   Priority = 2
+)
+
 // User represents a user in the system.
 type User struct {
 	ID        int64  `cramberry:"1,required"`
