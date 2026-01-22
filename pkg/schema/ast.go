@@ -4,6 +4,8 @@
 // and interfaces for code generation across multiple languages.
 package schema
 
+import "fmt"
+
 // Position represents a position in source code.
 type Position struct {
 	Filename string
@@ -212,7 +214,7 @@ func (t *ArrayType) End() Position { return t.EndPos }
 func (t *ArrayType) typeRefNode()  {}
 func (t *ArrayType) String() string {
 	if t.Size > 0 {
-		return "[" + string(rune('0'+t.Size)) + "]" + t.Element.String()
+		return fmt.Sprintf("[%d]", t.Size) + t.Element.String()
 	}
 	return "[]" + t.Element.String()
 }
