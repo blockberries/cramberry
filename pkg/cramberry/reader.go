@@ -1,6 +1,8 @@
 package cramberry
 
 import (
+	"unsafe"
+
 	"github.com/cramberry/cramberry-go/internal/wire"
 )
 
@@ -258,6 +260,42 @@ func (r *Reader) ReadUvarint() uint64 {
 	return v
 }
 
+// ReadUvarintInline reads an unsigned varint with inlined fast path for 1-2 byte values.
+// This is faster for small values (< 16384) which are common.
+func (r *Reader) ReadUvarintInline() uint64 {
+	if r.err != nil || r.pos >= len(r.data) {
+		if r.err == nil {
+			r.setErrorAt(ErrUnexpectedEOF, "unexpected end of data")
+		}
+		return 0
+	}
+
+	// Fast path: single byte (value < 128)
+	b := r.data[r.pos]
+	if b < 0x80 {
+		r.pos++
+		return uint64(b)
+	}
+
+	// Fast path: two bytes (value < 16384)
+	if r.pos+1 < len(r.data) {
+		b2 := r.data[r.pos+1]
+		if b2 < 0x80 {
+			r.pos += 2
+			return uint64(b&0x7f) | uint64(b2)<<7
+		}
+	}
+
+	// Slow path: delegate to wire package
+	v, n, err := wire.DecodeUvarint(r.data[r.pos:])
+	if err != nil {
+		r.setErrorAt(err, "invalid varint")
+		return 0
+	}
+	r.pos += n
+	return v
+}
+
 // ReadSvarint reads a signed varint (ZigZag encoded).
 func (r *Reader) ReadSvarint() int64 {
 	if !r.checkRead() {
@@ -270,6 +308,13 @@ func (r *Reader) ReadSvarint() int64 {
 	}
 	r.pos += n
 	return v
+}
+
+// ReadSvarintInline reads a signed varint with inlined fast path.
+func (r *Reader) ReadSvarintInline() int64 {
+	u := r.ReadUvarintInline()
+	// ZigZag decode: (u >> 1) ^ -(u & 1)
+	return int64(u>>1) ^ -int64(u&1)
 }
 
 // ReadFixed32 reads a fixed 32-bit value (little-endian).
@@ -347,7 +392,7 @@ func (r *Reader) ReadString() string {
 	if !r.checkRead() {
 		return ""
 	}
-	length := r.ReadUvarint()
+	length := r.ReadUvarintInline()
 	if r.err != nil {
 		return ""
 	}
@@ -371,6 +416,38 @@ func (r *Reader) ReadString() string {
 		r.setError(ErrInvalidUTF8)
 		return ""
 	}
+	return s
+}
+
+// ReadStringZeroCopy reads a length-prefixed string without allocating.
+// WARNING: The returned string references the underlying buffer and is only valid
+// until the Reader's data is modified or freed. Use only when the string lifetime
+// is shorter than the buffer lifetime.
+func (r *Reader) ReadStringZeroCopy() string {
+	if !r.checkRead() {
+		return ""
+	}
+	length := r.ReadUvarintInline()
+	if r.err != nil {
+		return ""
+	}
+	if length > uint64(MaxInt) {
+		r.setErrorAt(ErrOverflow, "string length overflow")
+		return ""
+	}
+	n := int(length)
+	// Check limits
+	if r.opts.Limits.MaxStringLength > 0 && n > r.opts.Limits.MaxStringLength {
+		r.setError(ErrMaxStringLength)
+		return ""
+	}
+	if !r.ensure(n) {
+		return ""
+	}
+	// Zero-copy: create string header pointing to buffer
+	s := unsafe.String(&r.data[r.pos], n)
+	r.pos += n
+	// Skip UTF-8 validation for zero-copy (caller's responsibility)
 	return s
 }
 
@@ -620,3 +697,106 @@ func (r *Reader) SubReader(length int) *Reader {
 
 // MaxInt is the maximum value of int (platform dependent).
 const MaxInt = int(^uint(0) >> 1)
+
+// ============================================================================
+// Fast Packed Array Readers - Direct Memory Copy for Fixed-Size Types
+// ============================================================================
+
+// ReadPackedFloat32 reads a packed array of float32 values directly.
+// This is faster than reading element by element for large arrays.
+func (r *Reader) ReadPackedFloat32(count int) []float32 {
+	if count <= 0 {
+		return nil
+	}
+	byteSize := count * 4
+	if !r.ensure(byteSize) {
+		return nil
+	}
+
+	result := make([]float32, count)
+	for i := 0; i < count; i++ {
+		// Little-endian decode
+		v := uint32(r.data[r.pos]) |
+			uint32(r.data[r.pos+1])<<8 |
+			uint32(r.data[r.pos+2])<<16 |
+			uint32(r.data[r.pos+3])<<24
+		result[i] = *(*float32)(unsafe.Pointer(&v))
+		r.pos += 4
+	}
+	return result
+}
+
+// ReadPackedFloat64 reads a packed array of float64 values directly.
+func (r *Reader) ReadPackedFloat64(count int) []float64 {
+	if count <= 0 {
+		return nil
+	}
+	byteSize := count * 8
+	if !r.ensure(byteSize) {
+		return nil
+	}
+
+	result := make([]float64, count)
+	for i := 0; i < count; i++ {
+		// Little-endian decode
+		v := uint64(r.data[r.pos]) |
+			uint64(r.data[r.pos+1])<<8 |
+			uint64(r.data[r.pos+2])<<16 |
+			uint64(r.data[r.pos+3])<<24 |
+			uint64(r.data[r.pos+4])<<32 |
+			uint64(r.data[r.pos+5])<<40 |
+			uint64(r.data[r.pos+6])<<48 |
+			uint64(r.data[r.pos+7])<<56
+		result[i] = *(*float64)(unsafe.Pointer(&v))
+		r.pos += 8
+	}
+	return result
+}
+
+// ReadPackedFixed32 reads a packed array of fixed 32-bit values directly.
+func (r *Reader) ReadPackedFixed32(count int) []uint32 {
+	if count <= 0 {
+		return nil
+	}
+	byteSize := count * 4
+	if !r.ensure(byteSize) {
+		return nil
+	}
+
+	result := make([]uint32, count)
+	for i := 0; i < count; i++ {
+		// Little-endian decode
+		result[i] = uint32(r.data[r.pos]) |
+			uint32(r.data[r.pos+1])<<8 |
+			uint32(r.data[r.pos+2])<<16 |
+			uint32(r.data[r.pos+3])<<24
+		r.pos += 4
+	}
+	return result
+}
+
+// ReadPackedFixed64 reads a packed array of fixed 64-bit values directly.
+func (r *Reader) ReadPackedFixed64(count int) []uint64 {
+	if count <= 0 {
+		return nil
+	}
+	byteSize := count * 8
+	if !r.ensure(byteSize) {
+		return nil
+	}
+
+	result := make([]uint64, count)
+	for i := 0; i < count; i++ {
+		// Little-endian decode
+		result[i] = uint64(r.data[r.pos]) |
+			uint64(r.data[r.pos+1])<<8 |
+			uint64(r.data[r.pos+2])<<16 |
+			uint64(r.data[r.pos+3])<<24 |
+			uint64(r.data[r.pos+4])<<32 |
+			uint64(r.data[r.pos+5])<<40 |
+			uint64(r.data[r.pos+6])<<48 |
+			uint64(r.data[r.pos+7])<<56
+		r.pos += 8
+	}
+	return result
+}

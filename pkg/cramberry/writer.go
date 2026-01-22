@@ -266,6 +266,40 @@ func (w *Writer) WriteUvarint(v uint64) {
 	w.buf = wire.AppendUvarint(w.buf, v)
 }
 
+// WriteUvarintInline writes an unsigned varint with inlined fast path for 1-2 byte values.
+// This is faster for small values (< 16384) which are common.
+func (w *Writer) WriteUvarintInline(v uint64) {
+	if w.frozen || w.err != nil {
+		if !w.frozen {
+			return
+		}
+		w.setError(NewEncodeError("writer is frozen after Bytes() call", nil))
+		return
+	}
+
+	// Fast path: single byte (value < 128)
+	if v < 0x80 {
+		if len(w.buf)+1 > cap(w.buf) {
+			w.grow(1)
+		}
+		w.buf = append(w.buf, byte(v))
+		return
+	}
+
+	// Fast path: two bytes (value < 16384)
+	if v < 0x4000 {
+		if len(w.buf)+2 > cap(w.buf) {
+			w.grow(2)
+		}
+		w.buf = append(w.buf, byte(v)|0x80, byte(v>>7))
+		return
+	}
+
+	// Slow path: delegate to wire package
+	w.grow(MaxVarintLen64)
+	w.buf = wire.AppendUvarint(w.buf, v)
+}
+
 // WriteSvarint writes a signed varint using ZigZag encoding.
 func (w *Writer) WriteSvarint(v int64) {
 	if !w.checkWrite() {
@@ -273,6 +307,13 @@ func (w *Writer) WriteSvarint(v int64) {
 	}
 	w.grow(MaxVarintLen64)
 	w.buf = wire.AppendSvarint(w.buf, v)
+}
+
+// WriteSvarintInline writes a signed varint with inlined fast path.
+func (w *Writer) WriteSvarintInline(v int64) {
+	// ZigZag encode: (v << 1) ^ (v >> 63)
+	u := uint64(v<<1) ^ uint64(v>>63)
+	w.WriteUvarintInline(u)
 }
 
 // WriteFloat32 writes a 32-bit floating point number.
@@ -676,3 +717,94 @@ func SizeOfSFixed64(_ int64) int {
 
 // Suppress unused import warning
 var _ = math.Float32bits
+
+// ============================================================================
+// Fast Packed Array Writers - Direct Memory Layout for Fixed-Size Types
+// ============================================================================
+
+// WritePackedFloat32 writes a packed array of float32 values.
+// This is faster than writing element by element for large arrays.
+func (w *Writer) WritePackedFloat32(values []float32) {
+	if !w.checkWrite() {
+		return
+	}
+	if len(values) == 0 {
+		return
+	}
+	byteSize := len(values) * 4
+	w.grow(byteSize)
+	for _, v := range values {
+		bits := math.Float32bits(v)
+		w.buf = append(w.buf,
+			byte(bits),
+			byte(bits>>8),
+			byte(bits>>16),
+			byte(bits>>24))
+	}
+}
+
+// WritePackedFloat64 writes a packed array of float64 values.
+func (w *Writer) WritePackedFloat64(values []float64) {
+	if !w.checkWrite() {
+		return
+	}
+	if len(values) == 0 {
+		return
+	}
+	byteSize := len(values) * 8
+	w.grow(byteSize)
+	for _, v := range values {
+		bits := math.Float64bits(v)
+		w.buf = append(w.buf,
+			byte(bits),
+			byte(bits>>8),
+			byte(bits>>16),
+			byte(bits>>24),
+			byte(bits>>32),
+			byte(bits>>40),
+			byte(bits>>48),
+			byte(bits>>56))
+	}
+}
+
+// WritePackedFixed32 writes a packed array of fixed 32-bit values.
+func (w *Writer) WritePackedFixed32(values []uint32) {
+	if !w.checkWrite() {
+		return
+	}
+	if len(values) == 0 {
+		return
+	}
+	byteSize := len(values) * 4
+	w.grow(byteSize)
+	for _, v := range values {
+		w.buf = append(w.buf,
+			byte(v),
+			byte(v>>8),
+			byte(v>>16),
+			byte(v>>24))
+	}
+}
+
+// WritePackedFixed64 writes a packed array of fixed 64-bit values.
+func (w *Writer) WritePackedFixed64(values []uint64) {
+	if !w.checkWrite() {
+		return
+	}
+	if len(values) == 0 {
+		return
+	}
+	byteSize := len(values) * 8
+	w.grow(byteSize)
+	for _, v := range values {
+		w.buf = append(w.buf,
+			byte(v),
+			byte(v>>8),
+			byte(v>>16),
+			byte(v>>24),
+			byte(v>>32),
+			byte(v>>40),
+			byte(v>>48),
+			byte(v>>56))
+	}
+}
