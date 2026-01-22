@@ -26,6 +26,9 @@ jobs:
           go-version: ${{ matrix.go-version }}
           cache: true
 
+      - name: Set up Go environment
+        run: go env -w GOTOOLCHAIN=go${{ matrix.go-version }}.0+auto
+
       - name: Download dependencies
         run: go mod download
 

@@ -22,6 +22,9 @@ jobs:
           go-version: '1.23'
           cache: true
 
+      - name: Set up Go environment
+        run: go env -w GOTOOLCHAIN=go1.23.0+auto
+
       - name: Run tests
         run: go test -race ./...
 
