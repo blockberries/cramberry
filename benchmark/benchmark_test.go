@@ -8,7 +8,6 @@ import (
 
 	cramgen "github.com/cramberry/cramberry-go/benchmark/gen/cramberry"
 	pb "github.com/cramberry/cramberry-go/benchmark/gen/protobuf"
-	"github.com/cramberry/cramberry-go/pkg/cramberry"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -675,18 +674,18 @@ func BenchmarkSmallMessage_Cramberry_Encode(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		_, _ = cramberry.Marshal(msg)
+		_, _ = msg.MarshalCramberry()
 	}
 }
 
 func BenchmarkSmallMessage_Cramberry_Decode(b *testing.B) {
 	msg := makeCramberrySmallMessage()
-	data, _ := cramberry.Marshal(msg)
+	data, _ := msg.MarshalCramberry()
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		var result cramgen.SmallMessage
-		_ = cramberry.Unmarshal(data, &result)
+		_ = result.UnmarshalCramberry(data)
 	}
 }
 
@@ -739,18 +738,18 @@ func BenchmarkMetrics_Cramberry_Encode(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		_, _ = cramberry.Marshal(msg)
+		_, _ = msg.MarshalCramberry()
 	}
 }
 
 func BenchmarkMetrics_Cramberry_Decode(b *testing.B) {
 	msg := makeCramberryMetrics()
-	data, _ := cramberry.Marshal(msg)
+	data, _ := msg.MarshalCramberry()
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		var result cramgen.Metrics
-		_ = cramberry.Unmarshal(data, &result)
+		_ = result.UnmarshalCramberry(data)
 	}
 }
 
@@ -803,18 +802,18 @@ func BenchmarkPerson_Cramberry_Encode(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		_, _ = cramberry.Marshal(msg)
+		_, _ = msg.MarshalCramberry()
 	}
 }
 
 func BenchmarkPerson_Cramberry_Decode(b *testing.B) {
 	msg := makeCramberryPerson()
-	data, _ := cramberry.Marshal(msg)
+	data, _ := msg.MarshalCramberry()
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		var result cramgen.Person
-		_ = cramberry.Unmarshal(data, &result)
+		_ = result.UnmarshalCramberry(data)
 	}
 }
 
@@ -867,18 +866,18 @@ func BenchmarkDocument_Cramberry_Encode(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		_, _ = cramberry.Marshal(msg)
+		_, _ = msg.MarshalCramberry()
 	}
 }
 
 func BenchmarkDocument_Cramberry_Decode(b *testing.B) {
 	msg := makeCramberryDocument()
-	data, _ := cramberry.Marshal(msg)
+	data, _ := msg.MarshalCramberry()
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		var result cramgen.Document
-		_ = cramberry.Unmarshal(data, &result)
+		_ = result.UnmarshalCramberry(data)
 	}
 }
 
@@ -931,18 +930,18 @@ func BenchmarkEvent_Cramberry_Encode(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		_, _ = cramberry.Marshal(msg)
+		_, _ = msg.MarshalCramberry()
 	}
 }
 
 func BenchmarkEvent_Cramberry_Decode(b *testing.B) {
 	msg := makeCramberryEvent()
-	data, _ := cramberry.Marshal(msg)
+	data, _ := msg.MarshalCramberry()
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		var result cramgen.Event
-		_ = cramberry.Unmarshal(data, &result)
+		_ = result.UnmarshalCramberry(data)
 	}
 }
 
@@ -995,18 +994,18 @@ func BenchmarkBatch100_Cramberry_Encode(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		_, _ = cramberry.Marshal(msg)
+		_, _ = msg.MarshalCramberry()
 	}
 }
 
 func BenchmarkBatch100_Cramberry_Decode(b *testing.B) {
 	msg := makeCramberryBatchRequest(100)
-	data, _ := cramberry.Marshal(msg)
+	data, _ := msg.MarshalCramberry()
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		var result cramgen.BatchRequest
-		_ = cramberry.Unmarshal(data, &result)
+		_ = result.UnmarshalCramberry(data)
 	}
 }
 
@@ -1055,18 +1054,18 @@ func BenchmarkBatch1000_Cramberry_Encode(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		_, _ = cramberry.Marshal(msg)
+		_, _ = msg.MarshalCramberry()
 	}
 }
 
 func BenchmarkBatch1000_Cramberry_Decode(b *testing.B) {
 	msg := makeCramberryBatchRequest(1000)
-	data, _ := cramberry.Marshal(msg)
+	data, _ := msg.MarshalCramberry()
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		var result cramgen.BatchRequest
-		_ = cramberry.Unmarshal(data, &result)
+		_ = result.UnmarshalCramberry(data)
 	}
 }
 
@@ -1123,43 +1122,43 @@ func TestEncodedSizes(t *testing.T) {
 	}{
 		{
 			name: "SmallMessage",
-			cram: func() ([]byte, error) { return cramberry.Marshal(makeCramberrySmallMessage()) },
+			cram: func() ([]byte, error) { return makeCramberrySmallMessage().MarshalCramberry() },
 			pb:   func() ([]byte, error) { return proto.Marshal(makeProtobufSmallMessage()) },
 			json: func() ([]byte, error) { return json.Marshal(makeJSONSmallMessage()) },
 		},
 		{
 			name: "Metrics",
-			cram: func() ([]byte, error) { return cramberry.Marshal(makeCramberryMetrics()) },
+			cram: func() ([]byte, error) { return makeCramberryMetrics().MarshalCramberry() },
 			pb:   func() ([]byte, error) { return proto.Marshal(makeProtobufMetrics()) },
 			json: func() ([]byte, error) { return json.Marshal(makeJSONMetrics()) },
 		},
 		{
 			name: "Person",
-			cram: func() ([]byte, error) { return cramberry.Marshal(makeCramberryPerson()) },
+			cram: func() ([]byte, error) { return makeCramberryPerson().MarshalCramberry() },
 			pb:   func() ([]byte, error) { return proto.Marshal(makeProtobufPerson()) },
 			json: func() ([]byte, error) { return json.Marshal(makeJSONPerson()) },
 		},
 		{
 			name: "Document",
-			cram: func() ([]byte, error) { return cramberry.Marshal(makeCramberryDocument()) },
+			cram: func() ([]byte, error) { return makeCramberryDocument().MarshalCramberry() },
 			pb:   func() ([]byte, error) { return proto.Marshal(makeProtobufDocument()) },
 			json: func() ([]byte, error) { return json.Marshal(makeJSONDocument()) },
 		},
 		{
 			name: "Event",
-			cram: func() ([]byte, error) { return cramberry.Marshal(makeCramberryEvent()) },
+			cram: func() ([]byte, error) { return makeCramberryEvent().MarshalCramberry() },
 			pb:   func() ([]byte, error) { return proto.Marshal(makeProtobufEvent()) },
 			json: func() ([]byte, error) { return json.Marshal(makeJSONEvent()) },
 		},
 		{
 			name: "Batch100",
-			cram: func() ([]byte, error) { return cramberry.Marshal(makeCramberryBatchRequest(100)) },
+			cram: func() ([]byte, error) { return makeCramberryBatchRequest(100).MarshalCramberry() },
 			pb:   func() ([]byte, error) { return proto.Marshal(makeProtobufBatchRequest(100)) },
 			json: func() ([]byte, error) { return json.Marshal(makeJSONBatchRequest(100)) },
 		},
 		{
 			name: "Batch1000",
-			cram: func() ([]byte, error) { return cramberry.Marshal(makeCramberryBatchRequest(1000)) },
+			cram: func() ([]byte, error) { return makeCramberryBatchRequest(1000).MarshalCramberry() },
 			pb:   func() ([]byte, error) { return proto.Marshal(makeProtobufBatchRequest(1000)) },
 			json: func() ([]byte, error) { return json.Marshal(makeJSONBatchRequest(1000)) },
 		},
