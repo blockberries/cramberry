@@ -306,8 +306,13 @@ func TestGoGeneratorOptions(t *testing.T) {
 			t.Fatalf("generate error: %v", err)
 		}
 
-		if strings.Contains(buf.String(), "MarshalCramberry") {
+		output := buf.String()
+		if strings.Contains(output, "MarshalCramberry") {
 			t.Error("expected no marshal methods")
+		}
+		// When no marshal and no required fields and no interfaces, should not have empty import block
+		if strings.Contains(output, "import (") && !strings.Contains(output, `"github.com/cramberry`) {
+			t.Error("expected no empty import block")
 		}
 	})
 
