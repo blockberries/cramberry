@@ -112,6 +112,11 @@ func decodePointer(r *Reader, v reflect.Value) error {
 
 // decodeSlice decodes a slice value.
 func decodeSlice(r *Reader, v reflect.Value) error {
+	// Use packed decoding for primitive types in V2
+	if r.Options().WireVersion == WireVersionV2 && isPackableType(v.Type().Elem()) {
+		return decodePackedSlice(r, v)
+	}
+
 	n := r.ReadArrayHeader()
 	if r.Err() != nil {
 		return r.Err()
@@ -135,8 +140,63 @@ func decodeSlice(r *Reader, v reflect.Value) error {
 	return r.Err()
 }
 
+// decodePackedSlice decodes a slice of primitive types in packed format.
+func decodePackedSlice(r *Reader, v reflect.Value) error {
+	n := int(r.ReadUvarint())
+	if r.Err() != nil {
+		return r.Err()
+	}
+
+	if n == 0 {
+		v.Set(reflect.MakeSlice(v.Type(), 0, 0))
+		return nil
+	}
+
+	slice := reflect.MakeSlice(v.Type(), n, n)
+	elemKind := v.Type().Elem().Kind()
+
+	for i := 0; i < n; i++ {
+		elem := slice.Index(i)
+		switch elemKind {
+		case reflect.Bool:
+			elem.SetBool(r.ReadBool())
+		case reflect.Int8:
+			elem.SetInt(int64(r.ReadInt8()))
+		case reflect.Int16:
+			elem.SetInt(int64(r.ReadInt16()))
+		case reflect.Int32:
+			elem.SetInt(int64(r.ReadInt32()))
+		case reflect.Int64, reflect.Int:
+			elem.SetInt(r.ReadInt64())
+		case reflect.Uint8:
+			elem.SetUint(uint64(r.ReadUint8()))
+		case reflect.Uint16:
+			elem.SetUint(uint64(r.ReadUint16()))
+		case reflect.Uint32:
+			elem.SetUint(uint64(r.ReadUint32()))
+		case reflect.Uint64, reflect.Uint:
+			elem.SetUint(r.ReadUint64())
+		case reflect.Float32:
+			elem.SetFloat(float64(r.ReadFloat32()))
+		case reflect.Float64:
+			elem.SetFloat(r.ReadFloat64())
+		}
+		if r.Err() != nil {
+			return r.Err()
+		}
+	}
+
+	v.Set(slice)
+	return r.Err()
+}
+
 // decodeArray decodes an array value.
 func decodeArray(r *Reader, v reflect.Value) error {
+	// Use packed decoding for primitive types in V2
+	if r.Options().WireVersion == WireVersionV2 && isPackableType(v.Type().Elem()) {
+		return decodePackedArray(r, v)
+	}
+
 	n := r.ReadArrayHeader()
 	if r.Err() != nil {
 		return r.Err()
@@ -149,6 +209,58 @@ func decodeArray(r *Reader, v reflect.Value) error {
 	for i := 0; i < n; i++ {
 		if err := decodeValue(r, v.Index(i)); err != nil {
 			return err
+		}
+	}
+
+	// Zero out remaining elements if the encoded array was shorter
+	for i := n; i < v.Len(); i++ {
+		v.Index(i).SetZero()
+	}
+
+	return r.Err()
+}
+
+// decodePackedArray decodes an array of primitive types in packed format.
+func decodePackedArray(r *Reader, v reflect.Value) error {
+	n := int(r.ReadUvarint())
+	if r.Err() != nil {
+		return r.Err()
+	}
+
+	if n > v.Len() {
+		return NewDecodeError("array length mismatch", nil)
+	}
+
+	elemKind := v.Type().Elem().Kind()
+
+	for i := 0; i < n; i++ {
+		elem := v.Index(i)
+		switch elemKind {
+		case reflect.Bool:
+			elem.SetBool(r.ReadBool())
+		case reflect.Int8:
+			elem.SetInt(int64(r.ReadInt8()))
+		case reflect.Int16:
+			elem.SetInt(int64(r.ReadInt16()))
+		case reflect.Int32:
+			elem.SetInt(int64(r.ReadInt32()))
+		case reflect.Int64, reflect.Int:
+			elem.SetInt(r.ReadInt64())
+		case reflect.Uint8:
+			elem.SetUint(uint64(r.ReadUint8()))
+		case reflect.Uint16:
+			elem.SetUint(uint64(r.ReadUint16()))
+		case reflect.Uint32:
+			elem.SetUint(uint64(r.ReadUint32()))
+		case reflect.Uint64, reflect.Uint:
+			elem.SetUint(r.ReadUint64())
+		case reflect.Float32:
+			elem.SetFloat(float64(r.ReadFloat32()))
+		case reflect.Float64:
+			elem.SetFloat(r.ReadFloat64())
+		}
+		if r.Err() != nil {
+			return r.Err()
 		}
 	}
 
@@ -193,7 +305,17 @@ func decodeMap(r *Reader, v reflect.Value) error {
 }
 
 // decodeStruct decodes a struct value using field tags.
+// Dispatches to V1 or V2 decoding based on options.
 func decodeStruct(r *Reader, v reflect.Value) error {
+	if r.Options().WireVersion == WireVersionV2 {
+		return decodeStructV2(r, v)
+	}
+	return decodeStructV1(r, v)
+}
+
+// decodeStructV1 decodes a struct using V1 wire format (field count prefix).
+// Deprecated: Use V2 for new code.
+func decodeStructV1(r *Reader, v reflect.Value) error {
 	info := getStructInfo(v.Type())
 
 	// Create a map of field number to field info for quick lookup
@@ -224,6 +346,62 @@ func decodeStruct(r *Reader, v reflect.Value) error {
 				return NewFieldDecodeError(v.Type().Name(), "", fieldNum, r.Pos(), "unknown field", ErrUnknownField)
 			}
 			r.SkipValue(wireType)
+			continue
+		}
+
+		fieldsSeen[fieldNum] = true
+		fv := v.Field(fi.index)
+
+		if err := decodeValue(r, fv); err != nil {
+			return err
+		}
+	}
+
+	// Check for missing required fields
+	for _, fi := range info.fields {
+		if fi.required && !fieldsSeen[fi.num] {
+			return NewFieldDecodeError(v.Type().Name(), fi.name, fi.num, -1, "required field missing", ErrRequiredFieldMissing)
+		}
+	}
+
+	return r.Err()
+}
+
+// decodeStructV2 decodes a struct using V2 wire format (compact tags + end marker).
+// Key differences from V1:
+//   - Reads until end marker (0x00) instead of using field count
+//   - Uses compact tags (single byte for fields 1-15)
+func decodeStructV2(r *Reader, v reflect.Value) error {
+	info := getStructInfo(v.Type())
+
+	// Create a map of field number to field info for quick lookup
+	fieldMap := make(map[int]*fieldInfo, len(info.fields))
+	for i := range info.fields {
+		fieldMap[info.fields[i].num] = &info.fields[i]
+	}
+
+	// Track which fields were set (for required field checking)
+	fieldsSeen := make(map[int]bool)
+
+	// Read fields until end marker
+	for {
+		fieldNum, wireType := r.ReadCompactTag()
+		if r.Err() != nil {
+			return r.Err()
+		}
+
+		// fieldNum=0 indicates end marker
+		if fieldNum == 0 {
+			break
+		}
+
+		fi, ok := fieldMap[fieldNum]
+		if !ok {
+			// Unknown field - skip it in non-strict mode
+			if r.Options().StrictMode {
+				return NewFieldDecodeError(v.Type().Name(), "", fieldNum, r.Pos(), "unknown field", ErrUnknownField)
+			}
+			r.SkipValueV2(wireType)
 			continue
 		}
 
@@ -387,6 +565,14 @@ func sizeMap(v reflect.Value, opts Options) int {
 }
 
 func sizeStruct(v reflect.Value, opts Options) int {
+	if opts.WireVersion == WireVersionV2 {
+		return sizeStructV2(v, opts)
+	}
+	return sizeStructV1(v, opts)
+}
+
+// sizeStructV1 calculates the encoded size using V1 format.
+func sizeStructV1(v reflect.Value, opts Options) int {
 	info := getStructInfo(v.Type())
 
 	// Count fields being encoded
@@ -411,6 +597,27 @@ func sizeStruct(v reflect.Value, opts Options) int {
 		size += SizeOfTag(field.num)
 		size += sizeValue(fv, opts)
 	}
+
+	return size
+}
+
+// sizeStructV2 calculates the encoded size using V2 format.
+func sizeStructV2(v reflect.Value, opts Options) int {
+	info := getStructInfo(v.Type())
+
+	size := 0
+	for _, field := range info.fields {
+		fv := v.Field(field.index)
+		if opts.OmitEmpty && isZeroValue(fv) {
+			continue
+		}
+		// Compact tag size + value size
+		size += CompactTagSize(field.num)
+		size += sizeValue(fv, opts)
+	}
+
+	// Add end marker size (1 byte)
+	size += 1
 
 	return size
 }

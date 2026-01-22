@@ -160,6 +160,12 @@ func encodeSlice(w *Writer, v reflect.Value) error {
 		w.WriteArrayHeader(0)
 		return w.Err()
 	}
+
+	// Use packed encoding for primitive types in V2
+	if w.Options().WireVersion == WireVersionV2 && isPackableType(v.Type().Elem()) {
+		return encodePackedSlice(w, v)
+	}
+
 	n := v.Len()
 	w.WriteArrayHeader(n)
 	if w.Err() != nil {
@@ -170,11 +176,76 @@ func encodeSlice(w *Writer, v reflect.Value) error {
 			return err
 		}
 	}
+	return w.Err()
+}
+
+// isPackableType returns true if the type can be packed in a contiguous byte sequence.
+// Packable types are fixed-size primitives: integers, floats, and bools.
+func isPackableType(t reflect.Type) bool {
+	switch t.Kind() {
+	case reflect.Bool,
+		reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int,
+		reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uint,
+		reflect.Float32, reflect.Float64:
+		return true
+	default:
+		return false
+	}
+}
+
+// encodePackedSlice encodes a slice of primitive types in packed format.
+// Format: [count:varint][elem1][elem2]...[elemN]
+// Elements are encoded without individual tags, contiguously.
+func encodePackedSlice(w *Writer, v reflect.Value) error {
+	n := v.Len()
+	w.WriteUvarint(uint64(n))
+	if w.Err() != nil {
+		return w.Err()
+	}
+
+	elemKind := v.Type().Elem().Kind()
+
+	for i := 0; i < n; i++ {
+		elem := v.Index(i)
+		switch elemKind {
+		case reflect.Bool:
+			w.WriteBool(elem.Bool())
+		case reflect.Int8:
+			w.WriteInt8(int8(elem.Int()))
+		case reflect.Int16:
+			w.WriteInt16(int16(elem.Int()))
+		case reflect.Int32:
+			w.WriteInt32(int32(elem.Int()))
+		case reflect.Int64, reflect.Int:
+			w.WriteInt64(elem.Int())
+		case reflect.Uint8:
+			w.WriteUint8(uint8(elem.Uint()))
+		case reflect.Uint16:
+			w.WriteUint16(uint16(elem.Uint()))
+		case reflect.Uint32:
+			w.WriteUint32(uint32(elem.Uint()))
+		case reflect.Uint64, reflect.Uint:
+			w.WriteUint64(elem.Uint())
+		case reflect.Float32:
+			w.WriteFloat32(float32(elem.Float()))
+		case reflect.Float64:
+			w.WriteFloat64(elem.Float())
+		}
+		if w.Err() != nil {
+			return w.Err()
+		}
+	}
+
 	return w.Err()
 }
 
 // encodeArray encodes an array value.
 func encodeArray(w *Writer, v reflect.Value) error {
+	// Use packed encoding for primitive types in V2
+	if w.Options().WireVersion == WireVersionV2 && isPackableType(v.Type().Elem()) {
+		return encodePackedArray(w, v)
+	}
+
 	n := v.Len()
 	w.WriteArrayHeader(n)
 	if w.Err() != nil {
@@ -188,7 +259,52 @@ func encodeArray(w *Writer, v reflect.Value) error {
 	return w.Err()
 }
 
-// encodeMap encodes a map value with deterministic key ordering.
+// encodePackedArray encodes an array of primitive types in packed format.
+func encodePackedArray(w *Writer, v reflect.Value) error {
+	n := v.Len()
+	w.WriteUvarint(uint64(n))
+	if w.Err() != nil {
+		return w.Err()
+	}
+
+	elemKind := v.Type().Elem().Kind()
+
+	for i := 0; i < n; i++ {
+		elem := v.Index(i)
+		switch elemKind {
+		case reflect.Bool:
+			w.WriteBool(elem.Bool())
+		case reflect.Int8:
+			w.WriteInt8(int8(elem.Int()))
+		case reflect.Int16:
+			w.WriteInt16(int16(elem.Int()))
+		case reflect.Int32:
+			w.WriteInt32(int32(elem.Int()))
+		case reflect.Int64, reflect.Int:
+			w.WriteInt64(elem.Int())
+		case reflect.Uint8:
+			w.WriteUint8(uint8(elem.Uint()))
+		case reflect.Uint16:
+			w.WriteUint16(uint16(elem.Uint()))
+		case reflect.Uint32:
+			w.WriteUint32(uint32(elem.Uint()))
+		case reflect.Uint64, reflect.Uint:
+			w.WriteUint64(elem.Uint())
+		case reflect.Float32:
+			w.WriteFloat32(float32(elem.Float()))
+		case reflect.Float64:
+			w.WriteFloat64(elem.Float())
+		}
+		if w.Err() != nil {
+			return w.Err()
+		}
+	}
+
+	return w.Err()
+}
+
+// encodeMap encodes a map value.
+// If Deterministic option is enabled, keys are sorted for reproducible output.
 func encodeMap(w *Writer, v reflect.Value) error {
 	if v.IsNil() {
 		w.WriteMapHeader(0)
@@ -208,10 +324,12 @@ func encodeMap(w *Writer, v reflect.Value) error {
 		return w.Err()
 	}
 
-	// Sort keys for deterministic encoding
-	sortedKeys := sortMapKeys(keys)
+	// Sort keys only if deterministic mode is enabled
+	if w.Options().Deterministic {
+		keys = sortMapKeys(keys)
+	}
 
-	for _, key := range sortedKeys {
+	for _, key := range keys {
 		if err := encodeValue(w, key); err != nil {
 			return err
 		}
@@ -223,9 +341,17 @@ func encodeMap(w *Writer, v reflect.Value) error {
 }
 
 // encodeStruct encodes a struct value using field tags.
-// Structs are encoded as a sequence of tag+value pairs with no explicit terminator.
-// The message boundary is determined by the caller (typically via length-prefixing).
+// Dispatches to V1 or V2 encoding based on options.
 func encodeStruct(w *Writer, v reflect.Value) error {
+	if w.Options().WireVersion == WireVersionV2 {
+		return encodeStructV2(w, v)
+	}
+	return encodeStructV1(w, v)
+}
+
+// encodeStructV1 encodes a struct using V1 wire format (field count prefix).
+// Deprecated: Use V2 for new code.
+func encodeStructV1(w *Writer, v reflect.Value) error {
 	info := getStructInfo(v.Type())
 
 	// Write number of fields being encoded (for efficient decoding)
@@ -263,6 +389,62 @@ func encodeStruct(w *Writer, v reflect.Value) error {
 	}
 
 	return w.Err()
+}
+
+// encodeStructV2 encodes a struct using V2 wire format (compact tags + end marker).
+// Key differences from V1:
+//   - Single byte tags for fields 1-15
+//   - End marker (0x00) instead of field count prefix
+//   - No two-pass encoding needed
+func encodeStructV2(w *Writer, v reflect.Value) error {
+	info := getStructInfo(v.Type())
+
+	for _, field := range info.fields {
+		fv := v.Field(field.index)
+
+		// Handle OmitEmpty
+		if w.Options().OmitEmpty && isZeroValue(fv) {
+			continue
+		}
+
+		// Write compact field tag
+		w.WriteCompactTag(field.num, getWireTypeV2(fv.Type()))
+		if w.Err() != nil {
+			return w.Err()
+		}
+
+		// Encode value
+		if err := encodeValue(w, fv); err != nil {
+			return err
+		}
+	}
+
+	// Write end marker
+	w.WriteEndMarker()
+	return w.Err()
+}
+
+// getWireTypeV2 returns the V2 wire type for a reflect.Type.
+func getWireTypeV2(t reflect.Type) byte {
+	switch t.Kind() {
+	case reflect.Bool, reflect.Uint8, reflect.Uint16, reflect.Uint32,
+		reflect.Uint, reflect.Uint64, reflect.Uintptr:
+		return WireTypeV2Varint
+	case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int, reflect.Int64:
+		return WireTypeV2SVarint
+	case reflect.Float32:
+		return WireTypeV2Fixed32
+	case reflect.Float64:
+		return WireTypeV2Fixed64
+	case reflect.Complex64:
+		return WireTypeV2Fixed64 // 2x float32 = 8 bytes
+	case reflect.Complex128, reflect.String, reflect.Slice, reflect.Array, reflect.Map, reflect.Struct:
+		return WireTypeV2Bytes
+	case reflect.Ptr, reflect.Interface:
+		return WireTypeV2Bytes
+	default:
+		return WireTypeV2Bytes
+	}
 }
 
 // fieldInfo holds metadata about a struct field.
