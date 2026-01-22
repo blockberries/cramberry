@@ -127,13 +127,13 @@ example-polymorphic: ## Run polymorphic example
 
 schema-generate: build ## Generate code from example schemas
 	@mkdir -p gen/
-	@$(BINARY_DIR)/$(BINARY) generate -lang go -out gen/ examples/schemas/*.cramberry
+	@$(BINARY_DIR)/$(BINARY) generate -lang go -out gen/ examples/schemas/*.cram
 	@echo "Generated Go code in gen/"
 
 schema-extract: build ## Extract schema from example code
 	@mkdir -p gen/
-	@$(BINARY_DIR)/$(BINARY) schema -out gen/extracted.cramberry ./examples/basic/...
-	@echo "Extracted schema to gen/extracted.cramberry"
+	@$(BINARY_DIR)/$(BINARY) schema -out gen/extracted.cram ./examples/basic/...
+	@echo "Extracted schema to gen/extracted.cram"
 
 ## Cross-language runtime targets
 

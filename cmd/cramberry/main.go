@@ -342,7 +342,7 @@ Extract Cramberry schema from Go source code.
 
 Examples:
   cramberry schema ./...
-  cramberry schema -out schema.cramberry ./pkg/models
+  cramberry schema -out schema.cram ./pkg/models
   cramberry schema -include "User*" -exclude "*Internal" ./...
 
 Options:`)

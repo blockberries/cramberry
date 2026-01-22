@@ -28,7 +28,7 @@ func TestLexerKeywords(t *testing.T) {
 		{TokenEOF, ""},
 	}
 
-	lexer := NewLexer("test.cramberry", input)
+	lexer := NewLexer("test.cram", input)
 	for i, exp := range expected {
 		tok := lexer.Next()
 		if tok.Type != exp.typ {
@@ -45,7 +45,7 @@ func TestLexerIdentifiers(t *testing.T) {
 
 	expected := []string{"foo", "Bar", "_private", "camelCase", "snake_case", "PascalCase"}
 
-	lexer := NewLexer("test.cramberry", input)
+	lexer := NewLexer("test.cram", input)
 	for i, exp := range expected {
 		tok := lexer.Next()
 		if tok.Type != TokenIdent {
@@ -79,7 +79,7 @@ func TestLexerNumbers(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		lexer := NewLexer("test.cramberry", tt.input)
+		lexer := NewLexer("test.cram", tt.input)
 		tok := lexer.Next()
 		if tok.Type != tt.typ {
 			t.Errorf("input %q: expected type %v, got %v", tt.input, tt.typ, tok.Type)
@@ -107,7 +107,7 @@ func TestLexerStrings(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		lexer := NewLexer("test.cramberry", tt.input)
+		lexer := NewLexer("test.cram", tt.input)
 		tok := lexer.Next()
 		if tok.Type != TokenString {
 			t.Errorf("input %q: expected String, got %v", tt.input, tok.Type)
@@ -129,7 +129,7 @@ func TestLexerStringErrors(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		lexer := NewLexer("test.cramberry", tt.input)
+		lexer := NewLexer("test.cram", tt.input)
 		tok := lexer.Next()
 		if tok.Type != TokenError {
 			t.Errorf("input %q: expected Error, got %v", tt.input, tok.Type)
@@ -149,7 +149,7 @@ func TestLexerPunctuation(t *testing.T) {
 		TokenEOF,
 	}
 
-	lexer := NewLexer("test.cramberry", input)
+	lexer := NewLexer("test.cram", input)
 	for i, exp := range expected {
 		tok := lexer.Next()
 		if tok.Type != exp {
@@ -173,7 +173,7 @@ func TestLexerComments(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		lexer := NewLexer("test.cramberry", tt.input)
+		lexer := NewLexer("test.cram", tt.input)
 		tok := lexer.Next()
 		if tok.Type != tt.typ {
 			t.Errorf("input %q: expected %v, got %v", tt.input, tt.typ, tok.Type)
@@ -187,7 +187,7 @@ func TestLexerComments(t *testing.T) {
 func TestLexerPositions(t *testing.T) {
 	input := "package foo\nmessage Bar {\n  int32 x = 1;\n}"
 
-	lexer := NewLexer("test.cramberry", input)
+	lexer := NewLexer("test.cram", input)
 
 	tests := []struct {
 		typ    TokenType
@@ -223,7 +223,7 @@ func TestLexerPositions(t *testing.T) {
 
 func TestLexerPeek(t *testing.T) {
 	input := "foo bar baz"
-	lexer := NewLexer("test.cramberry", input)
+	lexer := NewLexer("test.cram", input)
 
 	// Peek should not advance
 	tok1 := lexer.Peek()
@@ -252,7 +252,7 @@ func TestLexerCompleteSchema(t *testing.T) {
 // Package declaration
 package example;
 
-import "other.cramberry";
+import "other.cram";
 
 /// User represents a user in the system.
 message User {
@@ -275,7 +275,7 @@ interface Animal {
 }
 `
 
-	tokens := Tokenize("test.cramberry", input)
+	tokens := Tokenize("test.cram", input)
 
 	// Verify we got some tokens without errors
 	for _, tok := range tokens {
@@ -298,7 +298,7 @@ interface Animal {
 func TestLexerWhitespaceHandling(t *testing.T) {
 	input := "  \t\n\n   foo   \n\t  bar  "
 
-	lexer := NewLexer("test.cramberry", input)
+	lexer := NewLexer("test.cram", input)
 
 	tok1 := lexer.Next()
 	if tok1.Value != "foo" {
@@ -319,7 +319,7 @@ func TestLexerWhitespaceHandling(t *testing.T) {
 func TestLexerUnexpectedCharacter(t *testing.T) {
 	input := "foo $ bar"
 
-	lexer := NewLexer("test.cramberry", input)
+	lexer := NewLexer("test.cram", input)
 
 	tok1 := lexer.Next() // foo
 	if tok1.Value != "foo" {
@@ -373,10 +373,10 @@ func TestTokenString(t *testing.T) {
 
 func TestLexerFilename(t *testing.T) {
 	input := "foo"
-	lexer := NewLexer("myfile.cramberry", input)
+	lexer := NewLexer("myfile.cram", input)
 	tok := lexer.Next()
-	if tok.Position.Filename != "myfile.cramberry" {
-		t.Errorf("expected filename 'myfile.cramberry', got %q", tok.Position.Filename)
+	if tok.Position.Filename != "myfile.cram" {
+		t.Errorf("expected filename 'myfile.cram', got %q", tok.Position.Filename)
 	}
 }
 
@@ -396,7 +396,7 @@ func TestLexerMapType(t *testing.T) {
 		{TokenEOF, ""},
 	}
 
-	lexer := NewLexer("test.cramberry", input)
+	lexer := NewLexer("test.cram", input)
 	for i, exp := range expected {
 		tok := lexer.Next()
 		if tok.Type != exp.typ {
@@ -420,7 +420,7 @@ func TestLexerPointerType(t *testing.T) {
 		{TokenEOF, ""},
 	}
 
-	lexer := NewLexer("test.cramberry", input)
+	lexer := NewLexer("test.cram", input)
 	for i, exp := range expected {
 		tok := lexer.Next()
 		if tok.Type != exp.typ {
@@ -446,7 +446,7 @@ func TestLexerArrayType(t *testing.T) {
 		{TokenEOF, ""},
 	}
 
-	lexer := NewLexer("test.cramberry", input)
+	lexer := NewLexer("test.cram", input)
 	for i, exp := range expected {
 		tok := lexer.Next()
 		if tok.Type != exp.typ {
@@ -468,7 +468,7 @@ func TestLexerQualifiedType(t *testing.T) {
 		{TokenEOF, ""},
 	}
 
-	lexer := NewLexer("test.cramberry", input)
+	lexer := NewLexer("test.cram", input)
 	for i, exp := range expected {
 		tok := lexer.Next()
 		if tok.Type != exp.typ {
@@ -483,7 +483,7 @@ func TestLexerQualifiedType(t *testing.T) {
 func TestLexerUnicodeIdentifiers(t *testing.T) {
 	input := "café Здравствуй 你好"
 
-	lexer := NewLexer("test.cramberry", input)
+	lexer := NewLexer("test.cram", input)
 
 	tok1 := lexer.Next()
 	if tok1.Type != TokenIdent || tok1.Value != "café" {
@@ -514,7 +514,7 @@ func TestLexerUnicodeStrings(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		lexer := NewLexer("test.cramberry", tt.input)
+		lexer := NewLexer("test.cram", tt.input)
 		tok := lexer.Next()
 		if tok.Type != TokenString {
 			t.Errorf("input %q: expected String, got %v (value: %q)", tt.input, tok.Type, tok.Value)
@@ -531,7 +531,7 @@ func TestLexerUnicodeColumnTracking(t *testing.T) {
 	// Column should count characters (runes), not bytes
 	input := "café bar"
 
-	lexer := NewLexer("test.cramberry", input)
+	lexer := NewLexer("test.cram", input)
 
 	tok1 := lexer.Next() // café
 	if tok1.Position.Column != 1 {
@@ -549,7 +549,7 @@ func TestLexerUnicodeOffset(t *testing.T) {
 	// Test that byte offset is tracked correctly (separate from column)
 	input := "café bar"
 
-	lexer := NewLexer("test.cramberry", input)
+	lexer := NewLexer("test.cram", input)
 
 	tok1 := lexer.Next() // café
 	if tok1.Position.Offset != 0 {

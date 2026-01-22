@@ -128,7 +128,7 @@ if err := it.Err(); err != nil {
 Cramberry includes a schema definition language for defining message types:
 
 ```cramberry
-// user.cramberry
+// user.cram
 package example;
 
 enum Status {
@@ -164,13 +164,13 @@ Generate code from schema files:
 
 ```bash
 # Generate Go code
-cramberry generate -lang go -out ./gen ./schemas/*.cramberry
+cramberry generate -lang go -out ./gen ./schemas/*.cram
 
 # Generate TypeScript code
-cramberry generate -lang typescript -out ./gen ./schemas/*.cramberry
+cramberry generate -lang typescript -out ./gen ./schemas/*.cram
 
 # Generate Rust code
-cramberry generate -lang rust -out ./gen ./schemas/*.cramberry
+cramberry generate -lang rust -out ./gen ./schemas/*.cram
 ```
 
 CLI options:
@@ -359,7 +359,7 @@ Extract Cramberry schemas from existing Go code:
 
 ```bash
 # Extract schema from Go packages
-cramberry schema ./pkg/models -out schema.cramberry
+cramberry schema ./pkg/models -out schema.cram
 
 # Include unexported types
 cramberry schema -private ./...

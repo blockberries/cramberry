@@ -681,7 +681,7 @@ type Record struct {
 
 ### 8.2 File Format
 
-Schema files use the `.cramberry` extension.
+Schema files use the `.cram` extension.
 
 ### 8.3 Grammar Specification
 
@@ -730,8 +730,8 @@ GenericArgs = "<" TypeRef ("," TypeRef)* ">"
 package myapp.models;
 
 // Imports
-import "google/protobuf/timestamp.cramberry" as timestamp;
-import "cramberry/stdlib.cramberry";
+import "google/protobuf/timestamp.cram" as timestamp;
+import "cramberry/stdlib.cram";
 
 // Enum definition
 @doc("Status of an order")
@@ -832,7 +832,7 @@ service OrderService {
 
 ### 8.6 Built-in Types Library
 
-Standard library (`cramberry/stdlib.cramberry`):
+Standard library (`cramberry/stdlib.cram`):
 
 ```cramberry
 package cramberry.stdlib;
@@ -878,7 +878,7 @@ type Any {
 │                      Code Generation Pipeline                        │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
-│  .cramberry files                                                    │
+│  .cram files                                                    │
 │        │                                                             │
 │        ▼                                                             │
 │  ┌──────────┐    ┌─────────────────────────────────────────────┐   │
@@ -903,7 +903,7 @@ For each type, generate:
 
 ```go
 // ============================================================
-// Generated from: myapp/models.cramberry
+// Generated from: myapp/models.cram
 // DO NOT EDIT - changes will be overwritten
 // ============================================================
 
@@ -1043,7 +1043,7 @@ func init() {
 
 ```typescript
 // ============================================================
-// Generated from: myapp/models.cramberry
+// Generated from: myapp/models.cram
 // DO NOT EDIT - changes will be overwritten
 // ============================================================
 
@@ -1189,14 +1189,14 @@ export { registry };
 
 ```bash
 # Basic usage
-cramberry generate --lang=go --out=./gen schema/*.cramberry
+cramberry generate --lang=go --out=./gen schema/*.cram
 
 # Multiple languages
 cramberry generate \
     --lang=go --out=./gen/go \
     --lang=typescript --out=./gen/ts \
     --lang=rust --out=./gen/rust \
-    schema/*.cramberry
+    schema/*.cram
 
 # With options
 cramberry generate \
@@ -1208,7 +1208,7 @@ cramberry generate \
     --with-builders \       # Generate builder pattern
     --with-equals \         # Generate equality methods
     --with-clone \          # Generate clone methods
-    schema/*.cramberry
+    schema/*.cram
 ```
 
 ### 9.5 Generated Feature Matrix
@@ -2568,11 +2568,11 @@ The `cramberry-gen` tool extracts schema definitions from Go source code.
 │         │                                                            │
 │         ▼                                                            │
 │  ┌──────────────────┐                                               │
-│  │ Schema Generator │  Produces .cramberry files                    │
+│  │ Schema Generator │  Produces .cram files                    │
 │  └──────────────────┘                                               │
 │         │                                                            │
 │         ▼                                                            │
-│  .cramberry Schema Files                                             │
+│  .cram Schema Files                                             │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -2583,7 +2583,7 @@ The `cramberry-gen` tool extracts schema definitions from Go source code.
 # Generate schema from Go package
 cramberry-gen schema \
     --package ./pkg/models \
-    --output ./schema/models.cramberry \
+    --output ./schema/models.cram \
     --include-private=false
 
 # Generate from multiple packages
@@ -2596,7 +2596,7 @@ cramberry-gen schema \
 # With type filtering
 cramberry-gen schema \
     --package ./pkg/models \
-    --output ./schema/models.cramberry \
+    --output ./schema/models.cram \
     --include "User,Order,*Message" \
     --exclude "*Internal,*test*"
 
@@ -3033,7 +3033,7 @@ version: "1.0"
 # Package configuration
 packages:
   - path: "./pkg/models"
-    output: "./schema/models.cramberry"
+    output: "./schema/models.cram"
     include:
       - "User"
       - "Order"
@@ -3043,7 +3043,7 @@ packages:
       - "*Test"
 
   - path: "./pkg/events"
-    output: "./schema/events.cramberry"
+    output: "./schema/events.cram"
     recursive: true
 
 # Global settings
@@ -3308,7 +3308,7 @@ Wire Types:
 
 ```cramberry
 package foo.bar;
-import "other.cramberry";
+import "other.cram";
 
 @doc("Description")
 enum Status { A = 0; B = 1; }

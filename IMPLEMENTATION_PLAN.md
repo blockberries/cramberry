@@ -1549,9 +1549,9 @@ func (l *Loader) resolveImports(schema *ast.Schema) error
 
 ### 6.6 Standard Library Schema
 
-#### Task 4.6.1: stdlib.cramberry
+#### Task 4.6.1: stdlib.cram
 
-**File:** `schema/cramberry/stdlib.cramberry`
+**File:** `schema/cramberry/stdlib.cram`
 
 ```cramberry
 package cramberry.stdlib;
@@ -1983,7 +1983,7 @@ func runGenerate(cmd *cobra.Command, args []string) error
 
 **Usage:**
 ```bash
-cramberry generate --lang=go --out=./gen schema/*.cramberry
+cramberry generate --lang=go --out=./gen schema/*.cram
 ```
 
 ### 7.4 Test Suite
@@ -2172,7 +2172,7 @@ func (b *SchemaBuilder) goTypeToTypeRef(t types.Type) *ast.TypeRef
 ```go
 package extract
 
-// SchemaWriter formats schema to .cramberry file
+// SchemaWriter formats schema to .cram file
 type SchemaWriter struct {
     indent int
     buf    *bytes.Buffer
@@ -2251,7 +2251,7 @@ func runSchema(cmd *cobra.Command, args []string) error
 
 **Usage:**
 ```bash
-cramberry schema --package ./pkg/models --output ./schema/models.cramberry
+cramberry schema --package ./pkg/models --output ./schema/models.cram
 ```
 
 ### 8.6 Configuration File
@@ -2294,7 +2294,7 @@ version: "1.0"
 
 packages:
   - path: "./pkg/models"
-    output: "./schema/models.cramberry"
+    output: "./schema/models.cram"
     include: ["User", "Order", "*Message"]
     exclude: ["*Internal"]
 
@@ -2330,7 +2330,7 @@ type_mappings:
 | Tag Parser | cramberry tag parsing | All options parsed |
 | Interface Detection | Implementation finding | Correct detection |
 | Schema Builder | Type → AST conversion | Valid AST |
-| Schema Writer | AST → .cramberry | Valid syntax |
+| Schema Writer | AST → .cram | Valid syntax |
 | Type ID Assigner | ID strategies | All strategies work |
 | CLI Command | schema command | Full flag support |
 | Config File | YAML config | Loaded and applied |

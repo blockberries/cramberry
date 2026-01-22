@@ -101,7 +101,7 @@ func TestExtractorConfig(t *testing.T) {
 	cfg := &ExtractorConfig{
 		Config:     DefaultConfig(),
 		Patterns:   []string{"./..."},
-		OutputPath: "test.cramberry",
+		OutputPath: "test.cram",
 		Package:    "testpkg",
 	}
 
@@ -111,7 +111,7 @@ func TestExtractorConfig(t *testing.T) {
 	if len(cfg.Patterns) != 1 {
 		t.Error("Patterns should have one element")
 	}
-	if cfg.OutputPath != "test.cramberry" {
+	if cfg.OutputPath != "test.cram" {
 		t.Error("OutputPath mismatch")
 	}
 	if cfg.Package != "testpkg" {

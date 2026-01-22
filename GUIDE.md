@@ -28,8 +28,8 @@ make ts-test        # TypeScript tests (cd typescript && npm test)
 make rust-test      # Rust tests (cd rust && cargo test)
 
 # Code generation from schemas
-./bin/cramberry generate -lang go -out ./gen ./schemas/*.cramberry
-./bin/cramberry schema -out schema.cramberry ./pkg/models  # Extract schema from Go
+./bin/cramberry generate -lang go -out ./gen ./schemas/*.cram
+./bin/cramberry schema -out schema.cram ./pkg/models  # Extract schema from Go
 ```
 
 ## Architecture
@@ -37,7 +37,7 @@ make rust-test      # Rust tests (cd rust && cargo test)
 ### Core Packages
 
 - **pkg/cramberry/** - Main runtime: Marshal/Unmarshal APIs, Writer/Reader for binary encoding, StreamWriter/StreamReader for delimited messages, Registry for polymorphic types
-- **pkg/schema/** - Schema language parser: Lexer → Parser → AST → Validator. Handles `.cramberry` files with messages, enums, interfaces
+- **pkg/schema/** - Schema language parser: Lexer → Parser → AST → Validator. Handles `.cram` files with messages, enums, interfaces
 - **pkg/codegen/** - Code generators implementing Generator interface for Go/TypeScript/Rust output
 - **pkg/extract/** - Extracts Cramberry schemas from existing Go code via AST analysis
 - **internal/wire/** - Low-level wire protocol: field tags (field_number << 3 | wire_type), varint encoding, fixed-size values
@@ -80,7 +80,7 @@ cramberry.RegisterWithID[Cat](129)      // Explicit TypeID
 - **rust/** - Rust runtime with Writer/Reader/Registry (cargo)
 - **tests/integration/** - Cross-language interop tests
 
-## Schema Language (.cramberry files)
+## Schema Language (.cram files)
 
 ```cramberry
 package example;

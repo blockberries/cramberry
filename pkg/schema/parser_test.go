@@ -7,7 +7,7 @@ import (
 func TestParsePackage(t *testing.T) {
 	input := `package example;`
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 	if len(errors) > 0 {
 		t.Fatalf("unexpected errors: %v", errors)
 	}
@@ -23,11 +23,11 @@ func TestParsePackage(t *testing.T) {
 func TestParseImport(t *testing.T) {
 	input := `
 package test;
-import "other.cramberry";
-import "another.cramberry" as another;
+import "other.cram";
+import "another.cram" as another;
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 	if len(errors) > 0 {
 		t.Fatalf("unexpected errors: %v", errors)
 	}
@@ -36,15 +36,15 @@ import "another.cramberry" as another;
 		t.Fatalf("expected 2 imports, got %d", len(schema.Imports))
 	}
 
-	if schema.Imports[0].Path != "other.cramberry" {
-		t.Errorf("expected import path 'other.cramberry', got %q", schema.Imports[0].Path)
+	if schema.Imports[0].Path != "other.cram" {
+		t.Errorf("expected import path 'other.cram', got %q", schema.Imports[0].Path)
 	}
 	if schema.Imports[0].Alias != "" {
 		t.Errorf("expected no alias, got %q", schema.Imports[0].Alias)
 	}
 
-	if schema.Imports[1].Path != "another.cramberry" {
-		t.Errorf("expected import path 'another.cramberry', got %q", schema.Imports[1].Path)
+	if schema.Imports[1].Path != "another.cram" {
+		t.Errorf("expected import path 'another.cram', got %q", schema.Imports[1].Path)
 	}
 	if schema.Imports[1].Alias != "another" {
 		t.Errorf("expected alias 'another', got %q", schema.Imports[1].Alias)
@@ -59,7 +59,7 @@ option optimize_for = true;
 option max_size = 1024;
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 	if len(errors) > 0 {
 		t.Fatalf("unexpected errors: %v", errors)
 	}
@@ -104,7 +104,7 @@ message User {
 }
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 	if len(errors) > 0 {
 		t.Fatalf("unexpected errors: %v", errors)
 	}
@@ -144,7 +144,7 @@ message Request {
 }
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 	if len(errors) > 0 {
 		t.Fatalf("unexpected errors: %v", errors)
 	}
@@ -181,7 +181,7 @@ message Complex {
 }
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 	if len(errors) > 0 {
 		t.Fatalf("unexpected errors: %v", errors)
 	}
@@ -237,7 +237,7 @@ message User @128 {
 }
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 	if len(errors) > 0 {
 		t.Fatalf("unexpected errors: %v", errors)
 	}
@@ -257,7 +257,7 @@ message User {
 }
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 	if len(errors) > 0 {
 		t.Fatalf("unexpected errors: %v", errors)
 	}
@@ -287,7 +287,7 @@ enum Status {
 }
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 	if len(errors) > 0 {
 		t.Fatalf("unexpected errors: %v", errors)
 	}
@@ -336,7 +336,7 @@ interface Animal {
 }
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 	if len(errors) > 0 {
 		t.Fatalf("unexpected errors: %v", errors)
 	}
@@ -375,8 +375,8 @@ func TestParseCompleteSchema(t *testing.T) {
 // Complete schema example
 package example;
 
-import "common.cramberry";
-import "types.cramberry" as types;
+import "common.cram";
+import "types.cram" as types;
 
 option go_package = "github.com/example/test";
 
@@ -407,7 +407,7 @@ interface Shape {
 }
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 	if len(errors) > 0 {
 		t.Fatalf("unexpected errors: %v", errors)
 	}
@@ -450,7 +450,7 @@ option allowed_values = [1, 2, 3];
 option string_list = ["a", "b", "c"];
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 	if len(errors) > 0 {
 		t.Fatalf("unexpected errors: %v", errors)
 	}
@@ -503,7 +503,7 @@ func TestParseErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, errors := ParseFile("test.cramberry", tt.input)
+			_, errors := ParseFile("test.cram", tt.input)
 			if len(errors) == 0 {
 				t.Error("expected parse errors, got none")
 			}
@@ -568,7 +568,7 @@ message Outer {
 }
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 	if len(errors) > 0 {
 		t.Fatalf("unexpected errors: %v", errors)
 	}
@@ -643,7 +643,7 @@ message AllScalars {
 }
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 	if len(errors) > 0 {
 		t.Fatalf("unexpected errors: %v", errors)
 	}
@@ -680,7 +680,7 @@ message Empty {
 }
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 	if len(errors) > 0 {
 		t.Fatalf("unexpected errors: %v", errors)
 	}
@@ -702,7 +702,7 @@ enum Empty {
 }
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 	if len(errors) > 0 {
 		t.Fatalf("unexpected errors: %v", errors)
 	}
@@ -724,7 +724,7 @@ interface Empty {
 }
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 	if len(errors) > 0 {
 		t.Fatalf("unexpected errors: %v", errors)
 	}
@@ -756,7 +756,7 @@ message Good2 {
 }
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 
 	// Should have errors
 	if len(errors) == 0 {
@@ -789,7 +789,7 @@ enum Status {
 }
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 
 	// Should have errors from Bad message
 	if len(errors) == 0 {
@@ -839,7 +839,7 @@ interface Animal {
 }
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 
 	// Should have errors
 	if len(errors) == 0 {
@@ -896,7 +896,7 @@ message Second {
 }
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 
 	// Should have errors
 	if len(errors) == 0 {
@@ -947,7 +947,7 @@ message Second {
 }
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 
 	// Should have errors
 	if len(errors) == 0 {
@@ -984,7 +984,7 @@ message User {
   int32 id = 1;
 }`
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 	if len(errors) > 0 {
 		t.Fatalf("unexpected errors: %v", errors)
 	}
@@ -1014,7 +1014,7 @@ message User {
 }
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 	if len(errors) > 0 {
 		t.Fatalf("unexpected errors: %v", errors)
 	}
@@ -1034,7 +1034,7 @@ message Request {
 }
 `
 
-	schema, errors := ParseFile("test.cramberry", input)
+	schema, errors := ParseFile("test.cram", input)
 	if len(errors) > 0 {
 		t.Fatalf("unexpected errors: %v", errors)
 	}

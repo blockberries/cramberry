@@ -8,7 +8,7 @@ against Protocol Buffers and JSON.
 ```
 benchmark/
 ├── schemas/
-│   ├── messages.cramberry    # Cramberry schema definitions
+│   ├── messages.cram    # Cramberry schema definitions
 │   └── messages.proto        # Equivalent Protobuf definitions
 ├── gen/
 │   ├── cramberry/           # Generated Cramberry Go code
@@ -59,7 +59,7 @@ If you modify the schemas, regenerate the code:
 
 ```bash
 # Cramberry
-go run ./cmd/cramberry generate -out benchmark/gen/cramberry -package cramgen benchmark/schemas/messages.cramberry
+go run ./cmd/cramberry generate -out benchmark/gen/cramberry -package cramgen benchmark/schemas/messages.cram
 
 # Protobuf
 protoc --go_out=. --go_opt=paths=source_relative benchmark/schemas/messages.proto

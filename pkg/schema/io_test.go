@@ -181,17 +181,17 @@ func TestWriterImports(t *testing.T) {
 	schema := &Schema{
 		Package: &Package{Name: "test"},
 		Imports: []*Import{
-			{Path: "other.cramberry"},
-			{Path: "types.cramberry", Alias: "types"},
+			{Path: "other.cram"},
+			{Path: "types.cram", Alias: "types"},
 		},
 	}
 
 	output := FormatSchema(schema)
 
-	if !strings.Contains(output, `import "other.cramberry";`) {
+	if !strings.Contains(output, `import "other.cram";`) {
 		t.Error("expected import without alias")
 	}
-	if !strings.Contains(output, `import "types.cramberry" as types;`) {
+	if !strings.Contains(output, `import "types.cram" as types;`) {
 		t.Error("expected import with alias")
 	}
 }
@@ -365,8 +365,8 @@ func TestWriterListValue(t *testing.T) {
 func TestRoundTrip(t *testing.T) {
 	input := `package example;
 
-import "other.cramberry";
-import "types.cramberry" as types;
+import "other.cram";
+import "types.cram" as types;
 
 option go_package = "github.com/example";
 
@@ -389,7 +389,7 @@ interface Shape {
 `
 
 	// Parse
-	schema, parseErrors := ParseFile("test.cramberry", input)
+	schema, parseErrors := ParseFile("test.cram", input)
 	if len(parseErrors) > 0 {
 		t.Fatalf("parse errors: %v", parseErrors)
 	}
@@ -398,7 +398,7 @@ interface Shape {
 	output := FormatSchema(schema)
 
 	// Parse again
-	schema2, parseErrors2 := ParseFile("test.cramberry", output)
+	schema2, parseErrors2 := ParseFile("test.cram", output)
 	if len(parseErrors2) > 0 {
 		t.Fatalf("second parse errors: %v", parseErrors2)
 	}
@@ -433,7 +433,7 @@ message User {
   int32 id = 1;
 }
 `
-	schemaPath := filepath.Join(tmpDir, "test.cramberry")
+	schemaPath := filepath.Join(tmpDir, "test.cram")
 	if err := os.WriteFile(schemaPath, []byte(schemaContent), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -464,7 +464,7 @@ message Address {
   string street = 1;
 }
 `
-	typesPath := filepath.Join(tmpDir, "types.cramberry")
+	typesPath := filepath.Join(tmpDir, "types.cram")
 	if err := os.WriteFile(typesPath, []byte(typesContent), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -473,14 +473,14 @@ message Address {
 	mainContent := `
 package main;
 
-import "types.cramberry" as types;
+import "types.cram" as types;
 
 message User {
   int32 id = 1;
   types.Address address = 2;
 }
 `
-	mainPath := filepath.Join(tmpDir, "main.cramberry")
+	mainPath := filepath.Join(tmpDir, "main.cram")
 	if err := os.WriteFile(mainPath, []byte(mainContent), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -496,7 +496,7 @@ message User {
 		t.Errorf("expected package 'main', got %q", schema.Package.Name)
 	}
 
-	// Check that types.cramberry was also loaded
+	// Check that types.cram was also loaded
 	allSchemas := loader.AllSchemas()
 	if len(allSchemas) != 2 {
 		t.Errorf("expected 2 schemas, got %d", len(allSchemas))
@@ -509,13 +509,13 @@ func TestLoaderMissingImport(t *testing.T) {
 	mainContent := `
 package main;
 
-import "missing.cramberry";
+import "missing.cram";
 
 message User {
   int32 id = 1;
 }
 `
-	mainPath := filepath.Join(tmpDir, "main.cramberry")
+	mainPath := filepath.Join(tmpDir, "main.cram")
 	if err := os.WriteFile(mainPath, []byte(mainContent), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -530,24 +530,24 @@ message User {
 func TestLoaderCircularImport(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// a.cramberry imports b.cramberry
+	// a.cram imports b.cram
 	aContent := `
 package a;
-import "b.cramberry";
+import "b.cram";
 message A { int32 x = 1; }
 `
-	aPath := filepath.Join(tmpDir, "a.cramberry")
+	aPath := filepath.Join(tmpDir, "a.cram")
 	if err := os.WriteFile(aPath, []byte(aContent), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	// b.cramberry imports a.cramberry
+	// b.cram imports a.cram
 	bContent := `
 package b;
-import "a.cramberry";
+import "a.cram";
 message B { int32 y = 1; }
 `
-	bPath := filepath.Join(tmpDir, "b.cramberry")
+	bPath := filepath.Join(tmpDir, "b.cram")
 	if err := os.WriteFile(bPath, []byte(bContent), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -582,7 +582,7 @@ func TestLoaderSearchPaths(t *testing.T) {
 package lib;
 message Common { int32 x = 1; }
 `
-	libPath := filepath.Join(libDir, "common.cramberry")
+	libPath := filepath.Join(libDir, "common.cram")
 	if err := os.WriteFile(libPath, []byte(libContent), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -590,10 +590,10 @@ message Common { int32 x = 1; }
 	// Write main schema in tmpDir
 	mainContent := `
 package main;
-import "common.cramberry" as lib;
+import "common.cram" as lib;
 message User { lib.Common common = 1; }
 `
-	mainPath := filepath.Join(tmpDir, "main.cramberry")
+	mainPath := filepath.Join(tmpDir, "main.cram")
 	if err := os.WriteFile(mainPath, []byte(mainContent), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -612,7 +612,7 @@ message User { lib.Common common = 1; }
 
 func TestWriteToFile(t *testing.T) {
 	tmpDir := t.TempDir()
-	outPath := filepath.Join(tmpDir, "output.cramberry")
+	outPath := filepath.Join(tmpDir, "output.cram")
 
 	schema := &Schema{
 		Package: &Package{Name: "output"},
@@ -680,7 +680,7 @@ message User {
   string name = 2;
 }
 `
-	path := filepath.Join(tmpDir, "test.cramberry")
+	path := filepath.Join(tmpDir, "test.cram")
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}

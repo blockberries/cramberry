@@ -1,6 +1,6 @@
 // Package schema provides types and parsing for Cramberry schema files.
 //
-// Schema files (.cramberry) define the structure of messages, enums,
+// Schema files (.cram) define the structure of messages, enums,
 // and interfaces for code generation across multiple languages.
 package schema
 
