@@ -73,12 +73,20 @@ func RegisterInterface[T any]() error {
 }
 
 // RegisterValue registers the type of the given value with an auto-assigned ID.
+// Returns an error if the value is nil.
 func (r *Registry) RegisterValue(v any) (TypeID, error) {
+	if v == nil {
+		return 0, NewRegistrationError("", 0, "cannot register nil value", nil)
+	}
 	return r.RegisterType(reflect.TypeOf(v))
 }
 
 // RegisterValueWithID registers the type of the given value with a specific ID.
+// Returns an error if the value is nil.
 func (r *Registry) RegisterValueWithID(v any, id TypeID) error {
+	if v == nil {
+		return NewRegistrationError("", id, "cannot register nil value", nil)
+	}
 	return r.RegisterTypeWithID(reflect.TypeOf(v), id)
 }
 
@@ -106,9 +114,19 @@ func (r *Registry) RegisterTypeWithID(t reflect.Type, id TypeID) error {
 
 // registerLocked performs the actual registration (must hold lock).
 func (r *Registry) registerLocked(t reflect.Type, id TypeID) error {
+	// Validate input type is not nil
+	if t == nil {
+		return NewRegistrationError("", id, "cannot register nil type", nil)
+	}
+
 	// Get the concrete type (dereference pointers)
 	for t.Kind() == reflect.Ptr {
 		t = t.Elem()
+	}
+
+	// Validate the dereferenced type is valid
+	if t == nil || t.Kind() == reflect.Invalid {
+		return NewRegistrationError("", id, "cannot register invalid type", nil)
 	}
 
 	name := typeName(t)

@@ -408,6 +408,38 @@ func TestRegisterPointerType(t *testing.T) {
 	}
 }
 
+func TestRegistryNilValidation(t *testing.T) {
+	r := NewRegistry()
+
+	t.Run("RegisterType nil", func(t *testing.T) {
+		_, err := r.RegisterType(nil)
+		if err == nil {
+			t.Error("RegisterType(nil) should return error")
+		}
+	})
+
+	t.Run("RegisterTypeWithID nil", func(t *testing.T) {
+		err := r.RegisterTypeWithID(nil, TypeID(200))
+		if err == nil {
+			t.Error("RegisterTypeWithID(nil, id) should return error")
+		}
+	})
+
+	t.Run("RegisterValue nil", func(t *testing.T) {
+		_, err := r.RegisterValue(nil)
+		if err == nil {
+			t.Error("RegisterValue(nil) should return error")
+		}
+	})
+
+	t.Run("RegisterValueWithID nil", func(t *testing.T) {
+		err := r.RegisterValueWithID(nil, TypeID(200))
+		if err == nil {
+			t.Error("RegisterValueWithID(nil, id) should return error")
+		}
+	})
+}
+
 func BenchmarkRegistryLookup(b *testing.B) {
 	r := NewRegistry()
 	id, _ := r.RegisterType(reflect.TypeOf(Person{}))
