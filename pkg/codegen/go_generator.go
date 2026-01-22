@@ -509,7 +509,7 @@ func (c *goContext) goFieldType(f *schema.Field) string {
 	return t
 }
 
-func (c *goContext) goTypeInternal(t schema.TypeRef, inArray bool) string {
+func (c *goContext) goTypeInternal(t schema.TypeRef, _ bool) string {
 	switch typ := t.(type) {
 	case *schema.ScalarType:
 		return c.goScalarType(typ.Name)

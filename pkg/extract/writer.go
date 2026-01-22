@@ -11,13 +11,11 @@ import (
 
 // Extractor extracts schemas from Go packages.
 type Extractor struct {
-	loader    *PackageLoader
-	collector *TypeCollector
-	builder   *SchemaBuilder
+	loader *PackageLoader
 }
 
 // NewExtractor creates a new schema extractor.
-func NewExtractor(config *Config) *Extractor {
+func NewExtractor(_ *Config) *Extractor {
 	return &Extractor{
 		loader: NewPackageLoader(),
 	}
@@ -81,7 +79,7 @@ func (e *Extractor) ExtractAndWrite(cfg *ExtractorConfig) error {
 	if cfg.OutputPath != "" {
 		// Ensure output directory exists
 		dir := filepath.Dir(cfg.OutputPath)
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("failed to create output directory: %w", err)
 		}
 

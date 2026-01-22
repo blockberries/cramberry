@@ -210,11 +210,11 @@ func DecodeComplex128(data []byte) (complex128, error) {
 
 // Size constants for fixed-width types.
 const (
-	Fixed32Size   = 4
-	Fixed64Size   = 8
-	Float32Size   = 4
-	Float64Size   = 8
-	Complex64Size = 8
+	Fixed32Size    = 4
+	Fixed64Size    = 8
+	Float32Size    = 4
+	Float64Size    = 8
+	Complex64Size  = 8
 	Complex128Size = 16
 )
 

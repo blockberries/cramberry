@@ -94,7 +94,7 @@ func (c *rustContext) rustFieldType(f *schema.Field) string {
 	return t
 }
 
-func (c *rustContext) rustTypeInternal(t schema.TypeRef, inArray bool) string {
+func (c *rustContext) rustTypeInternal(t schema.TypeRef, _ bool) string {
 	switch typ := t.(type) {
 	case *schema.ScalarType:
 		return c.rustScalarType(typ.Name)

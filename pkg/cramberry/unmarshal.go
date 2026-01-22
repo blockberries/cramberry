@@ -617,7 +617,7 @@ func sizeStructV2(v reflect.Value, opts Options) int {
 	}
 
 	// Add end marker size (1 byte)
-	size += 1
+	size++
 
 	return size
 }

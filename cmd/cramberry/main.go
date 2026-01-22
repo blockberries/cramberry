@@ -160,7 +160,7 @@ Options:`)
 	opts.GenerateJSON = *jsonTags
 
 	// Create output directory
-	if err := os.MkdirAll(*outDir, 0755); err != nil {
+	if err := os.MkdirAll(*outDir, 0o755); err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating output directory: %v\n", err)
 		os.Exit(1)
 	}
@@ -309,7 +309,7 @@ Options:`)
 		formatted := schema.FormatSchema(s)
 
 		if *write {
-			if err := os.WriteFile(inputFile, []byte(formatted), 0644); err != nil {
+			if err := os.WriteFile(inputFile, []byte(formatted), 0o644); err != nil {
 				fmt.Fprintf(os.Stderr, "Error writing %s: %v\n", inputFile, err)
 				hasErrors = true
 				continue

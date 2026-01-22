@@ -43,8 +43,8 @@ func (s Severity) String() string {
 type Validator struct {
 	schema  *Schema
 	errors  []ValidationError
-	types   map[string]TypeDef   // All defined types
-	imports map[string]*Schema   // Imported schemas by alias/path
+	types   map[string]TypeDef // All defined types
+	imports map[string]*Schema // Imported schemas by alias/path
 }
 
 // TypeDef represents a type definition (message, enum, or interface).

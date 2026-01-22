@@ -160,9 +160,9 @@ func TestLexerPunctuation(t *testing.T) {
 
 func TestLexerComments(t *testing.T) {
 	tests := []struct {
-		input   string
-		typ     TokenType
-		value   string
+		input string
+		typ   TokenType
+		value string
 	}{
 		{"// comment", TokenComment, "comment"},
 		{"// comment with spaces", TokenComment, "comment with spaces"},
@@ -199,8 +199,8 @@ func TestLexerPositions(t *testing.T) {
 		{TokenMessage, 2, 1},
 		{TokenIdent, 2, 9},
 		{TokenLBrace, 2, 13},
-		{TokenIdent, 3, 3},     // int32
-		{TokenIdent, 3, 9},     // x
+		{TokenIdent, 3, 3}, // int32
+		{TokenIdent, 3, 9}, // x
 		{TokenEquals, 3, 11},
 		{TokenInt, 3, 13},
 		{TokenSemicolon, 3, 14},

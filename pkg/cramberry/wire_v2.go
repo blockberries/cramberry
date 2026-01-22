@@ -134,7 +134,7 @@ func CompactTagSize(fieldNum int) int {
 }
 
 // GetWireTypeV2 returns the V2 wire type for a Go type.
-func GetWireTypeV2(kind interface{}) byte {
+func GetWireTypeV2(_ interface{}) byte {
 	// This will be implemented based on reflect.Kind
 	// For now, return a default
 	return WireTypeV2Varint

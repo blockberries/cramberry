@@ -8,12 +8,12 @@ import (
 // Size-tiered buffer pools for efficient memory reuse.
 // Buffers are pooled in size classes: 64, 256, 1024, 4096, 16384, 65536 bytes.
 var bufferPools = [6]sync.Pool{
-	{New: func() any { return make([]byte, 0, 64) }},     // Tiny: <= 64 bytes
-	{New: func() any { return make([]byte, 0, 256) }},    // Small: <= 256 bytes
-	{New: func() any { return make([]byte, 0, 1024) }},   // Medium: <= 1KB
-	{New: func() any { return make([]byte, 0, 4096) }},   // Large: <= 4KB
-	{New: func() any { return make([]byte, 0, 16384) }},  // XLarge: <= 16KB
-	{New: func() any { return make([]byte, 0, 65536) }},  // XXLarge: <= 64KB
+	{New: func() any { return make([]byte, 0, 64) }},    // Tiny: <= 64 bytes
+	{New: func() any { return make([]byte, 0, 256) }},   // Small: <= 256 bytes
+	{New: func() any { return make([]byte, 0, 1024) }},  // Medium: <= 1KB
+	{New: func() any { return make([]byte, 0, 4096) }},  // Large: <= 4KB
+	{New: func() any { return make([]byte, 0, 16384) }}, // XLarge: <= 16KB
+	{New: func() any { return make([]byte, 0, 65536) }}, // XXLarge: <= 64KB
 }
 
 // bufferSizes maps pool index to capacity.
@@ -64,6 +64,7 @@ func PutBuffer(buf []byte) {
 	}
 	idx := poolIndex(c)
 	if idx >= 0 {
+		//nolint:staticcheck // SA6002: slice pooling is intentional, boxing overhead is acceptable
 		bufferPools[idx].Put(buf[:0])
 	}
 }

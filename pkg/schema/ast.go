@@ -184,11 +184,11 @@ func (t *ScalarType) String() string { return t.Name }
 
 // NamedType represents a reference to a message, enum, or interface.
 type NamedType struct {
-	Position  Position
-	EndPos    Position
-	Package   string // Optional package prefix
-	Name      string
-	TypeArgs  []TypeRef // For generic types (future)
+	Position Position
+	EndPos   Position
+	Package  string // Optional package prefix
+	Name     string
+	TypeArgs []TypeRef // For generic types (future)
 }
 
 func (t *NamedType) Pos() Position { return t.Position }
@@ -272,12 +272,12 @@ func (v *EnumValue) End() Position { return v.EndPos }
 
 // Interface represents an interface definition for polymorphic types.
 type Interface struct {
-	Position       Position
-	EndPos         Position
-	Name           string
+	Position        Position
+	EndPos          Position
+	Name            string
 	Implementations []*Implementation
-	Options        []*Option
-	Comments       []*Comment
+	Options         []*Option
+	Comments        []*Comment
 }
 
 func (i *Interface) Pos() Position { return i.Position }

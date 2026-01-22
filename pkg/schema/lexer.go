@@ -16,25 +16,25 @@ const (
 	TokenEOF
 
 	// Literals
-	TokenIdent   // identifier
-	TokenInt     // integer literal
-	TokenFloat   // float literal
-	TokenString  // string literal
+	TokenIdent  // identifier
+	TokenInt    // integer literal
+	TokenFloat  // float literal
+	TokenString // string literal
 
 	// Keywords
-	TokenPackage   // package
-	TokenImport    // import
-	TokenAs        // as
-	TokenMessage   // message
-	TokenEnum      // enum
-	TokenInterface // interface
-	TokenOption    // option
-	TokenRequired  // required
-	TokenRepeated  // repeated
-	TokenOptional  // optional
-	TokenMap       // map
-	TokenTrue      // true
-	TokenFalse     // false
+	TokenPackage    // package
+	TokenImport     // import
+	TokenAs         // as
+	TokenMessage    // message
+	TokenEnum       // enum
+	TokenInterface  // interface
+	TokenOption     // option
+	TokenRequired   // required
+	TokenRepeated   // repeated
+	TokenOptional   // optional
+	TokenMap        // map
+	TokenTrue       // true
+	TokenFalse      // false
 	TokenDeprecated // deprecated
 
 	// Punctuation
@@ -172,10 +172,10 @@ var keywords = map[string]TokenType{
 type Lexer struct {
 	filename string
 	input    string
-	pos      int  // current position in input
-	line     int  // current line number (1-based)
-	column   int  // current column number (1-based)
-	start    int  // start position of current token
+	pos      int      // current position in input
+	line     int      // current line number (1-based)
+	column   int      // current column number (1-based)
+	start    int      // start position of current token
 	startPos Position // position of current token start
 }
 

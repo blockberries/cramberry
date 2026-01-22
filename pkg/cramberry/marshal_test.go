@@ -483,8 +483,8 @@ func TestMarshalNilPointers(t *testing.T) {
 func TestMarshalDeterminism(t *testing.T) {
 	// Maps should encode deterministically
 	original := map[string]int32{
-		"zebra": 5,
-		"apple": 1,
+		"zebra":  5,
+		"apple":  1,
 		"banana": 2,
 		"cherry": 3,
 	}

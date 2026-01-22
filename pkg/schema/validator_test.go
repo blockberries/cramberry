@@ -428,7 +428,7 @@ func TestValidateMapKeyType(t *testing.T) {
 		{"string key", "map[string]int32", false},
 		{"int32 key", "map[int32]string", false},
 		{"bool key", "map[bool]string", false},
-		{"bytes key", "map[bytes]string", true},   // bytes not comparable
+		{"bytes key", "map[bytes]string", true},     // bytes not comparable
 		{"float32 key", "map[float32]string", true}, // floats not comparable
 		{"float64 key", "map[float64]string", true},
 	}

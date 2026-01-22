@@ -7,7 +7,7 @@ import (
 
 func TestWireTypeString(t *testing.T) {
 	tests := []struct {
-		wireType WireType
+		wireType Type
 		expected string
 	}{
 		{WireVarint, "Varint"},
@@ -16,30 +16,30 @@ func TestWireTypeString(t *testing.T) {
 		{WireFixed32, "Fixed32"},
 		{WireSVarint, "SVarint"},
 		{WireTypeRef, "TypeRef"},
-		{WireType(3), "Unknown"},
-		{WireType(4), "Unknown"},
-		{WireType(100), "Unknown"},
+		{Type(3), "Unknown"},
+		{Type(4), "Unknown"},
+		{Type(100), "Unknown"},
 	}
 
 	for _, tc := range tests {
 		if tc.wireType.String() != tc.expected {
-			t.Errorf("WireType(%d).String() = %q, want %q", tc.wireType, tc.wireType.String(), tc.expected)
+			t.Errorf("Type(%d).String() = %q, want %q", tc.wireType, tc.wireType.String(), tc.expected)
 		}
 	}
 }
 
 func TestWireTypeIsValid(t *testing.T) {
-	validTypes := []WireType{WireVarint, WireFixed64, WireBytes, WireFixed32, WireSVarint, WireTypeRef}
+	validTypes := []Type{WireVarint, WireFixed64, WireBytes, WireFixed32, WireSVarint, WireTypeRef}
 	for _, wt := range validTypes {
 		if !wt.IsValid() {
-			t.Errorf("WireType(%d).IsValid() = false, want true", wt)
+			t.Errorf("Type(%d).IsValid() = false, want true", wt)
 		}
 	}
 
-	invalidTypes := []WireType{3, 4, 8, 100}
+	invalidTypes := []Type{3, 4, 8, 100}
 	for _, wt := range invalidTypes {
 		if wt.IsValid() {
-			t.Errorf("WireType(%d).IsValid() = true, want false", wt)
+			t.Errorf("Type(%d).IsValid() = true, want false", wt)
 		}
 	}
 }
@@ -47,7 +47,7 @@ func TestWireTypeIsValid(t *testing.T) {
 func TestNewTag(t *testing.T) {
 	tests := []struct {
 		fieldNum int
-		wireType WireType
+		wireType Type
 		expected Tag
 	}{
 		{1, WireVarint, Tag(0x08)},   // (1 << 3) | 0 = 8
@@ -90,10 +90,10 @@ func TestTagFieldNumber(t *testing.T) {
 	}
 }
 
-func TestTagWireType(t *testing.T) {
+func TestTagType(t *testing.T) {
 	tests := []struct {
 		tag      Tag
-		expected WireType
+		expected Type
 	}{
 		{Tag(0x08), WireVarint},
 		{Tag(0x09), WireFixed64},
@@ -104,9 +104,9 @@ func TestTagWireType(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		wireType := tc.tag.WireType()
+		wireType := tc.tag.Type()
 		if wireType != tc.expected {
-			t.Errorf("Tag(%d).WireType() = %d, want %d", tc.tag, wireType, tc.expected)
+			t.Errorf("Tag(%d).Type() = %d, want %d", tc.tag, wireType, tc.expected)
 		}
 	}
 }
@@ -114,7 +114,7 @@ func TestTagWireType(t *testing.T) {
 func TestAppendTag(t *testing.T) {
 	tests := []struct {
 		fieldNum int
-		wireType WireType
+		wireType Type
 		expected []byte
 	}{
 		{1, WireVarint, []byte{0x08}},
@@ -136,12 +136,12 @@ func TestAppendTag(t *testing.T) {
 
 func TestDecodeTag(t *testing.T) {
 	tests := []struct {
-		name         string
-		data         []byte
-		fieldNum     int
-		wireType     WireType
-		bytesRead    int
-		expectError  bool
+		name        string
+		data        []byte
+		fieldNum    int
+		wireType    Type
+		bytesRead   int
+		expectError bool
 	}{
 		{"field1_varint", []byte{0x08}, 1, WireVarint, 1, false},
 		{"field1_bytes", []byte{0x0A}, 1, WireBytes, 1, false},
@@ -186,10 +186,10 @@ func TestDecodeTagErrors(t *testing.T) {
 	}{
 		{"empty", []byte{}, ErrVarintTruncated},
 		{"truncated", []byte{0x80}, ErrVarintTruncated},
-		{"field_zero", []byte{0x00}, ErrInvalidFieldNumber},          // field 0
-		{"field_zero_wire2", []byte{0x02}, ErrInvalidFieldNumber},    // field 0, wire 2
-		{"invalid_wire_3", []byte{0x0B}, ErrInvalidWireType},         // field 1, wire 3
-		{"invalid_wire_4", []byte{0x0C}, ErrInvalidWireType},         // field 1, wire 4
+		{"field_zero", []byte{0x00}, ErrInvalidFieldNumber},       // field 0
+		{"field_zero_wire2", []byte{0x02}, ErrInvalidFieldNumber}, // field 0, wire 2
+		{"invalid_wire_3", []byte{0x0B}, ErrInvalidWireType},      // field 1, wire 3
+		{"invalid_wire_4", []byte{0x0C}, ErrInvalidWireType},      // field 1, wire 4
 	}
 
 	for _, tc := range tests {
@@ -232,11 +232,11 @@ func TestTagSize(t *testing.T) {
 		fieldNum int
 		expected int
 	}{
-		{1, 1},     // (1 << 3) = 8, fits in 1 byte
-		{15, 1},    // (15 << 3) = 120, fits in 1 byte
-		{16, 2},    // (16 << 3) = 128, needs 2 bytes
-		{2047, 2},  // (2047 << 3) = 16376, fits in 2 bytes
-		{2048, 3},  // (2048 << 3) = 16384, needs 3 bytes
+		{1, 1},       // (1 << 3) = 8, fits in 1 byte
+		{15, 1},      // (15 << 3) = 120, fits in 1 byte
+		{16, 2},      // (16 << 3) = 128, needs 2 bytes
+		{2047, 2},    // (2047 << 3) = 16376, fits in 2 bytes
+		{2048, 3},    // (2048 << 3) = 16384, needs 3 bytes
 		{1000000, 4}, // Large field number
 	}
 
@@ -282,10 +282,10 @@ func TestValidateFieldNumber(t *testing.T) {
 	}
 }
 
-func TestWireTypeForKind(t *testing.T) {
+func TestTypeForKind(t *testing.T) {
 	tests := []struct {
 		kind     string
-		expected WireType
+		expected Type
 	}{
 		{"bool", WireVarint},
 		{"uint8", WireVarint},
@@ -312,15 +312,15 @@ func TestWireTypeForKind(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		result := WireTypeForKind(tc.kind)
+		result := TypeForKind(tc.kind)
 		if result != tc.expected {
-			t.Errorf("WireTypeForKind(%q) = %v, want %v", tc.kind, result, tc.expected)
+			t.Errorf("TypeForKind(%q) = %v, want %v", tc.kind, result, tc.expected)
 		}
 	}
 }
 
 func TestTagRoundTrip(t *testing.T) {
-	wireTypes := []WireType{WireVarint, WireFixed64, WireBytes, WireFixed32, WireSVarint, WireTypeRef}
+	wireTypes := []Type{WireVarint, WireFixed64, WireBytes, WireFixed32, WireSVarint, WireTypeRef}
 	fieldNums := []int{1, 2, 15, 16, 127, 128, 1000, 10000, 100000, MaxFieldNumber}
 
 	for _, fieldNum := range fieldNums {
@@ -395,7 +395,7 @@ func FuzzTagRoundTrip(f *testing.F) {
 		if fieldNum <= 0 || fieldNum > MaxFieldNumber {
 			return
 		}
-		wireType := WireType(wireTypeByte & 0x7) // Only lower 3 bits
+		wireType := Type(wireTypeByte & 0x7) // Only lower 3 bits
 		if !wireType.IsValid() {
 			return
 		}

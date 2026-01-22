@@ -58,11 +58,11 @@ func TestCompactTagSize(t *testing.T) {
 	}{
 		{1, 1},
 		{15, 1},
-		{16, 2},     // 1 marker + 1 byte varint
-		{127, 2},    // 1 marker + 1 byte varint
-		{128, 3},    // 1 marker + 2 byte varint
-		{16383, 3},  // 1 marker + 2 byte varint
-		{16384, 4},  // 1 marker + 3 byte varint
+		{16, 2},    // 1 marker + 1 byte varint
+		{127, 2},   // 1 marker + 1 byte varint
+		{128, 3},   // 1 marker + 2 byte varint
+		{16383, 3}, // 1 marker + 2 byte varint
+		{16384, 4}, // 1 marker + 3 byte varint
 	}
 
 	for _, tt := range tests {
@@ -147,11 +147,8 @@ func TestV2StructEncoding(t *testing.T) {
 		t.Fatalf("Marshal error: %v", err)
 	}
 
-	// Verify end marker is present at the end
-	if len(data) > 0 && data[len(data)-1] != EndMarker {
-		// End marker might not be the very last byte due to nested encoding
-		// But we can verify by decoding
-	}
+	// End marker might not be the very last byte due to nested encoding
+	// but we verify correctness by successfully decoding below
 
 	// Unmarshal
 	var decoded TestStruct
@@ -314,8 +311,8 @@ func TestPackedSliceEncoding(t *testing.T) {
 		value any
 	}{
 		{"[]int32", []int32{1, 2, 3, 100, -50, 1000}},
-		{"[]int64", []int64{1, 2, 3, 1<<40, -1 << 30}},
-		{"[]uint32", []uint32{0, 1, 255, 65535, 1<<20}},
+		{"[]int64", []int64{1, 2, 3, 1 << 40, -1 << 30}},
+		{"[]uint32", []uint32{0, 1, 255, 65535, 1 << 20}},
 		{"[]uint64", []uint64{0, 1, 1 << 32, 1 << 50}},
 		{"[]float32", []float32{1.5, 2.5, 3.14, -100.25}},
 		{"[]float64", []float64{1.5, 2.5, 3.14159265359, -1e100}},
@@ -362,9 +359,9 @@ func TestPackedSliceEncoding(t *testing.T) {
 
 func TestPackedArrayEncoding(t *testing.T) {
 	type ArrayStruct struct {
-		Ints    [5]int32   `cramberry:"1"`
-		Floats  [3]float64 `cramberry:"2"`
-		Bools   [4]bool    `cramberry:"3"`
+		Ints   [5]int32   `cramberry:"1"`
+		Floats [3]float64 `cramberry:"2"`
+		Bools  [4]bool    `cramberry:"3"`
 	}
 
 	original := ArrayStruct{

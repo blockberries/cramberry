@@ -7,11 +7,11 @@ import (
 
 // Parser parses schema source code into an AST.
 type Parser struct {
-	lexer     *Lexer
-	current   Token
-	previous  Token
-	errors    []ParseError
-	comments  []*Comment // Collected comments
+	lexer    *Lexer
+	current  Token
+	previous Token
+	errors   []ParseError
+	comments []*Comment // Collected comments
 }
 
 // ParseError represents a parsing error.
@@ -834,7 +834,7 @@ func (p *Parser) check(typ TokenType) bool {
 	return p.current.Type == typ
 }
 
-func (p *Parser) consume(typ TokenType, msg string) bool {
+func (p *Parser) consume(typ TokenType, _ string) bool {
 	if p.check(typ) {
 		p.advance()
 		return true

@@ -7,17 +7,15 @@ import (
 	"github.com/blockberries/cramberry/pkg/cramberry"
 )
 
-
-
 // Status represents entity status.
 type Status int32
 
 const (
-	StatusUnknown Status = 0
-	StatusPending Status = 1
-	StatusActive Status = 2
+	StatusUnknown   Status = 0
+	StatusPending   Status = 1
+	StatusActive    Status = 2
 	StatusSuspended Status = 3
-	StatusDeleted Status = 4
+	StatusDeleted   Status = 4
 )
 
 // String returns the string representation of the enum value.
@@ -70,9 +68,9 @@ func (e *Status) decodeFrom(r *cramberry.Reader) {
 type Priority int32
 
 const (
-	PriorityLow Priority = 0
-	PriorityMedium Priority = 1
-	PriorityHigh Priority = 2
+	PriorityLow      Priority = 0
+	PriorityMedium   Priority = 1
+	PriorityHigh     Priority = 2
 	PriorityCritical Priority = 3
 )
 
@@ -125,8 +123,8 @@ const (
 	EventTypeCreated EventType = 0
 	EventTypeUpdated EventType = 1
 	EventTypeDeleted EventType = 2
-	EventTypeViewed EventType = 3
-	EventTypeShared EventType = 4
+	EventTypeViewed  EventType = 3
+	EventTypeShared  EventType = 4
 )
 
 // String returns the string representation of the enum value.
@@ -175,12 +173,11 @@ func (e *EventType) decodeFrom(r *cramberry.Reader) {
 	*e = EventType(r.ReadInt32())
 }
 
-
 // Point represents a 3D point.
 type Point struct {
-X float64 `cramberry:"1" json:"x"`
-Y float64 `cramberry:"2" json:"y"`
-Z float64 `cramberry:"3" json:"z"`
+	X float64 `cramberry:"1" json:"x"`
+	Y float64 `cramberry:"2" json:"y"`
+	Z float64 `cramberry:"3" json:"z"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -247,11 +244,10 @@ func (m *Point) decodeFrom(r *cramberry.Reader) {
 	}
 }
 
-
 // Timestamp represents a point in time.
 type Timestamp struct {
-Seconds int64 `cramberry:"1" json:"seconds"`
-Nanos int32 `cramberry:"2" json:"nanos"`
+	Seconds int64 `cramberry:"1" json:"seconds"`
+	Nanos   int32 `cramberry:"2" json:"nanos"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -312,11 +308,10 @@ func (m *Timestamp) decodeFrom(r *cramberry.Reader) {
 	}
 }
 
-
 // Duration represents a time duration.
 type Duration struct {
-Seconds int64 `cramberry:"1" json:"seconds"`
-Nanos int32 `cramberry:"2" json:"nanos"`
+	Seconds int64 `cramberry:"1" json:"seconds"`
+	Nanos   int32 `cramberry:"2" json:"nanos"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -377,19 +372,18 @@ func (m *Duration) decodeFrom(r *cramberry.Reader) {
 	}
 }
 
-
 // Metrics contains various numeric metrics.
 type Metrics struct {
-Count int64 `cramberry:"1" json:"count"`
-Sum float64 `cramberry:"2" json:"sum"`
-Min float64 `cramberry:"3" json:"min"`
-Max float64 `cramberry:"4" json:"max"`
-Avg float64 `cramberry:"5" json:"avg"`
-P50 float64 `cramberry:"6" json:"p50"`
-P95 float64 `cramberry:"7" json:"p95"`
-P99 float64 `cramberry:"8" json:"p99"`
-TotalBytes int64 `cramberry:"9" json:"total_bytes"`
-ErrorCount int64 `cramberry:"10" json:"error_count"`
+	Count      int64   `cramberry:"1" json:"count"`
+	Sum        float64 `cramberry:"2" json:"sum"`
+	Min        float64 `cramberry:"3" json:"min"`
+	Max        float64 `cramberry:"4" json:"max"`
+	Avg        float64 `cramberry:"5" json:"avg"`
+	P50        float64 `cramberry:"6" json:"p50"`
+	P95        float64 `cramberry:"7" json:"p95"`
+	P99        float64 `cramberry:"8" json:"p99"`
+	TotalBytes int64   `cramberry:"9" json:"total_bytes"`
+	ErrorCount int64   `cramberry:"10" json:"error_count"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -498,12 +492,11 @@ func (m *Metrics) decodeFrom(r *cramberry.Reader) {
 	}
 }
 
-
 // SmallMessage is a minimal message for baseline testing.
 type SmallMessage struct {
-Id int64 `cramberry:"1" json:"id"`
-Name string `cramberry:"2" json:"name"`
-Active bool `cramberry:"3" json:"active"`
+	Id     int64  `cramberry:"1" json:"id"`
+	Name   string `cramberry:"2" json:"name"`
+	Active bool   `cramberry:"3" json:"active"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -570,16 +563,15 @@ func (m *SmallMessage) decodeFrom(r *cramberry.Reader) {
 	}
 }
 
-
 // Address represents a physical address.
 type Address struct {
-Street1 string `cramberry:"1" json:"street1"`
-Street2 *string `cramberry:"2,omitempty" json:"street2,omitempty"`
-City string `cramberry:"3" json:"city"`
-State string `cramberry:"4" json:"state"`
-PostalCode string `cramberry:"5" json:"postal_code"`
-Country string `cramberry:"6" json:"country"`
-Coordinates *Point `cramberry:"7,omitempty" json:"coordinates,omitempty"`
+	Street1     string  `cramberry:"1" json:"street1"`
+	Street2     *string `cramberry:"2,omitempty" json:"street2,omitempty"`
+	City        string  `cramberry:"3" json:"city"`
+	State       string  `cramberry:"4" json:"state"`
+	PostalCode  string  `cramberry:"5" json:"postal_code"`
+	Country     string  `cramberry:"6" json:"country"`
+	Coordinates *Point  `cramberry:"7,omitempty" json:"coordinates,omitempty"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -649,8 +641,8 @@ func (m *Address) decodeFrom(r *cramberry.Reader) {
 			m.Street1 = r.ReadString()
 		case 2:
 			var tmp string
-		tmp = r.ReadString()
-		m.Street2 = &tmp
+			tmp = r.ReadString()
+			m.Street2 = &tmp
 		case 3:
 			m.City = r.ReadString()
 		case 4:
@@ -661,8 +653,8 @@ func (m *Address) decodeFrom(r *cramberry.Reader) {
 			m.Country = r.ReadString()
 		case 7:
 			var tmp Point
-		tmp.decodeFrom(r)
-		m.Coordinates = &tmp
+			tmp.decodeFrom(r)
+			m.Coordinates = &tmp
 		default:
 			// Skip unknown field - read wire type would have been needed
 			// For now, just break as we can't determine how to skip
@@ -674,15 +666,14 @@ func (m *Address) decodeFrom(r *cramberry.Reader) {
 	}
 }
 
-
 // ContactInfo holds contact details.
 type ContactInfo struct {
-Email string `cramberry:"1" json:"email"`
-Phone *string `cramberry:"2,omitempty" json:"phone,omitempty"`
-Mobile *string `cramberry:"3,omitempty" json:"mobile,omitempty"`
-Fax *string `cramberry:"4,omitempty" json:"fax,omitempty"`
-MailingAddress *Address `cramberry:"5,omitempty" json:"mailing_address,omitempty"`
-BillingAddress *Address `cramberry:"6,omitempty" json:"billing_address,omitempty"`
+	Email          string   `cramberry:"1" json:"email"`
+	Phone          *string  `cramberry:"2,omitempty" json:"phone,omitempty"`
+	Mobile         *string  `cramberry:"3,omitempty" json:"mobile,omitempty"`
+	Fax            *string  `cramberry:"4,omitempty" json:"fax,omitempty"`
+	MailingAddress *Address `cramberry:"5,omitempty" json:"mailing_address,omitempty"`
+	BillingAddress *Address `cramberry:"6,omitempty" json:"billing_address,omitempty"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -748,24 +739,24 @@ func (m *ContactInfo) decodeFrom(r *cramberry.Reader) {
 			m.Email = r.ReadString()
 		case 2:
 			var tmp string
-		tmp = r.ReadString()
-		m.Phone = &tmp
+			tmp = r.ReadString()
+			m.Phone = &tmp
 		case 3:
 			var tmp string
-		tmp = r.ReadString()
-		m.Mobile = &tmp
+			tmp = r.ReadString()
+			m.Mobile = &tmp
 		case 4:
 			var tmp string
-		tmp = r.ReadString()
-		m.Fax = &tmp
+			tmp = r.ReadString()
+			m.Fax = &tmp
 		case 5:
 			var tmp Address
-		tmp.decodeFrom(r)
-		m.MailingAddress = &tmp
+			tmp.decodeFrom(r)
+			m.MailingAddress = &tmp
 		case 6:
 			var tmp Address
-		tmp.decodeFrom(r)
-		m.BillingAddress = &tmp
+			tmp.decodeFrom(r)
+			m.BillingAddress = &tmp
 		default:
 			// Skip unknown field - read wire type would have been needed
 			// For now, just break as we can't determine how to skip
@@ -777,18 +768,17 @@ func (m *ContactInfo) decodeFrom(r *cramberry.Reader) {
 	}
 }
 
-
 // Person represents a person entity.
 type Person struct {
-Id int64 `cramberry:"1" json:"id"`
-FirstName string `cramberry:"2" json:"first_name"`
-LastName string `cramberry:"3" json:"last_name"`
-MiddleName *string `cramberry:"4,omitempty" json:"middle_name,omitempty"`
-DateOfBirth *Timestamp `cramberry:"5,omitempty" json:"date_of_birth,omitempty"`
-Contact ContactInfo `cramberry:"6" json:"contact"`
-Status Status `cramberry:"7" json:"status"`
-CreatedAt Timestamp `cramberry:"8" json:"created_at"`
-UpdatedAt *Timestamp `cramberry:"9,omitempty" json:"updated_at,omitempty"`
+	Id          int64       `cramberry:"1" json:"id"`
+	FirstName   string      `cramberry:"2" json:"first_name"`
+	LastName    string      `cramberry:"3" json:"last_name"`
+	MiddleName  *string     `cramberry:"4,omitempty" json:"middle_name,omitempty"`
+	DateOfBirth *Timestamp  `cramberry:"5,omitempty" json:"date_of_birth,omitempty"`
+	Contact     ContactInfo `cramberry:"6" json:"contact"`
+	Status      Status      `cramberry:"7" json:"status"`
+	CreatedAt   Timestamp   `cramberry:"8" json:"created_at"`
+	UpdatedAt   *Timestamp  `cramberry:"9,omitempty" json:"updated_at,omitempty"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -864,12 +854,12 @@ func (m *Person) decodeFrom(r *cramberry.Reader) {
 			m.LastName = r.ReadString()
 		case 4:
 			var tmp string
-		tmp = r.ReadString()
-		m.MiddleName = &tmp
+			tmp = r.ReadString()
+			m.MiddleName = &tmp
 		case 5:
 			var tmp Timestamp
-		tmp.decodeFrom(r)
-		m.DateOfBirth = &tmp
+			tmp.decodeFrom(r)
+			m.DateOfBirth = &tmp
 		case 6:
 			m.Contact.decodeFrom(r)
 		case 7:
@@ -878,8 +868,8 @@ func (m *Person) decodeFrom(r *cramberry.Reader) {
 			m.CreatedAt.decodeFrom(r)
 		case 9:
 			var tmp Timestamp
-		tmp.decodeFrom(r)
-		m.UpdatedAt = &tmp
+			tmp.decodeFrom(r)
+			m.UpdatedAt = &tmp
 		default:
 			// Skip unknown field - read wire type would have been needed
 			// For now, just break as we can't determine how to skip
@@ -891,18 +881,17 @@ func (m *Person) decodeFrom(r *cramberry.Reader) {
 	}
 }
 
-
 // Organization represents a company or organization.
 type Organization struct {
-Id int64 `cramberry:"1" json:"id"`
-Name string `cramberry:"2" json:"name"`
-LegalName string `cramberry:"3" json:"legal_name"`
-TaxId *string `cramberry:"4,omitempty" json:"tax_id,omitempty"`
-Headquarters Address `cramberry:"5" json:"headquarters"`
-Contact ContactInfo `cramberry:"6" json:"contact"`
-Status Status `cramberry:"7" json:"status"`
-FoundedAt Timestamp `cramberry:"8" json:"founded_at"`
-CreatedAt Timestamp `cramberry:"9" json:"created_at"`
+	Id           int64       `cramberry:"1" json:"id"`
+	Name         string      `cramberry:"2" json:"name"`
+	LegalName    string      `cramberry:"3" json:"legal_name"`
+	TaxId        *string     `cramberry:"4,omitempty" json:"tax_id,omitempty"`
+	Headquarters Address     `cramberry:"5" json:"headquarters"`
+	Contact      ContactInfo `cramberry:"6" json:"contact"`
+	Status       Status      `cramberry:"7" json:"status"`
+	FoundedAt    Timestamp   `cramberry:"8" json:"founded_at"`
+	CreatedAt    Timestamp   `cramberry:"9" json:"created_at"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -974,8 +963,8 @@ func (m *Organization) decodeFrom(r *cramberry.Reader) {
 			m.LegalName = r.ReadString()
 		case 4:
 			var tmp string
-		tmp = r.ReadString()
-		m.TaxId = &tmp
+			tmp = r.ReadString()
+			m.TaxId = &tmp
 		case 5:
 			m.Headquarters.decodeFrom(r)
 		case 6:
@@ -997,12 +986,11 @@ func (m *Organization) decodeFrom(r *cramberry.Reader) {
 	}
 }
 
-
 // Tag represents a label/tag.
 type Tag struct {
-Key string `cramberry:"1" json:"key"`
-Value string `cramberry:"2" json:"value"`
-Color *string `cramberry:"3,omitempty" json:"color,omitempty"`
+	Key   string  `cramberry:"1" json:"key"`
+	Value string  `cramberry:"2" json:"value"`
+	Color *string `cramberry:"3,omitempty" json:"color,omitempty"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -1058,8 +1046,8 @@ func (m *Tag) decodeFrom(r *cramberry.Reader) {
 			m.Value = r.ReadString()
 		case 3:
 			var tmp string
-		tmp = r.ReadString()
-		m.Color = &tmp
+			tmp = r.ReadString()
+			m.Color = &tmp
 		default:
 			// Skip unknown field - read wire type would have been needed
 			// For now, just break as we can't determine how to skip
@@ -1071,16 +1059,15 @@ func (m *Tag) decodeFrom(r *cramberry.Reader) {
 	}
 }
 
-
 // Attachment represents a file attachment.
 type Attachment struct {
-Id string `cramberry:"1" json:"id"`
-Filename string `cramberry:"2" json:"filename"`
-MimeType string `cramberry:"3" json:"mime_type"`
-SizeBytes int64 `cramberry:"4" json:"size_bytes"`
-Checksum []byte `cramberry:"5" json:"checksum"`
-Url *string `cramberry:"6,omitempty" json:"url,omitempty"`
-UploadedAt Timestamp `cramberry:"7" json:"uploaded_at"`
+	Id         string    `cramberry:"1" json:"id"`
+	Filename   string    `cramberry:"2" json:"filename"`
+	MimeType   string    `cramberry:"3" json:"mime_type"`
+	SizeBytes  int64     `cramberry:"4" json:"size_bytes"`
+	Checksum   []byte    `cramberry:"5" json:"checksum"`
+	Url        *string   `cramberry:"6,omitempty" json:"url,omitempty"`
+	UploadedAt Timestamp `cramberry:"7" json:"uploaded_at"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -1156,8 +1143,8 @@ func (m *Attachment) decodeFrom(r *cramberry.Reader) {
 			m.Checksum = r.ReadBytes()
 		case 6:
 			var tmp string
-		tmp = r.ReadString()
-		m.Url = &tmp
+			tmp = r.ReadString()
+			m.Url = &tmp
 		case 7:
 			m.UploadedAt.decodeFrom(r)
 		default:
@@ -1171,15 +1158,14 @@ func (m *Attachment) decodeFrom(r *cramberry.Reader) {
 	}
 }
 
-
 // Comment represents a user comment.
 type Comment struct {
-Id int64 `cramberry:"1" json:"id"`
-AuthorId int64 `cramberry:"2" json:"author_id"`
-Content string `cramberry:"3" json:"content"`
-CreatedAt Timestamp `cramberry:"4" json:"created_at"`
-EditedAt *Timestamp `cramberry:"5,omitempty" json:"edited_at,omitempty"`
-Reactions []int64 `cramberry:"6" json:"reactions"`
+	Id        int64      `cramberry:"1" json:"id"`
+	AuthorId  int64      `cramberry:"2" json:"author_id"`
+	Content   string     `cramberry:"3" json:"content"`
+	CreatedAt Timestamp  `cramberry:"4" json:"created_at"`
+	EditedAt  *Timestamp `cramberry:"5,omitempty" json:"edited_at,omitempty"`
+	Reactions []int64    `cramberry:"6" json:"reactions"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -1252,14 +1238,14 @@ func (m *Comment) decodeFrom(r *cramberry.Reader) {
 			m.CreatedAt.decodeFrom(r)
 		case 5:
 			var tmp Timestamp
-		tmp.decodeFrom(r)
-		m.EditedAt = &tmp
+			tmp.decodeFrom(r)
+			m.EditedAt = &tmp
 		case 6:
 			n := int(r.ReadUvarint())
-		m.Reactions = make([]int64, n)
-		for i := 0; i < n; i++ {
-			m.Reactions[i] = r.ReadInt64()
-		}
+			m.Reactions = make([]int64, n)
+			for i := 0; i < n; i++ {
+				m.Reactions[i] = r.ReadInt64()
+			}
 		default:
 			// Skip unknown field - read wire type would have been needed
 			// For now, just break as we can't determine how to skip
@@ -1271,23 +1257,22 @@ func (m *Comment) decodeFrom(r *cramberry.Reader) {
 	}
 }
 
-
 // Document with arrays and maps.
 type Document struct {
-Id int64 `cramberry:"1" json:"id"`
-Title string `cramberry:"2" json:"title"`
-Content string `cramberry:"3" json:"content"`
-AuthorId int64 `cramberry:"4" json:"author_id"`
-Status Status `cramberry:"5" json:"status"`
-Priority Priority `cramberry:"6" json:"priority"`
-Tags []Tag `cramberry:"7" json:"tags"`
-Attachments []Attachment `cramberry:"8" json:"attachments"`
-Comments []Comment `cramberry:"9" json:"comments"`
-Metadata map[string]string `cramberry:"10" json:"metadata"`
-Collaborators []int64 `cramberry:"11" json:"collaborators"`
-CreatedAt Timestamp `cramberry:"12" json:"created_at"`
-UpdatedAt *Timestamp `cramberry:"13,omitempty" json:"updated_at,omitempty"`
-PublishedAt *Timestamp `cramberry:"14,omitempty" json:"published_at,omitempty"`
+	Id            int64             `cramberry:"1" json:"id"`
+	Title         string            `cramberry:"2" json:"title"`
+	Content       string            `cramberry:"3" json:"content"`
+	AuthorId      int64             `cramberry:"4" json:"author_id"`
+	Status        Status            `cramberry:"5" json:"status"`
+	Priority      Priority          `cramberry:"6" json:"priority"`
+	Tags          []Tag             `cramberry:"7" json:"tags"`
+	Attachments   []Attachment      `cramberry:"8" json:"attachments"`
+	Comments      []Comment         `cramberry:"9" json:"comments"`
+	Metadata      map[string]string `cramberry:"10" json:"metadata"`
+	Collaborators []int64           `cramberry:"11" json:"collaborators"`
+	CreatedAt     Timestamp         `cramberry:"12" json:"created_at"`
+	UpdatedAt     *Timestamp        `cramberry:"13,omitempty" json:"updated_at,omitempty"`
+	PublishedAt   *Timestamp        `cramberry:"14,omitempty" json:"published_at,omitempty"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -1405,48 +1390,48 @@ func (m *Document) decodeFrom(r *cramberry.Reader) {
 			m.Priority.decodeFrom(r)
 		case 7:
 			n := int(r.ReadUvarint())
-		m.Tags = make([]Tag, n)
-		for i := 0; i < n; i++ {
-			m.Tags[i].decodeFrom(r)
-		}
+			m.Tags = make([]Tag, n)
+			for i := 0; i < n; i++ {
+				m.Tags[i].decodeFrom(r)
+			}
 		case 8:
 			n := int(r.ReadUvarint())
-		m.Attachments = make([]Attachment, n)
-		for i := 0; i < n; i++ {
-			m.Attachments[i].decodeFrom(r)
-		}
+			m.Attachments = make([]Attachment, n)
+			for i := 0; i < n; i++ {
+				m.Attachments[i].decodeFrom(r)
+			}
 		case 9:
 			n := int(r.ReadUvarint())
-		m.Comments = make([]Comment, n)
-		for i := 0; i < n; i++ {
-			m.Comments[i].decodeFrom(r)
-		}
+			m.Comments = make([]Comment, n)
+			for i := 0; i < n; i++ {
+				m.Comments[i].decodeFrom(r)
+			}
 		case 10:
 			n := int(r.ReadUvarint())
-		m.Metadata = make(map[string]string, n)
-		for i := 0; i < n; i++ {
-			var k string
-			k = r.ReadString()
-			var v string
-			v = r.ReadString()
-			m.Metadata[k] = v
-		}
+			m.Metadata = make(map[string]string, n)
+			for i := 0; i < n; i++ {
+				var k string
+				k = r.ReadString()
+				var v string
+				v = r.ReadString()
+				m.Metadata[k] = v
+			}
 		case 11:
 			n := int(r.ReadUvarint())
-		m.Collaborators = make([]int64, n)
-		for i := 0; i < n; i++ {
-			m.Collaborators[i] = r.ReadInt64()
-		}
+			m.Collaborators = make([]int64, n)
+			for i := 0; i < n; i++ {
+				m.Collaborators[i] = r.ReadInt64()
+			}
 		case 12:
 			m.CreatedAt.decodeFrom(r)
 		case 13:
 			var tmp Timestamp
-		tmp.decodeFrom(r)
-		m.UpdatedAt = &tmp
+			tmp.decodeFrom(r)
+			m.UpdatedAt = &tmp
 		case 14:
 			var tmp Timestamp
-		tmp.decodeFrom(r)
-		m.PublishedAt = &tmp
+			tmp.decodeFrom(r)
+			m.PublishedAt = &tmp
 		default:
 			// Skip unknown field - read wire type would have been needed
 			// For now, just break as we can't determine how to skip
@@ -1458,13 +1443,12 @@ func (m *Document) decodeFrom(r *cramberry.Reader) {
 	}
 }
 
-
 // EventSource identifies the source of an event.
 type EventSource struct {
-Service string `cramberry:"1" json:"service"`
-Instance string `cramberry:"2" json:"instance"`
-Version string `cramberry:"3" json:"version"`
-Region *string `cramberry:"4,omitempty" json:"region,omitempty"`
+	Service  string  `cramberry:"1" json:"service"`
+	Instance string  `cramberry:"2" json:"instance"`
+	Version  string  `cramberry:"3" json:"version"`
+	Region   *string `cramberry:"4,omitempty" json:"region,omitempty"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -1526,8 +1510,8 @@ func (m *EventSource) decodeFrom(r *cramberry.Reader) {
 			m.Version = r.ReadString()
 		case 4:
 			var tmp string
-		tmp = r.ReadString()
-		m.Region = &tmp
+			tmp = r.ReadString()
+			m.Region = &tmp
 		default:
 			// Skip unknown field - read wire type would have been needed
 			// For now, just break as we can't determine how to skip
@@ -1539,19 +1523,18 @@ func (m *EventSource) decodeFrom(r *cramberry.Reader) {
 	}
 }
 
-
 // Event represents a system event.
 type Event struct {
-Id string `cramberry:"1" json:"id"`
-Type EventType `cramberry:"2" json:"type"`
-EntityType string `cramberry:"3" json:"entity_type"`
-EntityId string `cramberry:"4" json:"entity_id"`
-Source EventSource `cramberry:"5" json:"source"`
-Timestamp Timestamp `cramberry:"6" json:"timestamp"`
-Attributes map[string]string `cramberry:"7" json:"attributes"`
-Payload *[]byte `cramberry:"8,omitempty" json:"payload,omitempty"`
-CorrelationId *string `cramberry:"9,omitempty" json:"correlation_id,omitempty"`
-CausationId *string `cramberry:"10,omitempty" json:"causation_id,omitempty"`
+	Id            string            `cramberry:"1" json:"id"`
+	Type          EventType         `cramberry:"2" json:"type"`
+	EntityType    string            `cramberry:"3" json:"entity_type"`
+	EntityId      string            `cramberry:"4" json:"entity_id"`
+	Source        EventSource       `cramberry:"5" json:"source"`
+	Timestamp     Timestamp         `cramberry:"6" json:"timestamp"`
+	Attributes    map[string]string `cramberry:"7" json:"attributes"`
+	Payload       *[]byte           `cramberry:"8,omitempty" json:"payload,omitempty"`
+	CorrelationId *string           `cramberry:"9,omitempty" json:"correlation_id,omitempty"`
+	CausationId   *string           `cramberry:"10,omitempty" json:"causation_id,omitempty"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -1641,26 +1624,26 @@ func (m *Event) decodeFrom(r *cramberry.Reader) {
 			m.Timestamp.decodeFrom(r)
 		case 7:
 			n := int(r.ReadUvarint())
-		m.Attributes = make(map[string]string, n)
-		for i := 0; i < n; i++ {
-			var k string
-			k = r.ReadString()
-			var v string
-			v = r.ReadString()
-			m.Attributes[k] = v
-		}
+			m.Attributes = make(map[string]string, n)
+			for i := 0; i < n; i++ {
+				var k string
+				k = r.ReadString()
+				var v string
+				v = r.ReadString()
+				m.Attributes[k] = v
+			}
 		case 8:
 			var tmp []byte
-		tmp = r.ReadBytes()
-		m.Payload = &tmp
+			tmp = r.ReadBytes()
+			m.Payload = &tmp
 		case 9:
 			var tmp string
-		tmp = r.ReadString()
-		m.CorrelationId = &tmp
+			tmp = r.ReadString()
+			m.CorrelationId = &tmp
 		case 10:
 			var tmp string
-		tmp = r.ReadString()
-		m.CausationId = &tmp
+			tmp = r.ReadString()
+			m.CausationId = &tmp
 		default:
 			// Skip unknown field - read wire type would have been needed
 			// For now, just break as we can't determine how to skip
@@ -1672,18 +1655,17 @@ func (m *Event) decodeFrom(r *cramberry.Reader) {
 	}
 }
 
-
 // LogEntry represents a log message.
 type LogEntry struct {
-Timestamp Timestamp `cramberry:"1" json:"timestamp"`
-Level string `cramberry:"2" json:"level"`
-Logger string `cramberry:"3" json:"logger"`
-Msg string `cramberry:"4" json:"msg"`
-Source EventSource `cramberry:"5" json:"source"`
-Fields map[string]string `cramberry:"6" json:"fields"`
-StackTrace *string `cramberry:"7,omitempty" json:"stack_trace,omitempty"`
-TraceId *string `cramberry:"8,omitempty" json:"trace_id,omitempty"`
-SpanId *string `cramberry:"9,omitempty" json:"span_id,omitempty"`
+	Timestamp  Timestamp         `cramberry:"1" json:"timestamp"`
+	Level      string            `cramberry:"2" json:"level"`
+	Logger     string            `cramberry:"3" json:"logger"`
+	Msg        string            `cramberry:"4" json:"msg"`
+	Source     EventSource       `cramberry:"5" json:"source"`
+	Fields     map[string]string `cramberry:"6" json:"fields"`
+	StackTrace *string           `cramberry:"7,omitempty" json:"stack_trace,omitempty"`
+	TraceId    *string           `cramberry:"8,omitempty" json:"trace_id,omitempty"`
+	SpanId     *string           `cramberry:"9,omitempty" json:"span_id,omitempty"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -1769,26 +1751,26 @@ func (m *LogEntry) decodeFrom(r *cramberry.Reader) {
 			m.Source.decodeFrom(r)
 		case 6:
 			n := int(r.ReadUvarint())
-		m.Fields = make(map[string]string, n)
-		for i := 0; i < n; i++ {
-			var k string
-			k = r.ReadString()
-			var v string
-			v = r.ReadString()
-			m.Fields[k] = v
-		}
+			m.Fields = make(map[string]string, n)
+			for i := 0; i < n; i++ {
+				var k string
+				k = r.ReadString()
+				var v string
+				v = r.ReadString()
+				m.Fields[k] = v
+			}
 		case 7:
 			var tmp string
-		tmp = r.ReadString()
-		m.StackTrace = &tmp
+			tmp = r.ReadString()
+			m.StackTrace = &tmp
 		case 8:
 			var tmp string
-		tmp = r.ReadString()
-		m.TraceId = &tmp
+			tmp = r.ReadString()
+			m.TraceId = &tmp
 		case 9:
 			var tmp string
-		tmp = r.ReadString()
-		m.SpanId = &tmp
+			tmp = r.ReadString()
+			m.SpanId = &tmp
 		default:
 			// Skip unknown field - read wire type would have been needed
 			// For now, just break as we can't determine how to skip
@@ -1800,28 +1782,27 @@ func (m *LogEntry) decodeFrom(r *cramberry.Reader) {
 	}
 }
 
-
 // UserProfile is a comprehensive user profile for stress testing.
 type UserProfile struct {
-Id int64 `cramberry:"1" json:"id"`
-Username string `cramberry:"2" json:"username"`
-Email string `cramberry:"3" json:"email"`
-DisplayName string `cramberry:"4" json:"display_name"`
-Bio *string `cramberry:"5,omitempty" json:"bio,omitempty"`
-AvatarUrl *string `cramberry:"6,omitempty" json:"avatar_url,omitempty"`
-PersonalInfo Person `cramberry:"7" json:"personal_info"`
-AccountStatus Status `cramberry:"8" json:"account_status"`
-Roles []string `cramberry:"9" json:"roles"`
-Permissions []string `cramberry:"10" json:"permissions"`
-Preferences map[string]string `cramberry:"11" json:"preferences"`
-Settings map[string]string `cramberry:"12" json:"settings"`
-Organizations []Organization `cramberry:"13" json:"organizations"`
-Documents []Document `cramberry:"14" json:"documents"`
-RecentActivity []Event `cramberry:"15" json:"recent_activity"`
-UsageMetrics Metrics `cramberry:"16" json:"usage_metrics"`
-CreatedAt Timestamp `cramberry:"17" json:"created_at"`
-LastLoginAt Timestamp `cramberry:"18" json:"last_login_at"`
-DeletedAt *Timestamp `cramberry:"19,omitempty" json:"deleted_at,omitempty"`
+	Id             int64             `cramberry:"1" json:"id"`
+	Username       string            `cramberry:"2" json:"username"`
+	Email          string            `cramberry:"3" json:"email"`
+	DisplayName    string            `cramberry:"4" json:"display_name"`
+	Bio            *string           `cramberry:"5,omitempty" json:"bio,omitempty"`
+	AvatarUrl      *string           `cramberry:"6,omitempty" json:"avatar_url,omitempty"`
+	PersonalInfo   Person            `cramberry:"7" json:"personal_info"`
+	AccountStatus  Status            `cramberry:"8" json:"account_status"`
+	Roles          []string          `cramberry:"9" json:"roles"`
+	Permissions    []string          `cramberry:"10" json:"permissions"`
+	Preferences    map[string]string `cramberry:"11" json:"preferences"`
+	Settings       map[string]string `cramberry:"12" json:"settings"`
+	Organizations  []Organization    `cramberry:"13" json:"organizations"`
+	Documents      []Document        `cramberry:"14" json:"documents"`
+	RecentActivity []Event           `cramberry:"15" json:"recent_activity"`
+	UsageMetrics   Metrics           `cramberry:"16" json:"usage_metrics"`
+	CreatedAt      Timestamp         `cramberry:"17" json:"created_at"`
+	LastLoginAt    Timestamp         `cramberry:"18" json:"last_login_at"`
+	DeletedAt      *Timestamp        `cramberry:"19,omitempty" json:"deleted_at,omitempty"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -1958,66 +1939,66 @@ func (m *UserProfile) decodeFrom(r *cramberry.Reader) {
 			m.DisplayName = r.ReadString()
 		case 5:
 			var tmp string
-		tmp = r.ReadString()
-		m.Bio = &tmp
+			tmp = r.ReadString()
+			m.Bio = &tmp
 		case 6:
 			var tmp string
-		tmp = r.ReadString()
-		m.AvatarUrl = &tmp
+			tmp = r.ReadString()
+			m.AvatarUrl = &tmp
 		case 7:
 			m.PersonalInfo.decodeFrom(r)
 		case 8:
 			m.AccountStatus.decodeFrom(r)
 		case 9:
 			n := int(r.ReadUvarint())
-		m.Roles = make([]string, n)
-		for i := 0; i < n; i++ {
-			m.Roles[i] = r.ReadString()
-		}
+			m.Roles = make([]string, n)
+			for i := 0; i < n; i++ {
+				m.Roles[i] = r.ReadString()
+			}
 		case 10:
 			n := int(r.ReadUvarint())
-		m.Permissions = make([]string, n)
-		for i := 0; i < n; i++ {
-			m.Permissions[i] = r.ReadString()
-		}
+			m.Permissions = make([]string, n)
+			for i := 0; i < n; i++ {
+				m.Permissions[i] = r.ReadString()
+			}
 		case 11:
 			n := int(r.ReadUvarint())
-		m.Preferences = make(map[string]string, n)
-		for i := 0; i < n; i++ {
-			var k string
-			k = r.ReadString()
-			var v string
-			v = r.ReadString()
-			m.Preferences[k] = v
-		}
+			m.Preferences = make(map[string]string, n)
+			for i := 0; i < n; i++ {
+				var k string
+				k = r.ReadString()
+				var v string
+				v = r.ReadString()
+				m.Preferences[k] = v
+			}
 		case 12:
 			n := int(r.ReadUvarint())
-		m.Settings = make(map[string]string, n)
-		for i := 0; i < n; i++ {
-			var k string
-			k = r.ReadString()
-			var v string
-			v = r.ReadString()
-			m.Settings[k] = v
-		}
+			m.Settings = make(map[string]string, n)
+			for i := 0; i < n; i++ {
+				var k string
+				k = r.ReadString()
+				var v string
+				v = r.ReadString()
+				m.Settings[k] = v
+			}
 		case 13:
 			n := int(r.ReadUvarint())
-		m.Organizations = make([]Organization, n)
-		for i := 0; i < n; i++ {
-			m.Organizations[i].decodeFrom(r)
-		}
+			m.Organizations = make([]Organization, n)
+			for i := 0; i < n; i++ {
+				m.Organizations[i].decodeFrom(r)
+			}
 		case 14:
 			n := int(r.ReadUvarint())
-		m.Documents = make([]Document, n)
-		for i := 0; i < n; i++ {
-			m.Documents[i].decodeFrom(r)
-		}
+			m.Documents = make([]Document, n)
+			for i := 0; i < n; i++ {
+				m.Documents[i].decodeFrom(r)
+			}
 		case 15:
 			n := int(r.ReadUvarint())
-		m.RecentActivity = make([]Event, n)
-		for i := 0; i < n; i++ {
-			m.RecentActivity[i].decodeFrom(r)
-		}
+			m.RecentActivity = make([]Event, n)
+			for i := 0; i < n; i++ {
+				m.RecentActivity[i].decodeFrom(r)
+			}
 		case 16:
 			m.UsageMetrics.decodeFrom(r)
 		case 17:
@@ -2026,8 +2007,8 @@ func (m *UserProfile) decodeFrom(r *cramberry.Reader) {
 			m.LastLoginAt.decodeFrom(r)
 		case 19:
 			var tmp Timestamp
-		tmp.decodeFrom(r)
-		m.DeletedAt = &tmp
+			tmp.decodeFrom(r)
+			m.DeletedAt = &tmp
 		default:
 			// Skip unknown field - read wire type would have been needed
 			// For now, just break as we can't determine how to skip
@@ -2039,15 +2020,14 @@ func (m *UserProfile) decodeFrom(r *cramberry.Reader) {
 	}
 }
 
-
 // BatchRequest contains multiple items for batch processing.
 type BatchRequest struct {
-RequestId string `cramberry:"1" json:"request_id"`
-Items []SmallMessage `cramberry:"2" json:"items"`
-Headers map[string]string `cramberry:"3" json:"headers"`
-SubmittedAt Timestamp `cramberry:"4" json:"submitted_at"`
-Timeout *Duration `cramberry:"5,omitempty" json:"timeout,omitempty"`
-Priority Priority `cramberry:"6" json:"priority"`
+	RequestId   string            `cramberry:"1" json:"request_id"`
+	Items       []SmallMessage    `cramberry:"2" json:"items"`
+	Headers     map[string]string `cramberry:"3" json:"headers"`
+	SubmittedAt Timestamp         `cramberry:"4" json:"submitted_at"`
+	Timeout     *Duration         `cramberry:"5,omitempty" json:"timeout,omitempty"`
+	Priority    Priority          `cramberry:"6" json:"priority"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -2116,26 +2096,26 @@ func (m *BatchRequest) decodeFrom(r *cramberry.Reader) {
 			m.RequestId = r.ReadString()
 		case 2:
 			n := int(r.ReadUvarint())
-		m.Items = make([]SmallMessage, n)
-		for i := 0; i < n; i++ {
-			m.Items[i].decodeFrom(r)
-		}
+			m.Items = make([]SmallMessage, n)
+			for i := 0; i < n; i++ {
+				m.Items[i].decodeFrom(r)
+			}
 		case 3:
 			n := int(r.ReadUvarint())
-		m.Headers = make(map[string]string, n)
-		for i := 0; i < n; i++ {
-			var k string
-			k = r.ReadString()
-			var v string
-			v = r.ReadString()
-			m.Headers[k] = v
-		}
+			m.Headers = make(map[string]string, n)
+			for i := 0; i < n; i++ {
+				var k string
+				k = r.ReadString()
+				var v string
+				v = r.ReadString()
+				m.Headers[k] = v
+			}
 		case 4:
 			m.SubmittedAt.decodeFrom(r)
 		case 5:
 			var tmp Duration
-		tmp.decodeFrom(r)
-		m.Timeout = &tmp
+			tmp.decodeFrom(r)
+			m.Timeout = &tmp
 		case 6:
 			m.Priority.decodeFrom(r)
 		default:
@@ -2149,15 +2129,14 @@ func (m *BatchRequest) decodeFrom(r *cramberry.Reader) {
 	}
 }
 
-
 // BatchResponse contains results from batch processing.
 type BatchResponse struct {
-RequestId string `cramberry:"1" json:"request_id"`
-Results []SmallMessage `cramberry:"2" json:"results"`
-Errors []string `cramberry:"3" json:"errors"`
-ProcessingMetrics Metrics `cramberry:"4" json:"processing_metrics"`
-ProcessingTime Duration `cramberry:"5" json:"processing_time"`
-CompletedAt Timestamp `cramberry:"6" json:"completed_at"`
+	RequestId         string         `cramberry:"1" json:"request_id"`
+	Results           []SmallMessage `cramberry:"2" json:"results"`
+	Errors            []string       `cramberry:"3" json:"errors"`
+	ProcessingMetrics Metrics        `cramberry:"4" json:"processing_metrics"`
+	ProcessingTime    Duration       `cramberry:"5" json:"processing_time"`
+	CompletedAt       Timestamp      `cramberry:"6" json:"completed_at"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -2223,16 +2202,16 @@ func (m *BatchResponse) decodeFrom(r *cramberry.Reader) {
 			m.RequestId = r.ReadString()
 		case 2:
 			n := int(r.ReadUvarint())
-		m.Results = make([]SmallMessage, n)
-		for i := 0; i < n; i++ {
-			m.Results[i].decodeFrom(r)
-		}
+			m.Results = make([]SmallMessage, n)
+			for i := 0; i < n; i++ {
+				m.Results[i].decodeFrom(r)
+			}
 		case 3:
 			n := int(r.ReadUvarint())
-		m.Errors = make([]string, n)
-		for i := 0; i < n; i++ {
-			m.Errors[i] = r.ReadString()
-		}
+			m.Errors = make([]string, n)
+			for i := 0; i < n; i++ {
+				m.Errors[i] = r.ReadString()
+			}
 		case 4:
 			m.ProcessingMetrics.decodeFrom(r)
 		case 5:
@@ -2249,6 +2228,3 @@ func (m *BatchResponse) decodeFrom(r *cramberry.Reader) {
 		}
 	}
 }
-
-
-

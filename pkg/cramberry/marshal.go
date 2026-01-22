@@ -449,11 +449,11 @@ func getWireTypeV2(t reflect.Type) byte {
 
 // fieldInfo holds metadata about a struct field.
 type fieldInfo struct {
-	name     string
-	num      int
-	index    int
+	name      string
+	num       int
+	index     int
 	omitEmpty bool
-	required bool
+	required  bool
 }
 
 // structInfo holds cached metadata about a struct type.

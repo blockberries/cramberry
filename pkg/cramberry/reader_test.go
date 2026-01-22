@@ -63,7 +63,7 @@ func TestReadBool(t *testing.T) {
 	}{
 		{[]byte{0}, false},
 		{[]byte{1}, true},
-		{[]byte{2}, true},  // Non-zero is true
+		{[]byte{2}, true}, // Non-zero is true
 		{[]byte{255}, true},
 	}
 

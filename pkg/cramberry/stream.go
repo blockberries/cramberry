@@ -342,7 +342,7 @@ func (sw *StreamWriter) WriteTag(fieldNum int, wireType WireType) {
 		sw.setError(ErrInvalidFieldNumber)
 		return
 	}
-	n := wire.AppendTag(sw.scratch[:0], fieldNum, wire.WireType(wireType))
+	n := wire.AppendTag(sw.scratch[:0], fieldNum, wire.Type(wireType))
 	sw.write(n)
 }
 

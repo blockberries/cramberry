@@ -446,7 +446,7 @@ func (w *Writer) WriteTag(fieldNum int, wireType WireType) {
 		return
 	}
 	w.grow(MaxTagSize)
-	w.buf = wire.AppendTag(w.buf, fieldNum, wire.WireType(wireType))
+	w.buf = wire.AppendTag(w.buf, fieldNum, wire.Type(wireType))
 }
 
 // WriteNil writes a nil marker (TypeID 0).

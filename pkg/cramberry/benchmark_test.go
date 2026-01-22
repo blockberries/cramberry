@@ -13,12 +13,12 @@ type BenchSmall struct {
 }
 
 type BenchMedium struct {
-	ID       int64   `cramberry:"1" json:"id"`
-	Name     string  `cramberry:"2" json:"name"`
-	Email    string  `cramberry:"3" json:"email"`
-	Active   bool    `cramberry:"4" json:"active"`
-	Score    float64 `cramberry:"5" json:"score"`
-	Tags     []string `cramberry:"6" json:"tags"`
+	ID     int64    `cramberry:"1" json:"id"`
+	Name   string   `cramberry:"2" json:"name"`
+	Email  string   `cramberry:"3" json:"email"`
+	Active bool     `cramberry:"4" json:"active"`
+	Score  float64  `cramberry:"5" json:"score"`
+	Tags   []string `cramberry:"6" json:"tags"`
 }
 
 type BenchLarge struct {
@@ -387,7 +387,7 @@ func BenchmarkSize(b *testing.B) {
 // Comparison summary: Print size comparison
 func TestEncodingSizeComparison(t *testing.T) {
 	tests := []struct {
-		name string
+		name  string
 		value any
 	}{
 		{"Small", benchSmall},

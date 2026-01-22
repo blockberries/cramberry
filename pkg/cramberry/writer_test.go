@@ -724,16 +724,16 @@ func TestIsValidUTF8(t *testing.T) {
 		{"hello", true},
 		{"日本語", true},
 		{"emoji: 🎉", true},
-		{"\x80", false},                         // Invalid leading byte
-		{"\xC0\x80", false},                     // Overlong encoding
-		{"\xE0\x80\x80", false},                 // Overlong encoding
-		{"\xED\xA0\x80", false},                 // Surrogate half
-		{"\xF0\x80\x80\x80", false},             // Overlong encoding
-		{"\xF4\x90\x80\x80", false},             // Out of range
-		{"\xC2", false},                         // Truncated sequence
-		{"\xE0\x80", false},                     // Truncated sequence
-		{"\xC2\x00", false},                     // Invalid continuation
-		{string([]byte{0xC2, 0xA0}), true},      // Valid 2-byte
+		{"\x80", false},                          // Invalid leading byte
+		{"\xC0\x80", false},                      // Overlong encoding
+		{"\xE0\x80\x80", false},                  // Overlong encoding
+		{"\xED\xA0\x80", false},                  // Surrogate half
+		{"\xF0\x80\x80\x80", false},              // Overlong encoding
+		{"\xF4\x90\x80\x80", false},              // Out of range
+		{"\xC2", false},                          // Truncated sequence
+		{"\xE0\x80", false},                      // Truncated sequence
+		{"\xC2\x00", false},                      // Invalid continuation
+		{string([]byte{0xC2, 0xA0}), true},       // Valid 2-byte
 		{string([]byte{0xE2, 0x82, 0xAC}), true}, // Euro sign
 	}
 

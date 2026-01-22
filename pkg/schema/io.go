@@ -389,7 +389,7 @@ func WriteToFile(path string, schema *Schema) error {
 func FormatSchema(schema *Schema) string {
 	var sb strings.Builder
 	writer := NewWriter()
-	writer.WriteSchema(&sb, schema)
+	_ = writer.WriteSchema(&sb, schema) // Error can't happen with strings.Builder
 	return sb.String()
 }
 

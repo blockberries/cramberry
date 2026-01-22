@@ -331,7 +331,7 @@ func TestGenerateGoldenFiles(t *testing.T) {
 		t.Skip("Set GENERATE_GOLDEN=1 to regenerate golden files")
 	}
 
-	if err := os.MkdirAll(goldenDir, 0755); err != nil {
+	if err := os.MkdirAll(goldenDir, 0o755); err != nil {
 		t.Fatalf("Failed to create golden dir: %v", err)
 	}
 
@@ -355,14 +355,14 @@ func TestGenerateGoldenFiles(t *testing.T) {
 		}
 
 		path := filepath.Join(goldenDir, tc.name+".bin")
-		if err := os.WriteFile(path, data, 0644); err != nil {
+		if err := os.WriteFile(path, data, 0o644); err != nil {
 			t.Errorf("Failed to write %s: %v", path, err)
 			continue
 		}
 
 		// Also write hex for easier inspection
 		hexPath := filepath.Join(goldenDir, tc.name+".hex")
-		if err := os.WriteFile(hexPath, []byte(hex.EncodeToString(data)), 0644); err != nil {
+		if err := os.WriteFile(hexPath, []byte(hex.EncodeToString(data)), 0o644); err != nil {
 			t.Errorf("Failed to write %s: %v", hexPath, err)
 		}
 

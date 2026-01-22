@@ -37,7 +37,6 @@ tmp/
 *.gen.go
 *.gen.ts
 *.gen.rs
-gen/
 
 # Rust
 rust/target/

@@ -143,7 +143,7 @@ func (b *SchemaBuilder) buildMessages() {
 		}
 
 		for _, field := range fields {
-			fieldType := b.goTypeToSchemaType(field.GoType, field.IsPointer)
+			fieldType := b.goTypeToSchemaType(field.GoType)
 
 			// For repeated fields, unwrap the array type and mark as repeated
 			repeated := field.Repeated
@@ -249,10 +249,10 @@ func (b *SchemaBuilder) buildInterfaces() {
 	}
 }
 
-func (b *SchemaBuilder) goTypeToSchemaType(t types.Type, isPointer bool) schema.TypeRef {
+func (b *SchemaBuilder) goTypeToSchemaType(t types.Type) schema.TypeRef {
 	// Handle pointer types
 	if ptr, ok := t.(*types.Pointer); ok {
-		elemType := b.goTypeToSchemaType(ptr.Elem(), false)
+		elemType := b.goTypeToSchemaType(ptr.Elem())
 		return &schema.PointerType{Element: elemType}
 	}
 
@@ -276,7 +276,7 @@ func (b *SchemaBuilder) goTypeToSchemaType(t types.Type, isPointer bool) schema.
 		}
 
 		// Recurse to underlying type for basic type aliases
-		return b.goTypeToSchemaType(named.Underlying(), isPointer)
+		return b.goTypeToSchemaType(named.Underlying())
 	}
 
 	// Handle basic types
@@ -286,7 +286,7 @@ func (b *SchemaBuilder) goTypeToSchemaType(t types.Type, isPointer bool) schema.
 
 	// Handle slices
 	if slice, ok := t.(*types.Slice); ok {
-		elemType := b.goTypeToSchemaType(slice.Elem(), false)
+		elemType := b.goTypeToSchemaType(slice.Elem())
 		// Check for []byte specially
 		if basic, ok := slice.Elem().(*types.Basic); ok && basic.Kind() == types.Byte {
 			return &schema.ScalarType{Name: "bytes"}
@@ -296,14 +296,14 @@ func (b *SchemaBuilder) goTypeToSchemaType(t types.Type, isPointer bool) schema.
 
 	// Handle arrays
 	if array, ok := t.(*types.Array); ok {
-		elemType := b.goTypeToSchemaType(array.Elem(), false)
+		elemType := b.goTypeToSchemaType(array.Elem())
 		return &schema.ArrayType{Element: elemType, Size: int(array.Len())}
 	}
 
 	// Handle maps
 	if mapType, ok := t.(*types.Map); ok {
-		keyType := b.goTypeToSchemaType(mapType.Key(), false)
-		valueType := b.goTypeToSchemaType(mapType.Elem(), false)
+		keyType := b.goTypeToSchemaType(mapType.Key())
+		valueType := b.goTypeToSchemaType(mapType.Elem())
 		return &schema.MapType{Key: keyType, Value: valueType}
 	}
 

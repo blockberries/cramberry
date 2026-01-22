@@ -265,7 +265,7 @@ func TestWriterComplexTypes(t *testing.T) {
 						Type:   &ArrayType{Element: &ScalarType{Name: "byte"}, Size: 32},
 					},
 					{
-						Name: "map_field",
+						Name:   "map_field",
 						Number: 3,
 						Type: &MapType{
 							Key:   &ScalarType{Name: "string"},
@@ -434,7 +434,7 @@ message User {
 }
 `
 	schemaPath := filepath.Join(tmpDir, "test.cram")
-	if err := os.WriteFile(schemaPath, []byte(schemaContent), 0644); err != nil {
+	if err := os.WriteFile(schemaPath, []byte(schemaContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -465,7 +465,7 @@ message Address {
 }
 `
 	typesPath := filepath.Join(tmpDir, "types.cram")
-	if err := os.WriteFile(typesPath, []byte(typesContent), 0644); err != nil {
+	if err := os.WriteFile(typesPath, []byte(typesContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -481,7 +481,7 @@ message User {
 }
 `
 	mainPath := filepath.Join(tmpDir, "main.cram")
-	if err := os.WriteFile(mainPath, []byte(mainContent), 0644); err != nil {
+	if err := os.WriteFile(mainPath, []byte(mainContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -516,7 +516,7 @@ message User {
 }
 `
 	mainPath := filepath.Join(tmpDir, "main.cram")
-	if err := os.WriteFile(mainPath, []byte(mainContent), 0644); err != nil {
+	if err := os.WriteFile(mainPath, []byte(mainContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -537,7 +537,7 @@ import "b.cram";
 message A { int32 x = 1; }
 `
 	aPath := filepath.Join(tmpDir, "a.cram")
-	if err := os.WriteFile(aPath, []byte(aContent), 0644); err != nil {
+	if err := os.WriteFile(aPath, []byte(aContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -548,7 +548,7 @@ import "a.cram";
 message B { int32 y = 1; }
 `
 	bPath := filepath.Join(tmpDir, "b.cram")
-	if err := os.WriteFile(bPath, []byte(bContent), 0644); err != nil {
+	if err := os.WriteFile(bPath, []byte(bContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -573,7 +573,7 @@ message B { int32 y = 1; }
 func TestLoaderSearchPaths(t *testing.T) {
 	tmpDir := t.TempDir()
 	libDir := filepath.Join(tmpDir, "lib")
-	if err := os.MkdirAll(libDir, 0755); err != nil {
+	if err := os.MkdirAll(libDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -583,7 +583,7 @@ package lib;
 message Common { int32 x = 1; }
 `
 	libPath := filepath.Join(libDir, "common.cram")
-	if err := os.WriteFile(libPath, []byte(libContent), 0644); err != nil {
+	if err := os.WriteFile(libPath, []byte(libContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -594,7 +594,7 @@ import "common.cram" as lib;
 message User { lib.Common common = 1; }
 `
 	mainPath := filepath.Join(tmpDir, "main.cram")
-	if err := os.WriteFile(mainPath, []byte(mainContent), 0644); err != nil {
+	if err := os.WriteFile(mainPath, []byte(mainContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -681,7 +681,7 @@ message User {
 }
 `
 	path := filepath.Join(tmpDir, "test.cram")
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

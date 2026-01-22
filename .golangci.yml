@@ -17,8 +17,7 @@ linters:
     - unparam
     - gocritic
     - revive
-    - exportloopref
-    - prealloc
+    - copyloopvar
 
 linters-settings:
   gofmt:
@@ -30,11 +29,15 @@ linters-settings:
   gocritic:
     enabled-tags:
       - diagnostic
-      - style
       - performance
     disabled-checks:
-      - whyNoLint
       - hugeParam  # Allow large struct parameters for API clarity
+      - commentedOutCode  # Allow explanatory comments that look like code
+      - ifElseChain  # if-else chains are often clearer than switch
+      - assignOp  # Explicit assignment is clearer
+      - sprintfQuotedString  # Current format is intentional
+      - elseif  # Explicit else is sometimes clearer
+      - appendAssign  # This pattern is intentional for copy
 
   revive:
     rules:
@@ -66,11 +69,6 @@ linters-settings:
   misspell:
     locale: US
 
-  prealloc:
-    simple: true
-    range-loops: true
-    for-loops: true
-
 issues:
   exclude-rules:
     # Ignore long lines in generated files
@@ -83,6 +81,20 @@ issues:
       linters:
         - unparam
         - unused
+        - errcheck
+        - revive
+
+    # Ignore errcheck and naming in benchmark tests
+    - path: benchmark_test\.go
+      linters:
+        - errcheck
+        - revive
+
+    # Ignore exported stutter in extract package (API compatibility)
+    - path: pkg/extract/
+      text: "stutters"
+      linters:
+        - revive
 
   max-issues-per-linter: 0
   max-same-issues: 0

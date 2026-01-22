@@ -6,9 +6,10 @@ import (
 	"encoding/json"
 	"testing"
 
+	"google.golang.org/protobuf/proto"
+
 	cramgen "github.com/blockberries/cramberry/benchmark/gen/cramberry"
 	pb "github.com/blockberries/cramberry/benchmark/gen/protobuf"
-	"google.golang.org/protobuf/proto"
 )
 
 // ============================================================================

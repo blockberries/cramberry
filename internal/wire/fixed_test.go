@@ -167,9 +167,9 @@ func TestAppendFloat32(t *testing.T) {
 		expected []byte
 	}{
 		{"zero", 0.0, []byte{0x00, 0x00, 0x00, 0x00}},
-		{"one", 1.0, []byte{0x00, 0x00, 0x80, 0x3f}},              // IEEE 754: 0x3F800000
-		{"minus_one", -1.0, []byte{0x00, 0x00, 0x80, 0xbf}},       // IEEE 754: 0xBF800000
-		{"pi_approx", float32(3.14), []byte{0xc3, 0xf5, 0x48, 0x40}}, // Approximate
+		{"one", 1.0, []byte{0x00, 0x00, 0x80, 0x3f}},                       // IEEE 754: 0x3F800000
+		{"minus_one", -1.0, []byte{0x00, 0x00, 0x80, 0xbf}},                // IEEE 754: 0xBF800000
+		{"pi_approx", float32(3.14), []byte{0xc3, 0xf5, 0x48, 0x40}},       // Approximate
 		{"pos_inf", float32(math.Inf(1)), []byte{0x00, 0x00, 0x80, 0x7f}},  // 0x7F800000
 		{"neg_inf", float32(math.Inf(-1)), []byte{0x00, 0x00, 0x80, 0xff}}, // 0xFF800000
 	}
@@ -259,7 +259,7 @@ func TestAppendFloat64(t *testing.T) {
 		expected []byte
 	}{
 		{"zero", 0.0, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
-		{"one", 1.0, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0, 0x3f}},  // 0x3FF0000000000000
+		{"one", 1.0, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0, 0x3f}}, // 0x3FF0000000000000
 		{"minus_one", -1.0, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0, 0xbf}},
 		{"pos_inf", math.Inf(1), []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0, 0x7f}},
 		{"neg_inf", math.Inf(-1), []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0, 0xff}},
@@ -596,10 +596,10 @@ func FuzzFixed64RoundTrip(f *testing.F) {
 }
 
 func FuzzFloat64RoundTrip(f *testing.F) {
-	f.Add(uint64(0))                          // 0.0
-	f.Add(uint64(0x3FF0000000000000))          // 1.0
-	f.Add(uint64(0x7FF0000000000000))          // +Inf
-	f.Add(uint64(0x7FF8000000000000))          // NaN
+	f.Add(uint64(0))                  // 0.0
+	f.Add(uint64(0x3FF0000000000000)) // 1.0
+	f.Add(uint64(0x7FF0000000000000)) // +Inf
+	f.Add(uint64(0x7FF8000000000000)) // NaN
 
 	f.Fuzz(func(t *testing.T, bits uint64) {
 		v := math.Float64frombits(bits)

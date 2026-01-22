@@ -21,15 +21,15 @@ const (
 
 // User represents a user in the system.
 type User struct {
-	ID        int64  `cramberry:"1,required"`
-	Name      string `cramberry:"2"`
-	Email     string `cramberry:"3"`
-	Status    Status `cramberry:"4"`
-	Age       int32  `cramberry:"5,omitempty"`
-	Tags      []string `cramberry:"6"`
-	Metadata  map[string]string `cramberry:"7"`
-	Address   *Address `cramberry:"8"`
-	Internal  string `cramberry:"-"` // Should be skipped
+	ID       int64             `cramberry:"1,required"`
+	Name     string            `cramberry:"2"`
+	Email    string            `cramberry:"3"`
+	Status   Status            `cramberry:"4"`
+	Age      int32             `cramberry:"5,omitempty"`
+	Tags     []string          `cramberry:"6"`
+	Metadata map[string]string `cramberry:"7"`
+	Address  *Address          `cramberry:"8"`
+	Internal string            `cramberry:"-"` // Should be skipped
 }
 
 // Address represents a physical address.

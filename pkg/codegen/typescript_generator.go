@@ -86,7 +86,7 @@ func (c *tsContext) tsFieldType(f *schema.Field) string {
 	return t
 }
 
-func (c *tsContext) tsTypeInternal(t schema.TypeRef, inArray bool) string {
+func (c *tsContext) tsTypeInternal(t schema.TypeRef, _ bool) string {
 	switch typ := t.(type) {
 	case *schema.ScalarType:
 		return c.tsScalarType(typ.Name)

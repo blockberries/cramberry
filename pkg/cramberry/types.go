@@ -143,7 +143,7 @@ type Limits struct {
 // DefaultLimits are the default resource limits.
 // These are generous limits suitable for most use cases.
 var DefaultLimits = Limits{
-	MaxMessageSize:  64 * 1024 * 1024,  // 64 MB
+	MaxMessageSize:  64 * 1024 * 1024, // 64 MB
 	MaxDepth:        100,
 	MaxStringLength: 10 * 1024 * 1024,  // 10 MB
 	MaxBytesLength:  100 * 1024 * 1024, // 100 MB
@@ -155,7 +155,7 @@ var DefaultLimits = Limits{
 var SecureLimits = Limits{
 	MaxMessageSize:  1 * 1024 * 1024, // 1 MB
 	MaxDepth:        32,
-	MaxStringLength: 1 * 1024 * 1024, // 1 MB
+	MaxStringLength: 1 * 1024 * 1024,  // 1 MB
 	MaxBytesLength:  10 * 1024 * 1024, // 10 MB
 	MaxArrayLength:  10_000,
 	MaxMapSize:      10_000,
