@@ -263,6 +263,45 @@ func TestParseTypeIDFromDoc(t *testing.T) {
 	}
 }
 
+func TestFieldNumberCollisionWarning(t *testing.T) {
+	// Create types with field number collision
+	types := map[string]*TypeInfo{
+		"pkg.Collision": {
+			Name: "Collision",
+			Fields: []*FieldInfo{
+				{Name: "First", FieldNum: 1},
+				{Name: "Second", FieldNum: 2},
+				{Name: "Third", FieldNum: 1}, // Collision with First
+			},
+		},
+	}
+
+	builder := NewSchemaBuilder(types, nil, nil)
+	_, err := builder.Build("pkg")
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+
+	warnings := builder.Warnings()
+	if len(warnings) == 0 {
+		t.Error("Expected at least one warning for field number collision")
+	}
+
+	// Check that the warning mentions the collision
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "field number collision") &&
+			strings.Contains(w, "First") &&
+			strings.Contains(w, "Third") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Expected warning about field number collision between First and Third, got: %v", warnings)
+	}
+}
+
 func TestPlatformDependentTypeWarnings(t *testing.T) {
 	types := make(map[string]*TypeInfo)
 	interfaces := make(map[string]*InterfaceInfo)

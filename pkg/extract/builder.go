@@ -3,6 +3,7 @@ package extract
 import (
 	"go/types"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/cramberry/cramberry-go/pkg/schema"
@@ -129,6 +130,17 @@ func (b *SchemaBuilder) buildMessages() {
 		sort.Slice(fields, func(i, j int) bool {
 			return fields[i].FieldNum < fields[j].FieldNum
 		})
+
+		// Check for field number collisions
+		usedFieldNums := make(map[int]string)
+		for _, field := range fields {
+			if existingField, exists := usedFieldNums[field.FieldNum]; exists {
+				b.addWarning("field number collision in type '" + typ.Name +
+					"': fields '" + existingField + "' and '" + field.Name +
+					"' both have field number " + strconv.Itoa(field.FieldNum))
+			}
+			usedFieldNums[field.FieldNum] = field.Name
+		}
 
 		for _, field := range fields {
 			fieldType := b.goTypeToSchemaType(field.GoType, field.IsPointer)
