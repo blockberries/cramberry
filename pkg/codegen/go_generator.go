@@ -89,7 +89,16 @@ func (c *goContext) goType(t schema.TypeRef) string {
 
 func (c *goContext) goFieldType(f *schema.Field) string {
 	t := c.goTypeInternal(f.Type, false)
-	if f.Optional && !c.needsPointer(f.Type) {
+
+	// Wrap repeated fields in slice
+	if f.Repeated {
+		// Don't double-wrap if already a slice
+		if _, isArray := f.Type.(*schema.ArrayType); !isArray {
+			t = "[]" + t
+		}
+	}
+
+	if f.Optional && !c.needsPointer(f.Type) && !f.Repeated {
 		return "*" + t
 	}
 	return t
@@ -254,7 +263,7 @@ type {{goEnumType $enum}} int32
 
 const (
 {{- range $i, $v := $enum.Values}}
-	{{goEnumValueName $enum $v}} {{if eq $i 0}}{{goEnumType $enum}} = {{end}}{{$v.Number}}
+	{{goEnumValueName $enum $v}} {{goEnumType $enum}} = {{$v.Number}}
 {{- end}}
 )
 

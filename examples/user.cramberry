@@ -1,0 +1,45 @@
+// Example schema file for Cramberry
+
+package example;
+
+option go_package = "github.com/example/user";
+
+/// Status represents the user's account status.
+enum Status {
+  UNKNOWN = 0;
+  ACTIVE = 1;
+  SUSPENDED = 2;
+  DELETED = 3;
+}
+
+/// Address represents a physical address.
+message Address {
+  string street = 1;
+  string city = 2;
+  string state = 3;
+  string zip = 4;
+  string country = 5;
+}
+
+/// User represents a user in the system.
+message User @128 {
+  required int32 id = 1;
+  optional string name = 2;
+  string email = 3;
+  Status status = 4;
+  *Address address = 5;
+  repeated string tags = 6;
+  map[string]string metadata = 7;
+}
+
+/// Admin is a user with admin privileges.
+message Admin @129 {
+  User user = 1;
+  repeated string permissions = 2;
+}
+
+/// Person is a polymorphic interface for user types.
+interface Person {
+  128 = User;
+  129 = Admin;
+}
