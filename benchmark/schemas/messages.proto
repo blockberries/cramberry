@@ -1,0 +1,269 @@
+// Benchmark schemas for performance testing
+// These schemas are designed to test various serialization scenarios
+
+syntax = "proto3";
+
+package benchmark;
+
+option go_package = "github.com/cramberry/cramberry-go/benchmark/gen/protobuf";
+
+// ========================================
+// Enums
+// ========================================
+
+// Status represents entity status.
+enum Status {
+  STATUS_UNKNOWN = 0;
+  STATUS_PENDING = 1;
+  STATUS_ACTIVE = 2;
+  STATUS_SUSPENDED = 3;
+  STATUS_DELETED = 4;
+}
+
+// Priority levels.
+enum Priority {
+  PRIORITY_LOW = 0;
+  PRIORITY_MEDIUM = 1;
+  PRIORITY_HIGH = 2;
+  PRIORITY_CRITICAL = 3;
+}
+
+// EventType for event messages.
+enum EventType {
+  EVENT_TYPE_CREATED = 0;
+  EVENT_TYPE_UPDATED = 1;
+  EVENT_TYPE_DELETED = 2;
+  EVENT_TYPE_VIEWED = 3;
+  EVENT_TYPE_SHARED = 4;
+}
+
+// ========================================
+// Simple Messages (Scalar-heavy)
+// ========================================
+
+// Point represents a 3D point.
+message Point {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
+// Timestamp represents a point in time.
+message Timestamp {
+  int64 seconds = 1;
+  int32 nanos = 2;
+}
+
+// Duration represents a time duration.
+message Duration {
+  int64 seconds = 1;
+  int32 nanos = 2;
+}
+
+// Metrics contains various numeric metrics.
+message Metrics {
+  int64 count = 1;
+  double sum = 2;
+  double min = 3;
+  double max = 4;
+  double avg = 5;
+  double p50 = 6;
+  double p95 = 7;
+  double p99 = 8;
+  int64 total_bytes = 9;
+  int64 error_count = 10;
+}
+
+// SmallMessage is a minimal message for baseline testing.
+message SmallMessage {
+  int64 id = 1;
+  string name = 2;
+  bool active = 3;
+}
+
+// ========================================
+// Complex Nested Messages
+// ========================================
+
+// Address represents a physical address.
+message Address {
+  string street1 = 1;
+  optional string street2 = 2;
+  string city = 3;
+  string state = 4;
+  string postal_code = 5;
+  string country = 6;
+  optional Point coordinates = 7;
+}
+
+// ContactInfo holds contact details.
+message ContactInfo {
+  string email = 1;
+  optional string phone = 2;
+  optional string mobile = 3;
+  optional string fax = 4;
+  optional Address mailing_address = 5;
+  optional Address billing_address = 6;
+}
+
+// Person represents a person entity.
+message Person {
+  int64 id = 1;
+  string first_name = 2;
+  string last_name = 3;
+  optional string middle_name = 4;
+  optional Timestamp date_of_birth = 5;
+  ContactInfo contact = 6;
+  Status status = 7;
+  Timestamp created_at = 8;
+  optional Timestamp updated_at = 9;
+}
+
+// Organization represents a company or organization.
+message Organization {
+  int64 id = 1;
+  string name = 2;
+  string legal_name = 3;
+  optional string tax_id = 4;
+  Address headquarters = 5;
+  ContactInfo contact = 6;
+  Status status = 7;
+  Timestamp founded_at = 8;
+  Timestamp created_at = 9;
+}
+
+// ========================================
+// Messages with Collections
+// ========================================
+
+// Tag represents a label/tag.
+message Tag {
+  string key = 1;
+  string value = 2;
+  optional string color = 3;
+}
+
+// Attachment represents a file attachment.
+message Attachment {
+  string id = 1;
+  string filename = 2;
+  string mime_type = 3;
+  int64 size_bytes = 4;
+  bytes checksum = 5;
+  optional string url = 6;
+  Timestamp uploaded_at = 7;
+}
+
+// Comment represents a user comment.
+message Comment {
+  int64 id = 1;
+  int64 author_id = 2;
+  string content = 3;
+  Timestamp created_at = 4;
+  optional Timestamp edited_at = 5;
+  repeated int64 reactions = 6;
+}
+
+// Document with arrays and maps.
+message Document {
+  int64 id = 1;
+  string title = 2;
+  string content = 3;
+  int64 author_id = 4;
+  Status status = 5;
+  Priority priority = 6;
+  repeated Tag tags = 7;
+  repeated Attachment attachments = 8;
+  repeated Comment comments = 9;
+  map<string, string> metadata = 10;
+  repeated int64 collaborators = 11;
+  Timestamp created_at = 12;
+  optional Timestamp updated_at = 13;
+  optional Timestamp published_at = 14;
+}
+
+// ========================================
+// Event/Log Messages (Common in streaming)
+// ========================================
+
+// EventSource identifies the source of an event.
+message EventSource {
+  string service = 1;
+  string instance = 2;
+  string version = 3;
+  optional string region = 4;
+}
+
+// Event represents a system event.
+message Event {
+  string id = 1;
+  EventType type = 2;
+  string entity_type = 3;
+  string entity_id = 4;
+  EventSource source = 5;
+  Timestamp timestamp = 6;
+  map<string, string> attributes = 7;
+  optional bytes payload = 8;
+  optional string correlation_id = 9;
+  optional string causation_id = 10;
+}
+
+// LogEntry represents a log message.
+message LogEntry {
+  Timestamp timestamp = 1;
+  string level = 2;
+  string logger = 3;
+  string msg = 4;
+  EventSource source = 5;
+  map<string, string> fields = 6;
+  optional string stack_trace = 7;
+  optional string trace_id = 8;
+  optional string span_id = 9;
+}
+
+// ========================================
+// Large/Complex Message (stress test)
+// ========================================
+
+// UserProfile is a comprehensive user profile for stress testing.
+message UserProfile {
+  int64 id = 1;
+  string username = 2;
+  string email = 3;
+  string display_name = 4;
+  optional string bio = 5;
+  optional string avatar_url = 6;
+  Person personal_info = 7;
+  Status account_status = 8;
+  repeated string roles = 9;
+  repeated string permissions = 10;
+  map<string, string> preferences = 11;
+  map<string, string> settings = 12;
+  repeated Organization organizations = 13;
+  repeated Document documents = 14;
+  repeated Event recent_activity = 15;
+  Metrics usage_metrics = 16;
+  Timestamp created_at = 17;
+  Timestamp last_login_at = 18;
+  optional Timestamp deleted_at = 19;
+}
+
+// BatchRequest contains multiple items for batch processing.
+message BatchRequest {
+  string request_id = 1;
+  repeated SmallMessage items = 2;
+  map<string, string> headers = 3;
+  Timestamp submitted_at = 4;
+  optional Duration timeout = 5;
+  Priority priority = 6;
+}
+
+// BatchResponse contains results from batch processing.
+message BatchResponse {
+  string request_id = 1;
+  repeated SmallMessage results = 2;
+  repeated string errors = 3;
+  Metrics processing_metrics = 4;
+  Duration processing_time = 5;
+  Timestamp completed_at = 6;
+}
