@@ -13,10 +13,11 @@ import (
 
 // Config configures the type collector.
 type Config struct {
-	IncludePrivate   bool     // Include unexported types
-	IncludePatterns  []string // Type name patterns to include (glob)
-	ExcludePatterns  []string // Type name patterns to exclude (glob)
-	DetectInterfaces bool     // Auto-detect interface implementations
+	IncludePrivate         bool     // Include unexported types
+	IncludePatterns        []string // Type name patterns to include (glob)
+	ExcludePatterns        []string // Type name patterns to exclude (glob)
+	DetectInterfaces       bool     // Auto-detect interface implementations
+	IncludeEmptyInterfaces bool     // Include empty interfaces (marker interfaces for polymorphic grouping)
 }
 
 // DefaultConfig returns a default configuration.
@@ -179,7 +180,8 @@ func (c *TypeCollector) collectType(typeName *types.TypeName, pkgPath string, do
 		c.types[qualifiedName] = info
 
 	case *types.Interface:
-		if t.NumMethods() > 0 {
+		// Include interfaces with methods, or empty interfaces if configured
+		if t.NumMethods() > 0 || c.config.IncludeEmptyInterfaces {
 			info := &InterfaceInfo{
 				Name:    typeName.Name(),
 				Package: typeName.Pkg().Name(),

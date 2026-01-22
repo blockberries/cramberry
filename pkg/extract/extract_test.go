@@ -352,6 +352,49 @@ func TestPlatformDependentTypeWarnings(t *testing.T) {
 	}
 }
 
+func TestEmptyInterfaceDetection(t *testing.T) {
+	// Test that empty interfaces are NOT included by default
+	t.Run("ExcludedByDefault", func(t *testing.T) {
+		cfg := DefaultConfig()
+		result, err := ExtractToString([]string{"github.com/cramberry/cramberry-go/pkg/extract/testdata"}, cfg)
+		if err != nil {
+			t.Fatalf("ExtractToString() error = %v", err)
+		}
+
+		// Serializable is an empty interface - should NOT be in result by default
+		if strings.Contains(result, "Serializable") {
+			t.Error("result should NOT contain 'Serializable' empty interface by default")
+		}
+
+		// Person interface has methods - should be in result
+		if !strings.Contains(result, "Person") {
+			t.Error("result should contain 'Person' interface (has methods)")
+		}
+	})
+
+	// Test that empty interfaces ARE included when configured
+	t.Run("IncludedWhenConfigured", func(t *testing.T) {
+		cfg := &Config{
+			IncludeEmptyInterfaces: true,
+			DetectInterfaces:       true,
+		}
+		result, err := ExtractToString([]string{"github.com/cramberry/cramberry-go/pkg/extract/testdata"}, cfg)
+		if err != nil {
+			t.Fatalf("ExtractToString() error = %v", err)
+		}
+
+		// Serializable should now be in result
+		if !strings.Contains(result, "Serializable") {
+			t.Error("result should contain 'Serializable' empty interface when IncludeEmptyInterfaces is true")
+		}
+
+		// Person interface should also be in result
+		if !strings.Contains(result, "Person") {
+			t.Error("result should contain 'Person' interface (has methods)")
+		}
+	})
+}
+
 func TestTypeIDAutoAssignment(t *testing.T) {
 	// Create test types with and without explicit type IDs
 	types := map[string]*TypeInfo{

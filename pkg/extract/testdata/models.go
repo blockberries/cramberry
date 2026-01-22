@@ -65,3 +65,11 @@ func (a *Admin) GetName() string {
 type privateType struct {
 	Value int
 }
+
+// Serializable is a marker interface for types that can be serialized.
+// This is an empty interface used for polymorphic type grouping.
+type Serializable interface{}
+
+// Ensure User and Admin implement Serializable (no methods required)
+var _ Serializable = (*User)(nil)
+var _ Serializable = (*Admin)(nil)
