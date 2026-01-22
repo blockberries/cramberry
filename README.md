@@ -300,6 +300,74 @@ it := cramberry.NewMessageIterator(r)
 for it.Next(&msg) { ... }
 ```
 
+## Cross-Language Support
+
+Cramberry provides runtime libraries for multiple languages:
+
+### TypeScript
+
+```typescript
+import { Writer, Reader, WireType } from '@cramberry/runtime';
+
+// Encoding
+const writer = new Writer();
+writer.writeInt32Field(1, 42);
+writer.writeStringField(2, "hello");
+const data = writer.bytes();
+
+// Decoding
+const reader = new Reader(data);
+while (reader.hasMore) {
+  const { fieldNumber, wireType } = reader.readTag();
+  switch (fieldNumber) {
+    case 1: console.log(reader.readInt32()); break;
+    case 2: console.log(reader.readString()); break;
+    default: reader.skipField(wireType);
+  }
+}
+```
+
+### Rust
+
+```rust
+use cramberry::{Writer, Reader, WireType, Result};
+
+fn main() -> Result<()> {
+    // Encoding
+    let mut writer = Writer::new();
+    writer.write_int32_field(1, 42)?;
+    writer.write_string_field(2, "hello")?;
+    let data = writer.into_bytes();
+
+    // Decoding
+    let mut reader = Reader::new(&data);
+    while reader.has_more() {
+        let tag = reader.read_tag()?;
+        match tag.field_number {
+            1 => println!("{}", reader.read_int32()?),
+            2 => println!("{}", reader.read_string()?),
+            _ => reader.skip_field(tag.wire_type)?,
+        }
+    }
+    Ok(())
+}
+```
+
+### Schema Extraction
+
+Extract Cramberry schemas from existing Go code:
+
+```bash
+# Extract schema from Go packages
+cramberry schema ./pkg/models -out schema.cramberry
+
+# Include unexported types
+cramberry schema -private ./...
+
+# Filter by type name patterns
+cramberry schema -include "User*" -exclude "*Internal" ./...
+```
+
 ## Documentation
 
 - [Architecture Design](ARCHITECTURE.md)

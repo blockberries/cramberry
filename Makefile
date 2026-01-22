@@ -1,4 +1,7 @@
 .PHONY: all build test bench lint fmt vet generate clean install coverage help
+.PHONY: examples example-basic example-streaming example-polymorphic
+.PHONY: schema-generate schema-extract
+.PHONY: ts-build ts-test rust-build rust-test runtimes runtimes-test
 
 # Go parameters
 GO := go
@@ -100,6 +103,59 @@ ci: ## Run CI pipeline locally
 	$(MAKE) test
 	$(MAKE) build
 	@echo "CI pipeline complete"
+
+## Example targets
+
+examples: build ## Run all example applications
+	@echo "\n=== Basic Example ==="
+	@$(GO) run ./examples/basic/
+	@echo "\n=== Streaming Example ==="
+	@$(GO) run ./examples/streaming/
+	@echo "\n=== Polymorphic Example ==="
+	@$(GO) run ./examples/polymorphic/
+
+example-basic: ## Run basic example
+	@$(GO) run ./examples/basic/
+
+example-streaming: ## Run streaming example
+	@$(GO) run ./examples/streaming/
+
+example-polymorphic: ## Run polymorphic example
+	@$(GO) run ./examples/polymorphic/
+
+## Schema targets
+
+schema-generate: build ## Generate code from example schemas
+	@mkdir -p gen/
+	@$(BINARY_DIR)/$(BINARY) generate -lang go -out gen/ examples/schemas/*.cramberry
+	@echo "Generated Go code in gen/"
+
+schema-extract: build ## Extract schema from example code
+	@mkdir -p gen/
+	@$(BINARY_DIR)/$(BINARY) schema -out gen/extracted.cramberry ./examples/basic/...
+	@echo "Extracted schema to gen/extracted.cramberry"
+
+## Cross-language runtime targets
+
+ts-build: ## Build TypeScript runtime
+	@echo "Building TypeScript runtime..."
+	@cd typescript && npm install && npm run build
+
+ts-test: ## Run TypeScript tests
+	@echo "Running TypeScript tests..."
+	@cd typescript && npm test
+
+rust-build: ## Build Rust runtime
+	@echo "Building Rust runtime..."
+	@cd rust && cargo build
+
+rust-test: ## Run Rust tests
+	@echo "Running Rust tests..."
+	@cd rust && cargo test
+
+runtimes: ts-build rust-build ## Build all cross-language runtimes
+
+runtimes-test: ts-test rust-test ## Test all cross-language runtimes
 
 ## Help
 

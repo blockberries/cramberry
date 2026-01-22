@@ -1,0 +1,27 @@
+[package]
+name = "cramberry"
+version = "0.1.0"
+edition = "2021"
+authors = ["Cramberry Authors"]
+description = "High-performance binary serialization library"
+license = "Apache-2.0"
+repository = "https://github.com/cramberry/cramberry-rs"
+keywords = ["serialization", "binary", "encoding", "cramberry"]
+categories = ["encoding", "parsing"]
+readme = "README.md"
+
+[dependencies]
+thiserror = "2.0"
+byteorder = "1.5"
+
+[dev-dependencies]
+criterion = "0.5"
+
+# [[bench]]
+# name = "encode_decode"
+# harness = false
+
+[features]
+default = []
+std = []
+alloc = []

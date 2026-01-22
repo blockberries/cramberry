@@ -1,0 +1,78 @@
+// User schema example
+// Demonstrates Cramberry schema definition language
+
+package example;
+
+/// Status represents the user's account status.
+enum Status {
+    UNKNOWN = 0;
+    ACTIVE = 1;
+    SUSPENDED = 2;
+    DELETED = 3;
+}
+
+/// Role defines user permission levels.
+enum Role {
+    GUEST = 0;
+    USER = 1;
+    MODERATOR = 2;
+    ADMIN = 3;
+}
+
+/// Address represents a physical or mailing address.
+message Address {
+    string street = 1;
+    string city = 2;
+    string state = 3;
+    string country = 4;
+    string zip_code = 5;
+}
+
+/// User represents a user account in the system.
+message User {
+    /// Unique user identifier.
+    required int64 id = 1;
+
+    /// User's display name.
+    string name = 2;
+
+    /// Email address (must be unique).
+    string email = 3;
+
+    /// Account status.
+    Status status = 4;
+
+    /// User's role for permissions.
+    Role role = 5;
+
+    /// Optional profile picture URL.
+    optional string avatar_url = 6;
+
+    /// User's addresses (home, work, etc).
+    repeated Address addresses = 7;
+
+    /// Custom metadata key-value pairs.
+    map[string]string metadata = 8;
+
+    /// Account creation timestamp (Unix seconds).
+    int64 created_at = 9;
+
+    /// Last update timestamp (Unix seconds).
+    int64 updated_at = 10;
+}
+
+/// Organization represents a company or group.
+message Organization {
+    required int64 id = 1;
+    string name = 2;
+    string description = 3;
+    repeated User members = 4;
+    *User owner = 5;
+    int64 created_at = 6;
+}
+
+/// Principal represents any entity that can be authenticated.
+interface Principal {
+    128 = User;
+    129 = Organization;
+}

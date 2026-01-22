@@ -1,0 +1,58 @@
+// Package testdata contains test types for schema extraction.
+package testdata
+
+// Status represents the status of a user.
+type Status int
+
+const (
+	StatusUnknown Status = iota
+	StatusActive
+	StatusInactive
+)
+
+// User represents a user in the system.
+type User struct {
+	ID        int64  `cramberry:"1,required"`
+	Name      string `cramberry:"2"`
+	Email     string `cramberry:"3"`
+	Status    Status `cramberry:"4"`
+	Age       int32  `cramberry:"5,omitempty"`
+	Tags      []string `cramberry:"6"`
+	Metadata  map[string]string `cramberry:"7"`
+	Address   *Address `cramberry:"8"`
+	Internal  string `cramberry:"-"` // Should be skipped
+}
+
+// Address represents a physical address.
+type Address struct {
+	Street  string `cramberry:"1"`
+	City    string `cramberry:"2"`
+	Country string `cramberry:"3"`
+	ZipCode string `cramberry:"4"`
+}
+
+// Admin is a user with admin privileges.
+type Admin struct {
+	User
+	Permissions []string `cramberry:"10"`
+}
+
+// Person is an interface for any person type.
+type Person interface {
+	GetName() string
+}
+
+// GetName returns the user's name.
+func (u *User) GetName() string {
+	return u.Name
+}
+
+// GetName returns the admin's name.
+func (a *Admin) GetName() string {
+	return a.Name
+}
+
+// privateType is an unexported type that should be excluded by default.
+type privateType struct {
+	Value int
+}

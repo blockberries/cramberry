@@ -5,6 +5,7 @@
 //	cramberry generate [options] <schema-file>...
 //	cramberry validate <schema-file>...
 //	cramberry format <schema-file>...
+//	cramberry schema [options] <go-package>...
 //	cramberry version
 //
 // Generate Command:
@@ -28,6 +29,17 @@
 // Format Command:
 //
 //	Format schema files in place.
+//
+// Schema Command:
+//
+//	Extract schema from Go source code.
+//
+//	Options:
+//	  -out string       Output file (default: stdout)
+//	  -package string   Override package name
+//	  -private          Include unexported types
+//	  -include string   Type name pattern to include (glob, can be repeated)
+//	  -exclude string   Type name pattern to exclude (glob, can be repeated)
 package main
 
 import (
@@ -39,6 +51,7 @@ import (
 
 	"github.com/cramberry/cramberry-go/pkg/codegen"
 	"github.com/cramberry/cramberry-go/pkg/cramberry"
+	"github.com/cramberry/cramberry-go/pkg/extract"
 	"github.com/cramberry/cramberry-go/pkg/schema"
 )
 
@@ -55,6 +68,8 @@ func main() {
 		cmdValidate(os.Args[2:])
 	case "format", "fmt", "f":
 		cmdFormat(os.Args[2:])
+	case "schema", "extract", "s":
+		cmdSchema(os.Args[2:])
 	case "version":
 		cmdVersion()
 	case "help", "-h", "--help":
@@ -76,6 +91,7 @@ Commands:
   generate    Generate code from schema files
   validate    Validate schema files
   format      Format schema files
+  schema      Extract schema from Go source code
   version     Print version information
   help        Print this help message
 
@@ -306,6 +322,65 @@ Options:`)
 
 	if hasErrors {
 		os.Exit(1)
+	}
+}
+
+func cmdSchema(args []string) {
+	fs := flag.NewFlagSet("schema", flag.ExitOnError)
+	outFile := fs.String("out", "", "Output file (default: stdout)")
+	pkg := fs.String("package", "", "Override package name")
+	private := fs.Bool("private", false, "Include unexported types")
+	var includePatterns stringSliceFlag
+	fs.Var(&includePatterns, "include", "Type name pattern to include (glob, can be repeated)")
+	var excludePatterns stringSliceFlag
+	fs.Var(&excludePatterns, "exclude", "Type name pattern to exclude (glob, can be repeated)")
+
+	fs.Usage = func() {
+		fmt.Println(`Usage: cramberry schema [options] <go-package>...
+
+Extract Cramberry schema from Go source code.
+
+Examples:
+  cramberry schema ./...
+  cramberry schema -out schema.cramberry ./pkg/models
+  cramberry schema -include "User*" -exclude "*Internal" ./...
+
+Options:`)
+		fs.PrintDefaults()
+	}
+
+	if err := fs.Parse(args); err != nil {
+		os.Exit(1)
+	}
+
+	if fs.NArg() == 0 {
+		fmt.Fprintln(os.Stderr, "Error: no Go packages specified")
+		fs.Usage()
+		os.Exit(1)
+	}
+
+	// Configure extraction
+	cfg := &extract.ExtractorConfig{
+		Config: &extract.Config{
+			IncludePrivate:   *private,
+			IncludePatterns:  includePatterns,
+			ExcludePatterns:  excludePatterns,
+			DetectInterfaces: true,
+		},
+		Patterns:   fs.Args(),
+		OutputPath: *outFile,
+		Package:    *pkg,
+	}
+
+	// Extract schema
+	extractor := extract.NewExtractor(cfg.Config)
+	if err := extractor.ExtractAndWrite(cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if *outFile != "" {
+		fmt.Printf("Extracted: %s\n", *outFile)
 	}
 }
 
