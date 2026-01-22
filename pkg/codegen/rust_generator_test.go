@@ -51,7 +51,7 @@ func TestRustGeneratorSimpleMessage(t *testing.T) {
 	}
 
 	// Check derive attributes
-	if !strings.Contains(output, "#[derive(Debug, Clone, PartialEq)]") {
+	if !strings.Contains(output, "#[derive(Debug, Clone, PartialEq, Default)]") {
 		t.Error("expected derive attributes")
 	}
 }

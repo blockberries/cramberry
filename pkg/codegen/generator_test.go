@@ -337,6 +337,11 @@ func TestCaseConversions(t *testing.T) {
 		{"foo-bar", "FooBar", "fooBar", "foo_bar", "FOO_BAR", "foo-bar"},
 		{"ID", "Id", "id", "id", "ID", "id"},
 		{"userID", "UserId", "userId", "user_id", "USER_ID", "user-id"},
+		// Empty and single character
+		{"", "", "", "", "", ""},
+		{"a", "A", "a", "a", "A", "a"},
+		// Unicode handling (using ASCII-only for deterministic behavior)
+		{"café", "Café", "café", "café", "CAFÉ", "café"},
 	}
 
 	for _, tt := range tests {

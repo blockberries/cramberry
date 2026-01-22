@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/cramberry/cramberry-go/pkg/schema"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // Language represents a target code generation language.
@@ -96,11 +98,14 @@ func Languages() []Language {
 
 // Helper functions for code generation
 
+// titleCaser is used for converting strings to title case.
+var titleCaser = cases.Title(language.English)
+
 // ToPascalCase converts a string to PascalCase.
 func ToPascalCase(s string) string {
 	parts := splitName(s)
 	for i, p := range parts {
-		parts[i] = strings.Title(strings.ToLower(p))
+		parts[i] = titleCaser.String(strings.ToLower(p))
 	}
 	return strings.Join(parts, "")
 }
