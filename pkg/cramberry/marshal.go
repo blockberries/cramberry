@@ -100,6 +100,9 @@ func encodeValueWithRegistry(w *Writer, v reflect.Value, reg *Registry) error {
 		w.WriteFloat32(float32(v.Float()))
 	case reflect.Float64:
 		w.WriteFloat64(v.Float())
+	// NOTE: complex64/complex128 are Go-only types. TypeScript and Rust runtimes
+	// do not support complex numbers. Use two separate float fields if cross-language
+	// compatibility is needed.
 	case reflect.Complex64:
 		w.WriteComplex64(complex64(v.Complex()))
 	case reflect.Complex128:

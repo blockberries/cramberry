@@ -108,6 +108,28 @@ interface Principal {
 - **Field tags**: Single varint combines field number and wire type for compact encoding
 - **No reflection caching**: Uses reflect package directly; generated code recommended for hot paths
 
+## Cross-Language Compatibility Notes
+
+### Go-Only Types
+
+- **complex64/complex128**: Go supports complex number types, but TypeScript and Rust don't have native complex number support. Data containing complex numbers encoded in Go cannot be decoded in TypeScript/Rust. Use two separate float fields if cross-language compatibility is needed.
+- **platform-dependent int/uint**: The `int` and `uint` types have platform-dependent sizes (32 or 64 bits). Schema extraction maps these to int32/uint32, which may lose precision on 64-bit platforms. Prefer explicit int32/int64/uint32/uint64 for cross-language schemas.
+
+### Nil/Null Semantics
+
+Different languages handle null/nil differently:
+- **Go**: `nil` for pointers, interfaces, maps, slices, channels
+- **TypeScript**: `null` and `undefined` are distinct
+- **Rust**: `Option<T>` with `None`
+
+Cramberry encodes nil/null as `TypeIDNil` (0) for polymorphic types. For optional fields:
+- Nil pointers are omitted when `omitempty` is set
+- Empty slices/maps may be encoded differently than nil slices/maps
+
+### Map Key Type Restrictions
+
+Map keys must be primitive types (string, integers, floats, bool) for deterministic sorting during encoding. Complex types (structs, slices, maps) are not supported as map keys.
+
 ## Mandatory Workflow for Implementation
 
 **ALWAYS follow these steps after completing each item in a plan:**
