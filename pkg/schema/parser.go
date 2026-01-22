@@ -849,16 +849,34 @@ func (p *Parser) error(msg string) *ParseError {
 	}
 }
 
-// synchronize skips tokens until we find a likely sync point.
+// synchronize skips tokens until we find a likely sync point at the top level.
+// It tracks brace depth to avoid stopping at inner closing braces.
 func (p *Parser) synchronize() {
+	braceDepth := 0
+
 	for !p.check(TokenEOF) {
-		if p.previous.Type == TokenSemicolon || p.previous.Type == TokenRBrace {
-			return
+		// Track brace depth
+		if p.current.Type == TokenLBrace {
+			braceDepth++
+		} else if p.current.Type == TokenRBrace {
+			if braceDepth > 0 {
+				braceDepth--
+			}
 		}
-		switch p.current.Type {
-		case TokenPackage, TokenImport, TokenMessage, TokenEnum, TokenInterface:
-			return
+
+		// Only synchronize at top level (braceDepth == 0)
+		if braceDepth == 0 {
+			// Return after semicolon or closing brace at top level
+			if p.previous.Type == TokenSemicolon || p.previous.Type == TokenRBrace {
+				return
+			}
+			// Return before a top-level keyword
+			switch p.current.Type {
+			case TokenPackage, TokenImport, TokenMessage, TokenEnum, TokenInterface:
+				return
+			}
 		}
+
 		p.advance()
 	}
 }

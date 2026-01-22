@@ -769,6 +769,214 @@ message Good2 {
 	}
 }
 
+func TestParseErrorRecoveryNestedBraces(t *testing.T) {
+	// Test that error recovery properly handles nested braces and doesn't
+	// stop at an inner closing brace.
+	input := `
+package test;
+
+message Bad {
+  map[string]int data = [invalid] = 1;
+}
+
+message Good {
+  string name = 1;
+}
+
+enum Status {
+  UNKNOWN = 0;
+  ACTIVE = 1;
+}
+`
+
+	schema, errors := ParseFile("test.cramberry", input)
+
+	// Should have errors from Bad message
+	if len(errors) == 0 {
+		t.Error("expected parse errors")
+	}
+
+	// Should still parse Good message after Bad
+	goodFound := false
+	for _, msg := range schema.Messages {
+		if msg.Name == "Good" {
+			goodFound = true
+			if len(msg.Fields) != 1 || msg.Fields[0].Name != "name" {
+				t.Errorf("Good message should have 'name' field, got %+v", msg.Fields)
+			}
+		}
+	}
+	if !goodFound {
+		t.Error("expected 'Good' message to be parsed after error recovery")
+	}
+
+	// Should also parse Status enum
+	if len(schema.Enums) == 0 {
+		t.Error("expected Status enum to be parsed")
+	}
+}
+
+func TestParseErrorRecoveryNestedStructures(t *testing.T) {
+	// Test error recovery with deeply nested invalid syntax
+	input := `
+package test;
+
+message First {
+  int32 x = 1;
+}
+
+message ErrorNested {
+  map[string]map[int]{ = 1;
+}
+
+message Second {
+  string y = 2;
+}
+
+interface Animal {
+  1 = Dog;
+  2 = Cat;
+}
+`
+
+	schema, errors := ParseFile("test.cramberry", input)
+
+	// Should have errors
+	if len(errors) == 0 {
+		t.Error("expected parse errors")
+	}
+
+	// First message should be parsed
+	firstFound := false
+	for _, msg := range schema.Messages {
+		if msg.Name == "First" {
+			firstFound = true
+		}
+	}
+	if !firstFound {
+		t.Error("expected 'First' message to be parsed")
+	}
+
+	// Second message should be parsed after error recovery
+	secondFound := false
+	for _, msg := range schema.Messages {
+		if msg.Name == "Second" {
+			secondFound = true
+		}
+	}
+	if !secondFound {
+		t.Error("expected 'Second' message to be parsed after error recovery")
+	}
+
+	// Interface should be parsed
+	if len(schema.Interfaces) == 0 {
+		t.Error("expected Animal interface to be parsed")
+	}
+}
+
+func TestParseErrorRecoveryActualNestedBraces(t *testing.T) {
+	// Test that synchronize correctly handles actual nested braces in erroneous input.
+	// This tests the case where someone writes invalid syntax with nested braces.
+	input := `
+package test;
+
+message First {
+  int32 x = 1;
+}
+
+message Bad {
+  unknown_keyword {
+    inner stuff;
+  }
+  more_invalid;
+}
+
+message Second {
+  string y = 1;
+}
+`
+
+	schema, errors := ParseFile("test.cramberry", input)
+
+	// Should have errors
+	if len(errors) == 0 {
+		t.Error("expected parse errors")
+	}
+
+	// First message should be parsed correctly
+	firstFound := false
+	for _, msg := range schema.Messages {
+		if msg.Name == "First" {
+			firstFound = true
+		}
+	}
+	if !firstFound {
+		t.Error("expected 'First' message to be parsed")
+	}
+
+	// Critical: Second message should be parsed after error recovery,
+	// even though there were nested braces in the erroneous Bad message.
+	secondFound := false
+	for _, msg := range schema.Messages {
+		if msg.Name == "Second" {
+			secondFound = true
+		}
+	}
+	if !secondFound {
+		t.Error("expected 'Second' message to be parsed after error recovery from nested braces")
+	}
+}
+
+func TestParseErrorRecoveryNestedBracesNoSemicolon(t *testing.T) {
+	// Test error recovery when nested braces don't have semicolons.
+	// This is a pathological case that tests brace depth tracking.
+	input := `
+package test;
+
+message First {
+  int32 x = 1;
+}
+
+message Bad {
+  invalid {
+  }
+}
+
+message Second {
+  string y = 1;
+}
+`
+
+	schema, errors := ParseFile("test.cramberry", input)
+
+	// Should have errors
+	if len(errors) == 0 {
+		t.Error("expected parse errors")
+	}
+
+	// First message should be parsed correctly
+	firstFound := false
+	for _, msg := range schema.Messages {
+		if msg.Name == "First" {
+			firstFound = true
+		}
+	}
+	if !firstFound {
+		t.Error("expected 'First' message to be parsed")
+	}
+
+	// Second message should be parsed after error recovery
+	secondFound := false
+	for _, msg := range schema.Messages {
+		if msg.Name == "Second" {
+			secondFound = true
+		}
+	}
+	if !secondFound {
+		t.Error("expected 'Second' message to be parsed after error recovery - synchronize may have stopped at inner brace")
+	}
+}
+
 func TestParsePosition(t *testing.T) {
 	input := `package test;
 
