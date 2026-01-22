@@ -245,10 +245,13 @@ func decodeStruct(r *Reader, v reflect.Value) error {
 	return r.Err()
 }
 
-// decodeInterface decodes an interface value.
-// For now, this only supports nil interfaces.
-// Full polymorphic decoding requires a type registry (to be added later).
+// decodeInterface decodes an interface value using the type registry.
 func decodeInterface(r *Reader, v reflect.Value) error {
+	return decodeInterfaceWithRegistry(r, v, DefaultRegistry)
+}
+
+// decodeInterfaceWithRegistry decodes an interface value using the specified registry.
+func decodeInterfaceWithRegistry(r *Reader, v reflect.Value, reg *Registry) error {
 	// Read the type ID
 	typeID := r.ReadTypeID()
 	if r.Err() != nil {
@@ -260,9 +263,23 @@ func decodeInterface(r *Reader, v reflect.Value) error {
 		return nil
 	}
 
-	// For now, return an error for non-nil interfaces
-	// Type registry will be added in a later phase
-	return NewDecodeError("polymorphic interface decoding requires type registry", ErrNotImplemented)
+	// Look up the type in the registry
+	registration, ok := reg.Lookup(typeID)
+	if !ok {
+		return NewDecodeError("unknown type ID: "+typeID.String(), ErrUnknownType)
+	}
+
+	// Create a new instance of the concrete type
+	newVal := reflect.New(registration.Type)
+
+	// Decode into the new value
+	if err := decodeValue(r, newVal.Elem()); err != nil {
+		return err
+	}
+
+	// Set the interface value
+	v.Set(newVal)
+	return r.Err()
 }
 
 // Size returns the encoded size of a value without actually encoding it.

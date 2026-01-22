@@ -641,3 +641,122 @@ func BenchmarkUnmarshal(b *testing.B) {
 		}
 	})
 }
+
+// Polymorphic types for testing
+type Greeter interface {
+	Greet() string
+}
+
+type EnglishGreeter struct {
+	Name string `cramberry:"1"`
+}
+
+func (g *EnglishGreeter) Greet() string {
+	return "Hello, " + g.Name
+}
+
+type SpanishGreeter struct {
+	Name string `cramberry:"1"`
+}
+
+func (g *SpanishGreeter) Greet() string {
+	return "Hola, " + g.Name
+}
+
+type PolymorphicContainer struct {
+	Greeter Greeter `cramberry:"1"`
+}
+
+func TestPolymorphicEncoding(t *testing.T) {
+	// Clear and set up registry
+	DefaultRegistry.Clear()
+	defer DefaultRegistry.Clear()
+
+	// Register types
+	MustRegister[EnglishGreeter]()
+	MustRegister[SpanishGreeter]()
+
+	t.Run("EnglishGreeter", func(t *testing.T) {
+		// Polymorphic encoding works through struct fields with interface types
+		original := PolymorphicContainer{
+			Greeter: &EnglishGreeter{Name: "Alice"},
+		}
+
+		data, err := Marshal(original)
+		if err != nil {
+			t.Fatalf("Marshal error: %v", err)
+		}
+
+		var result PolymorphicContainer
+		if err := Unmarshal(data, &result); err != nil {
+			t.Fatalf("Unmarshal error: %v", err)
+		}
+
+		eg, ok := result.Greeter.(*EnglishGreeter)
+		if !ok {
+			t.Fatalf("Expected *EnglishGreeter, got %T", result.Greeter)
+		}
+		if eg.Name != "Alice" {
+			t.Errorf("Name = %q, want %q", eg.Name, "Alice")
+		}
+	})
+
+	t.Run("SpanishGreeter", func(t *testing.T) {
+		original := PolymorphicContainer{
+			Greeter: &SpanishGreeter{Name: "Carlos"},
+		}
+
+		data, err := Marshal(original)
+		if err != nil {
+			t.Fatalf("Marshal error: %v", err)
+		}
+
+		var result PolymorphicContainer
+		if err := Unmarshal(data, &result); err != nil {
+			t.Fatalf("Unmarshal error: %v", err)
+		}
+
+		sg, ok := result.Greeter.(*SpanishGreeter)
+		if !ok {
+			t.Fatalf("Expected *SpanishGreeter, got %T", result.Greeter)
+		}
+		if sg.Name != "Carlos" {
+			t.Errorf("Name = %q, want %q", sg.Name, "Carlos")
+		}
+	})
+
+	t.Run("NilInterface", func(t *testing.T) {
+		original := PolymorphicContainer{
+			Greeter: nil,
+		}
+
+		data, err := Marshal(original)
+		if err != nil {
+			t.Fatalf("Marshal error: %v", err)
+		}
+
+		var result PolymorphicContainer
+		if err := Unmarshal(data, &result); err != nil {
+			t.Fatalf("Unmarshal error: %v", err)
+		}
+
+		if result.Greeter != nil {
+			t.Errorf("Expected nil, got %v", result.Greeter)
+		}
+	})
+}
+
+func TestPolymorphicUnregisteredType(t *testing.T) {
+	DefaultRegistry.Clear()
+	defer DefaultRegistry.Clear()
+
+	// Don't register the type
+	original := PolymorphicContainer{
+		Greeter: &EnglishGreeter{Name: "Alice"},
+	}
+
+	_, err := Marshal(original)
+	if err == nil {
+		t.Error("Expected error for unregistered type")
+	}
+}

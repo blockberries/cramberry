@@ -1,5 +1,7 @@
 package cramberry
 
+import "fmt"
+
 // TypeID uniquely identifies a registered type for polymorphic serialization.
 // Type IDs are used in the wire format to identify concrete types when
 // encoding/decoding interface values.
@@ -49,6 +51,11 @@ func (id TypeID) IsNil() bool {
 // IsValid returns true if the TypeID is valid (not nil and > 0).
 func (id TypeID) IsValid() bool {
 	return id > TypeIDNil
+}
+
+// String returns a string representation of the TypeID.
+func (id TypeID) String() string {
+	return fmt.Sprintf("%d", id)
 }
 
 // WireType indicates how a value is encoded on the wire.

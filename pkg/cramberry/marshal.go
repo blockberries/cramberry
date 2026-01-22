@@ -52,14 +52,24 @@ func MarshalAppendWithOptions(buf []byte, v any, opts Options) ([]byte, error) {
 
 // encodeValue encodes a reflect.Value to the writer.
 func encodeValue(w *Writer, v reflect.Value) error {
+	return encodeValueWithRegistry(w, v, DefaultRegistry)
+}
+
+// encodeValueWithRegistry encodes a reflect.Value using the specified registry.
+func encodeValueWithRegistry(w *Writer, v reflect.Value, reg *Registry) error {
 	// Handle nil interface or invalid values
 	if !v.IsValid() {
 		w.WriteNil()
 		return w.Err()
 	}
 
+	// Handle interfaces specially for polymorphic encoding
+	if v.Kind() == reflect.Interface {
+		return encodeInterface(w, v, reg)
+	}
+
 	// Dereference pointers
-	for v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
+	for v.Kind() == reflect.Ptr {
 		if v.IsNil() {
 			w.WriteNil()
 			return w.Err()
@@ -113,6 +123,32 @@ func encodeValue(w *Writer, v reflect.Value) error {
 		return NewEncodeError("unsupported type: "+v.Type().String(), ErrNotImplemented)
 	}
 	return w.Err()
+}
+
+// encodeInterface encodes an interface value with its type ID.
+func encodeInterface(w *Writer, v reflect.Value, reg *Registry) error {
+	if v.IsNil() {
+		w.WriteTypeID(TypeIDNil)
+		return w.Err()
+	}
+
+	// Get the concrete value
+	elem := v.Elem()
+
+	// Look up the type ID
+	typeID := reg.TypeIDFor(elem.Interface())
+	if typeID == TypeIDNil {
+		return NewEncodeError("unregistered interface type: "+elem.Type().String(), ErrUnregisteredType)
+	}
+
+	// Write the type ID
+	w.WriteTypeID(typeID)
+	if w.Err() != nil {
+		return w.Err()
+	}
+
+	// Encode the concrete value
+	return encodeValueWithRegistry(w, elem, reg)
 }
 
 // encodeSlice encodes a slice value.
