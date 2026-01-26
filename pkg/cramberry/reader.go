@@ -11,11 +11,104 @@ import (
 //
 // The zero value is not ready for use; create with NewReader.
 type Reader struct {
-	data  []byte
-	pos   int
-	opts  Options
-	depth int
-	err   error
+	data       []byte
+	pos        int
+	opts       Options
+	depth      int
+	err        error
+	generation uint64 // Incremented on Reset() to invalidate zero-copy references
+}
+
+// ZeroCopyString is a string that references the Reader's buffer directly.
+// It validates that the Reader hasn't been reset before allowing access.
+//
+// Use the String() method to get the string value. If the Reader has been
+// reset since this ZeroCopyString was created, String() will panic with
+// a clear error message rather than returning corrupted data.
+type ZeroCopyString struct {
+	s          string
+	generation uint64
+	reader     *Reader
+}
+
+// String returns the string value, panicking if the Reader has been reset.
+// This implements fmt.Stringer for convenient use in fmt functions.
+func (zcs ZeroCopyString) String() string {
+	if zcs.reader != nil && zcs.reader.generation != zcs.generation {
+		panic("cramberry: ZeroCopyString accessed after Reader.Reset() - this would cause memory corruption")
+	}
+	return zcs.s
+}
+
+// Valid returns true if the ZeroCopyString is still valid (Reader not reset).
+func (zcs ZeroCopyString) Valid() bool {
+	return zcs.reader == nil || zcs.reader.generation == zcs.generation
+}
+
+// UnsafeString returns the underlying string without validation.
+// Only use this if you have externally guaranteed the Reader hasn't been reset.
+func (zcs ZeroCopyString) UnsafeString() string {
+	return zcs.s
+}
+
+// IsEmpty returns true if the string is empty.
+func (zcs ZeroCopyString) IsEmpty() bool {
+	return len(zcs.s) == 0
+}
+
+// Len returns the length of the string.
+func (zcs ZeroCopyString) Len() int {
+	return len(zcs.s)
+}
+
+// ZeroCopyBytes is a byte slice that references the Reader's buffer directly.
+// It validates that the Reader hasn't been reset before allowing access.
+//
+// Use the Bytes() method to get the slice. If the Reader has been reset
+// since this ZeroCopyBytes was created, Bytes() will panic with a clear
+// error message rather than returning corrupted data.
+type ZeroCopyBytes struct {
+	b          []byte
+	generation uint64
+	reader     *Reader
+}
+
+// Bytes returns the byte slice, panicking if the Reader has been reset.
+func (zcb ZeroCopyBytes) Bytes() []byte {
+	if zcb.reader != nil && zcb.reader.generation != zcb.generation {
+		panic("cramberry: ZeroCopyBytes accessed after Reader.Reset() - this would cause memory corruption")
+	}
+	return zcb.b
+}
+
+// Valid returns true if the ZeroCopyBytes is still valid (Reader not reset).
+func (zcb ZeroCopyBytes) Valid() bool {
+	return zcb.reader == nil || zcb.reader.generation == zcb.generation
+}
+
+// UnsafeBytes returns the underlying slice without validation.
+// Only use this if you have externally guaranteed the Reader hasn't been reset.
+func (zcb ZeroCopyBytes) UnsafeBytes() []byte {
+	return zcb.b
+}
+
+// IsEmpty returns true if the slice is empty.
+func (zcb ZeroCopyBytes) IsEmpty() bool {
+	return len(zcb.b) == 0
+}
+
+// Len returns the length of the byte slice.
+func (zcb ZeroCopyBytes) Len() int {
+	return len(zcb.b)
+}
+
+// String returns the bytes as a string, panicking if the Reader has been reset.
+// This implements fmt.Stringer for convenient use in fmt functions.
+func (zcb ZeroCopyBytes) String() string {
+	if zcb.reader != nil && zcb.reader.generation != zcb.generation {
+		panic("cramberry: ZeroCopyBytes accessed after Reader.Reset() - this would cause memory corruption")
+	}
+	return string(zcb.b)
 }
 
 // NewReader creates a new Reader for the given data.
@@ -35,11 +128,20 @@ func NewReaderWithOptions(data []byte, opts Options) *Reader {
 }
 
 // Reset resets the reader to read from new data.
+// This invalidates all ZeroCopyString and ZeroCopyBytes values obtained
+// from this reader - accessing them after Reset will panic.
 func (r *Reader) Reset(data []byte) {
 	r.data = data
 	r.pos = 0
 	r.depth = 0
 	r.err = nil
+	r.generation++ // Invalidate all zero-copy references
+}
+
+// Generation returns the current generation counter.
+// This is incremented each time Reset() is called.
+func (r *Reader) Generation() uint64 {
+	return r.generation
 }
 
 // SetOptions updates the reader's options.
@@ -451,32 +553,39 @@ func (r *Reader) ReadString() string {
 //	    result := processString(s)  // Use s immediately, don't store it
 //	    return result               // Don't return s itself
 //	}
-func (r *Reader) ReadStringZeroCopy() string {
+func (r *Reader) ReadStringZeroCopy() ZeroCopyString {
 	if !r.checkRead() {
-		return ""
+		return ZeroCopyString{}
 	}
 	length := r.ReadUvarintInline()
 	if r.err != nil {
-		return ""
+		return ZeroCopyString{}
 	}
 	if length > uint64(MaxInt) {
 		r.setErrorAt(ErrOverflow, "string length overflow")
-		return ""
+		return ZeroCopyString{}
 	}
 	n := int(length)
 	// Check limits
 	if r.opts.Limits.MaxStringLength > 0 && n > r.opts.Limits.MaxStringLength {
 		r.setError(ErrMaxStringLength)
-		return ""
+		return ZeroCopyString{}
 	}
 	if !r.ensure(n) {
-		return ""
+		return ZeroCopyString{}
 	}
 	// Zero-copy: create string header pointing to buffer
-	s := unsafe.String(&r.data[r.pos], n)
+	var s string
+	if n > 0 {
+		s = unsafe.String(&r.data[r.pos], n)
+	}
 	r.pos += n
 	// Skip UTF-8 validation for zero-copy (caller's responsibility)
-	return s
+	return ZeroCopyString{
+		s:          s,
+		generation: r.generation,
+		reader:     r,
+	}
 }
 
 // ReadBytes reads a length-prefixed byte slice.
@@ -538,30 +647,34 @@ func (r *Reader) ReadBytes() []byte {
 //
 //	b := r.ReadBytesNoCopy()
 //	b[0] = 'x'  // UNDEFINED BEHAVIOR: modifying shared buffer
-func (r *Reader) ReadBytesNoCopy() []byte {
+func (r *Reader) ReadBytesNoCopy() ZeroCopyBytes {
 	if !r.checkRead() {
-		return nil
+		return ZeroCopyBytes{}
 	}
 	length := r.ReadUvarint()
 	if r.err != nil {
-		return nil
+		return ZeroCopyBytes{}
 	}
 	if length > uint64(MaxInt) {
 		r.setErrorAt(ErrOverflow, "bytes length overflow")
-		return nil
+		return ZeroCopyBytes{}
 	}
 	n := int(length)
 	// Check limits
 	if r.opts.Limits.MaxBytesLength > 0 && n > r.opts.Limits.MaxBytesLength {
 		r.setError(ErrMaxBytesLength)
-		return nil
+		return ZeroCopyBytes{}
 	}
 	if !r.ensure(n) {
-		return nil
+		return ZeroCopyBytes{}
 	}
 	result := r.data[r.pos : r.pos+n]
 	r.pos += n
-	return result
+	return ZeroCopyBytes{
+		b:          result,
+		generation: r.generation,
+		reader:     r,
+	}
 }
 
 // ReadRawBytes reads exactly n bytes without a length prefix.
@@ -584,17 +697,21 @@ func (r *Reader) ReadRawBytes(n int) []byte {
 // SAFETY WARNING: The returned slice points directly into the Reader's buffer.
 // See ReadBytesNoCopy documentation for safety requirements.
 // For safe usage, prefer ReadRawBytes() instead.
-func (r *Reader) ReadRawBytesNoCopy(n int) []byte {
+func (r *Reader) ReadRawBytesNoCopy(n int) ZeroCopyBytes {
 	if n < 0 {
 		r.setError(ErrNegativeLength)
-		return nil
+		return ZeroCopyBytes{}
 	}
 	if !r.ensure(n) {
-		return nil
+		return ZeroCopyBytes{}
 	}
 	result := r.data[r.pos : r.pos+n]
 	r.pos += n
-	return result
+	return ZeroCopyBytes{
+		b:          result,
+		generation: r.generation,
+		reader:     r,
+	}
 }
 
 // ReadTag reads a field tag (field number + wire type).

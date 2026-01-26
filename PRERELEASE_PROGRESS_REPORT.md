@@ -62,14 +62,47 @@
 
 **Files Modified:**
 - `pkg/cramberry/reader.go`
+- `pkg/cramberry/reader_test.go`
 
 **Implementation:**
-- Added comprehensive SAFETY WARNING documentation to `ReadStringZeroCopy()`
-- Documentation includes:
-  - Clear list of safety requirements
-  - Examples of unsafe usage patterns (what NOT to do)
-  - Examples of safe usage patterns
-  - Guidance on when to prefer `ReadString()` instead
+- Added `generation uint64` field to `Reader` struct, incremented on each `Reset()` call
+- Created `ZeroCopyString` wrapper type that validates generation before allowing access:
+  - `String() string` - returns value, panics if Reader was reset (use-after-free prevention)
+  - `Valid() bool` - returns true if reference is still valid
+  - `UnsafeString() string` - returns value without validation (escape hatch)
+  - `Len() int`, `IsEmpty() bool` - convenience methods
+- Created `ZeroCopyBytes` wrapper type with same generation validation:
+  - `Bytes() []byte` - returns value, panics if Reader was reset
+  - `Valid() bool` - returns true if reference is still valid
+  - `UnsafeBytes() []byte` - returns value without validation
+  - `String() string` - returns bytes as string with validation
+  - `Len() int`, `IsEmpty() bool` - convenience methods
+- Updated `ReadStringZeroCopy()` to return `ZeroCopyString`
+- Updated `ReadBytesNoCopy()` to return `ZeroCopyBytes`
+- Updated `ReadRawBytesNoCopy()` to return `ZeroCopyBytes`
+- Added `Generation() uint64` method to expose current generation counter
+
+**Tests Added:**
+- `TestZeroCopyStringValidBeforeReset` - verify validity before Reset
+- `TestZeroCopyStringInvalidAfterReset` - verify invalidation after Reset
+- `TestZeroCopyStringPanicAfterReset` - verify panic on access after Reset
+- `TestZeroCopyBytesValidBeforeReset`
+- `TestZeroCopyBytesInvalidAfterReset`
+- `TestZeroCopyBytesPanicAfterReset`
+- `TestZeroCopyBytesStringPanicAfterReset`
+- `TestZeroCopyRawBytesValidBeforeReset`
+- `TestZeroCopyRawBytesInvalidAfterReset`
+- `TestReaderGenerationCounter` - verify generation increments
+- `TestZeroCopyEmptyString` - edge case for empty strings
+- `TestZeroCopyEmptyBytes` - edge case for empty bytes
+- `TestMultipleZeroCopyReferencesInvalidatedTogether` - all references invalidated on single Reset
+
+**Breaking Change:**
+- `ReadStringZeroCopy()` now returns `ZeroCopyString` instead of `string`
+- `ReadBytesNoCopy()` now returns `ZeroCopyBytes` instead of `[]byte`
+- `ReadRawBytesNoCopy()` now returns `ZeroCopyBytes` instead of `[]byte`
+- Users must call `.String()` or `.Bytes()` to get underlying values
+- If this is unacceptable, users can use `.UnsafeString()` / `.UnsafeBytes()` to bypass validation
 
 ---
 
@@ -79,9 +112,8 @@
 - `pkg/cramberry/reader.go`
 
 **Implementation:**
-- Added comprehensive SAFETY WARNING documentation to `ReadBytesNoCopy()`
-- Added documentation to `ReadRawBytesNoCopy()` referencing the main safety docs
-- Documented aliasing hazards and modification restrictions
+- Merged with C2 above - all zero-copy methods now return generation-validated wrapper types
+- Documentation still warns about aliasing hazards (modifying the underlying buffer)
 
 ---
 
@@ -377,7 +409,7 @@ All tests pass with race detection:
 
 1. **Overflow Constants**: Used conservative limits (~4GB) that work on both 32-bit and 64-bit platforms while preventing integer overflow.
 
-2. **Zero-Copy Safety**: Chose documentation-based safety approach (Option C from the plan) to maintain backward compatibility while clearly warning users of aliasing hazards.
+2. **Zero-Copy Safety**: Implemented generation counter approach (Option B from the plan) for runtime use-after-free detection. Each `Reset()` call increments a generation counter, and `ZeroCopyString`/`ZeroCopyBytes` wrapper types validate the generation before allowing access. This is a breaking API change but prevents silent memory corruption.
 
 3. **Idempotent Registration**: Implemented double-check locking pattern for efficiency - fast read path for already-registered types, write lock only when needed.
 

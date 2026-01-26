@@ -584,3 +584,124 @@ const value = reader.readInt64AsNumber();  // Logs warning for large values
 // Or use BigInt for full precision
 const value = reader.readSVarint64();  // Returns bigint
 ```
+
+## Upgrading from v1.1.0 to v1.2.0
+
+Version 1.2.0 introduces a breaking API change to fix a critical memory safety issue with zero-copy methods.
+
+### Breaking Changes
+
+#### Zero-Copy Methods Return Wrapper Types
+
+Zero-copy methods now return wrapper types that validate references are still valid before allowing access. This prevents use-after-free bugs that could cause memory corruption.
+
+**Before (v1.1.0):**
+```go
+r := cramberry.NewReader(data)
+s := r.ReadStringZeroCopy()  // Returns string
+b := r.ReadBytesNoCopy()     // Returns []byte
+raw := r.ReadRawBytesNoCopy(10)  // Returns []byte
+
+// DANGEROUS: s, b, raw now point to invalid memory!
+r.Reset(newData)
+fmt.Println(s)  // Undefined behavior - may crash or return garbage
+```
+
+**After (v1.2.0):**
+```go
+r := cramberry.NewReader(data)
+s := r.ReadStringZeroCopy()  // Returns ZeroCopyString
+b := r.ReadBytesNoCopy()     // Returns ZeroCopyBytes
+raw := r.ReadRawBytesNoCopy(10)  // Returns ZeroCopyBytes
+
+// Use the wrapper methods to get values
+str := s.String()           // Get string value
+bytes := b.Bytes()          // Get []byte value
+rawBytes := raw.Bytes()     // Get []byte value
+
+// SAFE: After Reset(), accessing wrappers will panic
+// instead of returning corrupted data
+r.Reset(newData)
+_ = s.String()  // PANICS: "cramberry: ZeroCopyString accessed after Reader.Reset()"
+```
+
+#### Migration Options
+
+**Option 1: Use the safe accessor methods (recommended)**
+```go
+r := cramberry.NewReader(data)
+zcs := r.ReadStringZeroCopy()
+
+// Check validity before use in long-lived code
+if zcs.Valid() {
+    processString(zcs.String())
+}
+```
+
+**Option 2: Use unsafe accessors to bypass validation**
+
+If you're certain the Reader won't be reset while references are in use:
+```go
+r := cramberry.NewReader(data)
+s := r.ReadStringZeroCopy().UnsafeString()  // Returns string directly
+b := r.ReadBytesNoCopy().UnsafeBytes()      // Returns []byte directly
+```
+
+**Option 3: Use copying methods instead**
+
+For simplicity, use the copying versions which don't have this constraint:
+```go
+r := cramberry.NewReader(data)
+s := r.ReadString()     // Returns owned copy - always safe
+b := r.ReadBytes()      // Returns owned copy - always safe
+raw := r.ReadRawBytes(10)  // Returns owned copy - always safe
+```
+
+### New Features
+
+#### Generation Counter
+
+The Reader now tracks a generation counter that increments on each `Reset()`:
+
+```go
+r := cramberry.NewReader(data)
+gen1 := r.Generation()  // Returns 0
+
+r.Reset(newData)
+gen2 := r.Generation()  // Returns 1
+```
+
+#### Wrapper Type Methods
+
+The new wrapper types provide several useful methods:
+
+```go
+zcs := r.ReadStringZeroCopy()
+
+// Validation
+if zcs.Valid() { ... }      // Check if reference is still valid
+
+// Access
+s := zcs.String()           // Get value (panics if invalid)
+s := zcs.UnsafeString()     // Get value (no validation)
+
+// Utility
+length := zcs.Len()         // Length without validation
+empty := zcs.IsEmpty()      // Empty check without validation
+```
+
+```go
+zcb := r.ReadBytesNoCopy()
+
+// Validation
+if zcb.Valid() { ... }      // Check if reference is still valid
+
+// Access
+b := zcb.Bytes()            // Get value (panics if invalid)
+b := zcb.UnsafeBytes()      // Get value (no validation)
+s := zcb.String()           // Get as string (panics if invalid)
+
+// Utility
+length := zcb.Len()         // Length without validation
+empty := zcb.IsEmpty()      // Empty check without validation
+```

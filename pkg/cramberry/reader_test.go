@@ -430,7 +430,10 @@ func TestReadBytesNoCopy(t *testing.T) {
 	if r.Err() != nil {
 		t.Errorf("ReadBytesNoCopy error: %v", r.Err())
 	}
-	if !bytes.Equal(got, []byte{1, 2, 3, 4, 5}) {
+	if !got.Valid() {
+		t.Error("ReadBytesNoCopy returned invalid ZeroCopyBytes")
+	}
+	if !bytes.Equal(got.Bytes(), []byte{1, 2, 3, 4, 5}) {
 		t.Error("ReadBytesNoCopy mismatch")
 	}
 }
@@ -454,7 +457,10 @@ func TestReadRawBytesNoCopy(t *testing.T) {
 	data := []byte{1, 2, 3, 4, 5}
 	r := NewReader(data)
 	got := r.ReadRawBytesNoCopy(3)
-	if !bytes.Equal(got, []byte{1, 2, 3}) {
+	if !got.Valid() {
+		t.Error("ReadRawBytesNoCopy returned invalid ZeroCopyBytes")
+	}
+	if !bytes.Equal(got.Bytes(), []byte{1, 2, 3}) {
 		t.Error("ReadRawBytesNoCopy mismatch")
 	}
 }
@@ -945,6 +951,335 @@ func TestReadInt32Overflow(t *testing.T) {
 	_ = r.ReadInt32()
 	if r.Err() == nil {
 		t.Error("ReadInt32 with overflow should fail")
+	}
+}
+
+// ============================================================================
+// Zero-Copy Generation Tracking Tests
+// ============================================================================
+
+func TestZeroCopyStringValidBeforeReset(t *testing.T) {
+	w := NewWriter()
+	w.WriteString("hello")
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcs := r.ReadStringZeroCopy()
+	if r.Err() != nil {
+		t.Fatalf("ReadStringZeroCopy error: %v", r.Err())
+	}
+
+	// Should be valid before Reset
+	if !zcs.Valid() {
+		t.Error("ZeroCopyString should be valid before Reset")
+	}
+
+	// Should be able to access the string
+	if zcs.String() != "hello" {
+		t.Errorf("ZeroCopyString.String() = %q, want %q", zcs.String(), "hello")
+	}
+
+	// Len should work
+	if zcs.Len() != 5 {
+		t.Errorf("ZeroCopyString.Len() = %d, want 5", zcs.Len())
+	}
+
+	// IsEmpty should be false
+	if zcs.IsEmpty() {
+		t.Error("ZeroCopyString.IsEmpty() should be false")
+	}
+}
+
+func TestZeroCopyStringInvalidAfterReset(t *testing.T) {
+	w := NewWriter()
+	w.WriteString("hello")
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcs := r.ReadStringZeroCopy()
+	if r.Err() != nil {
+		t.Fatalf("ReadStringZeroCopy error: %v", r.Err())
+	}
+
+	// Reset the reader
+	r.Reset([]byte{})
+
+	// Should be invalid after Reset
+	if zcs.Valid() {
+		t.Error("ZeroCopyString should be invalid after Reset")
+	}
+
+	// UnsafeString should still return the value (but it's unsafe)
+	if zcs.UnsafeString() != "hello" {
+		t.Errorf("ZeroCopyString.UnsafeString() = %q, want %q", zcs.UnsafeString(), "hello")
+	}
+}
+
+func TestZeroCopyStringPanicAfterReset(t *testing.T) {
+	w := NewWriter()
+	w.WriteString("hello")
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcs := r.ReadStringZeroCopy()
+	if r.Err() != nil {
+		t.Fatalf("ReadStringZeroCopy error: %v", r.Err())
+	}
+
+	// Reset the reader
+	r.Reset([]byte{})
+
+	// Accessing String() should panic
+	defer func() {
+		if rec := recover(); rec == nil {
+			t.Error("ZeroCopyString.String() should panic after Reset")
+		}
+	}()
+	_ = zcs.String()
+}
+
+func TestZeroCopyBytesValidBeforeReset(t *testing.T) {
+	w := NewWriter()
+	w.WriteBytes([]byte{1, 2, 3, 4, 5})
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcb := r.ReadBytesNoCopy()
+	if r.Err() != nil {
+		t.Fatalf("ReadBytesNoCopy error: %v", r.Err())
+	}
+
+	// Should be valid before Reset
+	if !zcb.Valid() {
+		t.Error("ZeroCopyBytes should be valid before Reset")
+	}
+
+	// Should be able to access the bytes
+	if !bytes.Equal(zcb.Bytes(), []byte{1, 2, 3, 4, 5}) {
+		t.Error("ZeroCopyBytes.Bytes() mismatch")
+	}
+
+	// Len should work
+	if zcb.Len() != 5 {
+		t.Errorf("ZeroCopyBytes.Len() = %d, want 5", zcb.Len())
+	}
+
+	// IsEmpty should be false
+	if zcb.IsEmpty() {
+		t.Error("ZeroCopyBytes.IsEmpty() should be false")
+	}
+
+	// String should work
+	if zcb.String() != "\x01\x02\x03\x04\x05" {
+		t.Error("ZeroCopyBytes.String() mismatch")
+	}
+}
+
+func TestZeroCopyBytesInvalidAfterReset(t *testing.T) {
+	w := NewWriter()
+	w.WriteBytes([]byte{1, 2, 3, 4, 5})
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcb := r.ReadBytesNoCopy()
+	if r.Err() != nil {
+		t.Fatalf("ReadBytesNoCopy error: %v", r.Err())
+	}
+
+	// Reset the reader
+	r.Reset([]byte{})
+
+	// Should be invalid after Reset
+	if zcb.Valid() {
+		t.Error("ZeroCopyBytes should be invalid after Reset")
+	}
+
+	// UnsafeBytes should still return the value (but it's unsafe)
+	if !bytes.Equal(zcb.UnsafeBytes(), []byte{1, 2, 3, 4, 5}) {
+		t.Error("ZeroCopyBytes.UnsafeBytes() mismatch")
+	}
+}
+
+func TestZeroCopyBytesPanicAfterReset(t *testing.T) {
+	w := NewWriter()
+	w.WriteBytes([]byte{1, 2, 3, 4, 5})
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcb := r.ReadBytesNoCopy()
+	if r.Err() != nil {
+		t.Fatalf("ReadBytesNoCopy error: %v", r.Err())
+	}
+
+	// Reset the reader
+	r.Reset([]byte{})
+
+	// Accessing Bytes() should panic
+	defer func() {
+		if rec := recover(); rec == nil {
+			t.Error("ZeroCopyBytes.Bytes() should panic after Reset")
+		}
+	}()
+	_ = zcb.Bytes()
+}
+
+func TestZeroCopyBytesStringPanicAfterReset(t *testing.T) {
+	w := NewWriter()
+	w.WriteBytes([]byte{1, 2, 3})
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcb := r.ReadBytesNoCopy()
+	if r.Err() != nil {
+		t.Fatalf("ReadBytesNoCopy error: %v", r.Err())
+	}
+
+	// Reset the reader
+	r.Reset([]byte{})
+
+	// Accessing String() should panic
+	defer func() {
+		if rec := recover(); rec == nil {
+			t.Error("ZeroCopyBytes.String() should panic after Reset")
+		}
+	}()
+	_ = zcb.String()
+}
+
+func TestZeroCopyRawBytesValidBeforeReset(t *testing.T) {
+	data := []byte{1, 2, 3, 4, 5}
+	r := NewReader(data)
+	zcb := r.ReadRawBytesNoCopy(3)
+	if r.Err() != nil {
+		t.Fatalf("ReadRawBytesNoCopy error: %v", r.Err())
+	}
+
+	// Should be valid before Reset
+	if !zcb.Valid() {
+		t.Error("ZeroCopyBytes from ReadRawBytesNoCopy should be valid before Reset")
+	}
+
+	// Should be able to access the bytes
+	if !bytes.Equal(zcb.Bytes(), []byte{1, 2, 3}) {
+		t.Error("ZeroCopyBytes.Bytes() mismatch")
+	}
+}
+
+func TestZeroCopyRawBytesInvalidAfterReset(t *testing.T) {
+	data := []byte{1, 2, 3, 4, 5}
+	r := NewReader(data)
+	zcb := r.ReadRawBytesNoCopy(3)
+	if r.Err() != nil {
+		t.Fatalf("ReadRawBytesNoCopy error: %v", r.Err())
+	}
+
+	// Reset the reader
+	r.Reset([]byte{})
+
+	// Should be invalid after Reset
+	if zcb.Valid() {
+		t.Error("ZeroCopyBytes from ReadRawBytesNoCopy should be invalid after Reset")
+	}
+}
+
+func TestReaderGenerationCounter(t *testing.T) {
+	r := NewReader([]byte{1, 2, 3})
+
+	// Initial generation should be 0
+	gen0 := r.Generation()
+
+	// After Reset, generation should increment
+	r.Reset([]byte{4, 5, 6})
+	gen1 := r.Generation()
+	if gen1 != gen0+1 {
+		t.Errorf("Generation after first Reset = %d, want %d", gen1, gen0+1)
+	}
+
+	// After another Reset, generation should increment again
+	r.Reset([]byte{7, 8, 9})
+	gen2 := r.Generation()
+	if gen2 != gen1+1 {
+		t.Errorf("Generation after second Reset = %d, want %d", gen2, gen1+1)
+	}
+}
+
+func TestZeroCopyEmptyString(t *testing.T) {
+	w := NewWriter()
+	w.WriteString("")
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcs := r.ReadStringZeroCopy()
+	if r.Err() != nil {
+		t.Fatalf("ReadStringZeroCopy error: %v", r.Err())
+	}
+
+	if !zcs.Valid() {
+		t.Error("Empty ZeroCopyString should be valid")
+	}
+	if zcs.String() != "" {
+		t.Error("Empty ZeroCopyString should return empty string")
+	}
+	if !zcs.IsEmpty() {
+		t.Error("Empty ZeroCopyString.IsEmpty() should be true")
+	}
+	if zcs.Len() != 0 {
+		t.Error("Empty ZeroCopyString.Len() should be 0")
+	}
+}
+
+func TestZeroCopyEmptyBytes(t *testing.T) {
+	w := NewWriter()
+	w.WriteBytes([]byte{})
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcb := r.ReadBytesNoCopy()
+	if r.Err() != nil {
+		t.Fatalf("ReadBytesNoCopy error: %v", r.Err())
+	}
+
+	if !zcb.Valid() {
+		t.Error("Empty ZeroCopyBytes should be valid")
+	}
+	if len(zcb.Bytes()) != 0 {
+		t.Error("Empty ZeroCopyBytes should return empty slice")
+	}
+	if !zcb.IsEmpty() {
+		t.Error("Empty ZeroCopyBytes.IsEmpty() should be true")
+	}
+	if zcb.Len() != 0 {
+		t.Error("Empty ZeroCopyBytes.Len() should be 0")
+	}
+}
+
+func TestMultipleZeroCopyReferencesInvalidatedTogether(t *testing.T) {
+	w := NewWriter()
+	w.WriteString("first")
+	w.WriteString("second")
+	w.WriteBytes([]byte{1, 2, 3})
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcs1 := r.ReadStringZeroCopy()
+	zcs2 := r.ReadStringZeroCopy()
+	zcb := r.ReadBytesNoCopy()
+
+	if r.Err() != nil {
+		t.Fatalf("Read error: %v", r.Err())
+	}
+
+	// All should be valid
+	if !zcs1.Valid() || !zcs2.Valid() || !zcb.Valid() {
+		t.Error("All zero-copy references should be valid before Reset")
+	}
+
+	// Reset invalidates all
+	r.Reset([]byte{})
+
+	// All should be invalid now
+	if zcs1.Valid() || zcs2.Valid() || zcb.Valid() {
+		t.Error("All zero-copy references should be invalid after Reset")
 	}
 }
 

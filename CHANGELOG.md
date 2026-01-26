@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking Changes
+- **[CRITICAL]** Zero-copy methods now return wrapper types for memory safety:
+  - `ReadStringZeroCopy()` returns `ZeroCopyString` instead of `string`
+  - `ReadBytesNoCopy()` returns `ZeroCopyBytes` instead of `[]byte`
+  - `ReadRawBytesNoCopy()` returns `ZeroCopyBytes` instead of `[]byte`
+  - Call `.String()` or `.Bytes()` to get underlying values
+  - Use `.UnsafeString()` / `.UnsafeBytes()` to bypass validation if needed
+
+### Added
+- `ZeroCopyString` and `ZeroCopyBytes` wrapper types with generation-based validity tracking
+- Generation counter in `Reader` to detect use-after-reset of zero-copy references
+- `Reader.Generation()` method to access current generation counter
+- `Valid()` method on wrapper types to check if reference is still valid
+- Comprehensive tests for zero-copy safety mechanisms
+
+### Security
+- **[CRITICAL]** Zero-copy methods now detect use-after-reset and panic with clear error message instead of silently returning corrupted data
+
 ## [1.1.0] - 2026-01-26
 
 ### Added
