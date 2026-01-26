@@ -436,15 +436,15 @@ Cramberry is **production-ready** with comprehensive security hardening (v1.2.0)
 **v1.2.0** - Zero-copy memory safety with generation tracking (breaking API change)
 **v1.1.0** - Security hardening, schema compatibility checker, cross-language consistency
 
-### Implemented Features
+### What's Next
 
-- Reflection caching for struct metadata
-- Full streaming support in Go, TypeScript, and Rust
-- Schema compatibility checker
-- Thread-safe registries across all languages
-- Fuzz testing for parser and codec
+Upcoming priorities include:
+- Performance optimizations (reflection caching, SIMD acceleration)
+- TypeScript/Rust code generator improvements
+- gRPC integration
+- Python code generator
 
-See [CHANGELOG.md](CHANGELOG.md) for release history.
+See [ROADMAP.md](ROADMAP.md) for the full development roadmap and [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## License
 
