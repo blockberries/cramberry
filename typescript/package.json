@@ -1,6 +1,6 @@
 {
   "name": "@cramberry/runtime",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Cramberry serialization runtime for TypeScript",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
