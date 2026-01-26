@@ -485,3 +485,102 @@ data, _ := cramberry.MarshalWithOptions(v, cramberry.DefaultOptions) // Determin
 // NOT:
 data, _ := cramberry.MarshalWithOptions(v, cramberry.FastOptions) // Non-deterministic
 ```
+
+## Upgrading from v1.0.0 to v1.1.0
+
+Version 1.1.0 includes important security hardening. Most code will work without changes.
+
+### Breaking Changes
+
+#### Rust: Registry API Change
+
+The Rust `Registry` is now thread-safe. Methods that previously required `&mut self` now take `&self`:
+
+**Before (v1.0.0):**
+```rust
+let mut registry = Registry::new();
+registry.register(...)?;  // Required &mut self
+```
+
+**After (v1.1.0):**
+```rust
+let registry = Registry::new();
+registry.register(...)?;  // Now takes &self
+
+// Can now be shared across threads with Arc
+let registry = Arc::new(Registry::new());
+```
+
+### Deprecations
+
+#### Go: MustRegister Functions
+
+`MustRegister()` and `MustRegisterWithID()` are deprecated because they panic on duplicate registration, which can crash production services.
+
+**Before:**
+```go
+cramberry.MustRegister[MyType]()  // Panics if called twice
+```
+
+**After (recommended):**
+```go
+// Option 1: Idempotent registration (safe to call multiple times)
+cramberry.RegisterOrGet[MyType]()
+
+// Option 2: Explicit error handling
+id, err := cramberry.Register[MyType]()
+if err != nil {
+    // Handle duplicate registration
+}
+```
+
+### New Features to Consider
+
+#### Schema Compatibility Checking
+
+Before deploying schema changes, verify backward compatibility:
+
+```go
+import "github.com/blockberries/cramberry/pkg/schema"
+
+report := schema.CheckCompatibility(oldSchema, newSchema)
+if !report.IsCompatible() {
+    for _, change := range report.Breaking {
+        log.Printf("Breaking change: %s", change.Error())
+    }
+}
+```
+
+#### Rust Streaming
+
+New streaming support for processing large datasets:
+
+```rust
+use cramberry::stream::{StreamWriter, StreamReader};
+
+// Write messages
+let mut writer = StreamWriter::new(file);
+writer.write_message(data)?;
+writer.flush()?;
+
+// Read messages
+let mut reader = StreamReader::new(file);
+while let Some(data) = reader.try_read_message()? {
+    // Process message
+}
+```
+
+#### TypeScript BigInt Precision
+
+New methods warn about precision loss with large integers:
+
+```typescript
+// Old: silently loses precision for values > 2^53
+const value = reader.readInt64();
+
+// New: warns if precision would be lost
+const value = reader.readInt64AsNumber();  // Logs warning for large values
+
+// Or use BigInt for full precision
+const value = reader.readSVarint64();  // Returns bigint
+```

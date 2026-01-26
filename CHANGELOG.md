@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-01-26
+
+### Added
+- Schema compatibility checker (`pkg/schema/compat.go`) for detecting breaking changes between schema versions
+- Idempotent type registration with `RegisterOrGet()` and `RegisterOrGetWithID()` functions
+- Go fuzz testing targets for parser, lexer, marshal/unmarshal, and varint encoding
+- Rust streaming support with `StreamWriter` and `StreamReader` for length-delimited messages
+- TypeScript `readInt64AsNumber()` and `readUint64AsNumber()` methods with BigInt precision warnings
+- Overflow protection constants: `MaxPackedFloat32Length`, `MaxPackedFloat64Length`, `MaxPackedFixed32Length`, `MaxPackedFixed64Length`
+- Exported NaN canonicalization functions: `wire.CanonicalFloat32Bits()`, `wire.CanonicalFloat64Bits()`
+
+### Changed
+- Rust `Registry` is now thread-safe using `RwLock` internally
+- Rust `Registry.register()` now takes `&self` instead of `&mut self`
+- All runtimes (Go, TypeScript, Rust) now enforce consistent 10-byte maximum for varint encoding
+
+### Fixed
+- **[CRITICAL]** Integer overflow in packed array writers (`WritePackedFloat32`, `WritePackedFloat64`, etc.) - now checks array length before multiplication
+- **[CRITICAL]** Added comprehensive safety documentation for zero-copy methods (`ReadStringZeroCopy`, `ReadBytesNoCopy`)
+- **[HIGH]** Cross-language varint consistency - TypeScript and Rust now match Go's 10-byte maximum with proper overflow checking
+- **[HIGH]** NaN canonicalization in packed float arrays - all NaN values now encode to canonical quiet NaN
+- **[HIGH]** Overflow protection in packed readers (`ReadPackedFloat32`, `ReadPackedFloat64`, etc.)
+
+### Deprecated
+- `MustRegister()` - Use `RegisterOrGet()` for idempotent registration or `Register()` with error handling
+- `MustRegisterWithID()` - Use `RegisterOrGetWithID()` for idempotent registration or `RegisterWithID()` with error handling
+
+### Security
+- Integer overflow protection prevents memory corruption from maliciously large arrays
+- Consistent varint decoding across all languages prevents cross-language parsing discrepancies
+- NaN canonicalization ensures deterministic encoding for consensus-critical applications
+- Zero-copy method documentation warns users of memory safety requirements
+
+## [1.0.0] - 2026-01-22
+
 ### Added
 - Initial public release of Cramberry serialization library
 - Core runtime library (`pkg/cramberry`) with reflection-based Marshal/Unmarshal
