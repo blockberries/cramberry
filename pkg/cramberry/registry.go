@@ -346,7 +346,7 @@ func typeName(t reflect.Type) string {
 // MustRegister is like Register but panics on error.
 // Returns the assigned TypeID.
 //
-// DEPRECATED: MustRegister can crash production services if called with
+// Deprecated: MustRegister can crash production services if called with
 // a duplicate type. Consider using RegisterOrGet() for idempotent registration
 // or Register() with proper error handling.
 func MustRegister[T any]() TypeID {
@@ -359,7 +359,7 @@ func MustRegister[T any]() TypeID {
 
 // MustRegisterWithID is like RegisterWithID but panics on error.
 //
-// DEPRECATED: MustRegisterWithID can crash production services if called with
+// Deprecated: MustRegisterWithID can crash production services if called with
 // a duplicate type or ID. Consider using RegisterOrGetWithID() for idempotent
 // registration or RegisterWithID() with proper error handling.
 func MustRegisterWithID[T any](id TypeID) {

@@ -177,10 +177,39 @@ export class Reader {
   }
 
   /**
-   * Reads a 64-bit signed integer.
+   * Reads a 64-bit signed integer as bigint.
+   * Use this for full 64-bit precision.
    */
   readInt64(): bigint {
     return this.readSVarint64();
+  }
+
+  /**
+   * Reads a 64-bit signed integer as a JavaScript number.
+   *
+   * WARNING: JavaScript numbers can only safely represent integers
+   * up to Number.MAX_SAFE_INTEGER (2^53-1). Values larger than this
+   * will lose precision.
+   *
+   * For values that may exceed 2^53-1, use readInt64() instead which
+   * returns a bigint with full 64-bit precision.
+   *
+   * @param warnOnPrecisionLoss - If true (default), logs a warning when
+   *                              precision loss occurs
+   */
+  readInt64AsNumber(warnOnPrecisionLoss: boolean = true): number {
+    const value = this.readSVarint64();
+    if (warnOnPrecisionLoss) {
+      if (value > BigInt(Number.MAX_SAFE_INTEGER) ||
+          value < BigInt(Number.MIN_SAFE_INTEGER)) {
+        console.warn(
+          `cramberry: int64 value ${value} exceeds safe integer range ` +
+          `(${Number.MIN_SAFE_INTEGER} to ${Number.MAX_SAFE_INTEGER}), ` +
+          `precision may be lost. Use readInt64() for full precision.`
+        );
+      }
+    }
+    return Number(value);
   }
 
   /**
@@ -191,10 +220,38 @@ export class Reader {
   }
 
   /**
-   * Reads a 64-bit unsigned integer.
+   * Reads a 64-bit unsigned integer as bigint.
+   * Use this for full 64-bit precision.
    */
   readUint64(): bigint {
     return this.readVarint64();
+  }
+
+  /**
+   * Reads a 64-bit unsigned integer as a JavaScript number.
+   *
+   * WARNING: JavaScript numbers can only safely represent integers
+   * up to Number.MAX_SAFE_INTEGER (2^53-1). Values larger than this
+   * will lose precision.
+   *
+   * For values that may exceed 2^53-1, use readUint64() instead which
+   * returns a bigint with full 64-bit precision.
+   *
+   * @param warnOnPrecisionLoss - If true (default), logs a warning when
+   *                              precision loss occurs
+   */
+  readUint64AsNumber(warnOnPrecisionLoss: boolean = true): number {
+    const value = this.readVarint64();
+    if (warnOnPrecisionLoss) {
+      if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
+        console.warn(
+          `cramberry: uint64 value ${value} exceeds safe integer range ` +
+          `(max ${Number.MAX_SAFE_INTEGER}), precision may be lost. ` +
+          `Use readUint64() for full precision.`
+        );
+      }
+    }
+    return Number(value);
   }
 
   /**

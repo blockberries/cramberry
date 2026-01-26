@@ -35,12 +35,14 @@
 mod error;
 mod reader;
 mod registry;
+pub mod stream;
 mod types;
 mod writer;
 
 pub use error::{Error, Result};
 pub use reader::Reader;
 pub use registry::{Decoder, Encoder, Registry};
+pub use stream::{StreamReader, StreamWriter};
 pub use types::{FieldTag, TypeId, WireType};
 pub use writer::Writer;
 

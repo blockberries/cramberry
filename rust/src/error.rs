@@ -36,6 +36,10 @@ pub enum Error {
     #[error("invalid UTF-8 string")]
     InvalidUtf8,
 
+    /// Unexpected end of file.
+    #[error("unexpected end of file")]
+    UnexpectedEof,
+
     /// IO error.
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),

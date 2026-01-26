@@ -144,6 +144,60 @@ describe('Writer', () => {
     });
   });
 
+  describe('int64 precision', () => {
+    it('readInt64AsNumber returns number for safe values', () => {
+      const writer = new Writer();
+      writer.writeSVarint64(BigInt(12345));
+      const data = writer.bytes();
+
+      const reader = new Reader(data);
+      const value = reader.readInt64AsNumber(false);
+      expect(value).toBe(12345);
+    });
+
+    it('readInt64AsNumber handles negative values', () => {
+      const writer = new Writer();
+      writer.writeSVarint64(BigInt(-12345));
+      const data = writer.bytes();
+
+      const reader = new Reader(data);
+      const value = reader.readInt64AsNumber(false);
+      expect(value).toBe(-12345);
+    });
+
+    it('readUint64AsNumber returns number for safe values', () => {
+      const writer = new Writer();
+      writer.writeVarint64(BigInt(12345));
+      const data = writer.bytes();
+
+      const reader = new Reader(data);
+      const value = reader.readUint64AsNumber(false);
+      expect(value).toBe(12345);
+    });
+
+    it('readInt64 returns bigint with full precision', () => {
+      const largeValue = BigInt(Number.MAX_SAFE_INTEGER) + 100n;
+      const writer = new Writer();
+      writer.writeSVarint64(largeValue);
+      const data = writer.bytes();
+
+      const reader = new Reader(data);
+      const value = reader.readInt64();
+      expect(value).toBe(largeValue);
+    });
+
+    it('readUint64 returns bigint with full precision', () => {
+      const largeValue = BigInt(Number.MAX_SAFE_INTEGER) + 100n;
+      const writer = new Writer();
+      writer.writeVarint64(largeValue);
+      const data = writer.bytes();
+
+      const reader = new Reader(data);
+      const value = reader.readUint64();
+      expect(value).toBe(largeValue);
+    });
+  });
+
   describe('typeRef', () => {
     it('writes and reads typeRef', () => {
       // Create some value data
