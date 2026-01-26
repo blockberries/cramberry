@@ -2,7 +2,8 @@
 
 **Test Environment:**
 - Platform: darwin/arm64 (Apple M4 Pro)
-- Go version: 1.21+
+- Go version: 1.24+
+- Cramberry version: 1.2.0
 - Comparison formats: Cramberry, Protocol Buffers, JSON
 
 ---
@@ -11,18 +12,18 @@
 
 | Message Type | Cramberry | Protobuf | JSON | Cram vs PB | Cram vs JSON |
 |--------------|-----------|----------|------|------------|--------------|
-| SmallMessage | 47.0 ns | 44.6 ns | 83.9 ns | 1.05x slower | 1.79x faster |
-| Metrics | 77.0 ns | 80.6 ns | 368.5 ns | 1.05x faster | 4.79x faster |
-| Person | 300.3 ns | 332.9 ns | 706.5 ns | 1.11x faster | 2.35x faster |
-| Document | 590.1 ns | 985.4 ns | 1278 ns | 1.67x faster | 2.17x faster |
-| Event | 275.4 ns | 535.9 ns | 518.0 ns | 1.95x faster | 1.88x faster |
-| Batch100 | 2.67 μs | 3.50 μs | 5.47 μs | 1.31x faster | 2.05x faster |
-| Batch1000 | 24.4 μs | 30.0 μs | 54.9 μs | 1.23x faster | 2.25x faster |
+| SmallMessage | 49.8 ns | 45.9 ns | 86.2 ns | 1.09x slower | 1.73x faster |
+| Metrics | 80.2 ns | 79.5 ns | 375.6 ns | 1.01x slower | 4.68x faster |
+| Person | 304.2 ns | 368.3 ns | 692.1 ns | 1.21x faster | 2.28x faster |
+| Document | 607.5 ns | 1037 ns | 1244 ns | 1.71x faster | 2.05x faster |
+| Event | 279.2 ns | 531.2 ns | 547.1 ns | 1.90x faster | 1.96x faster |
+| Batch100 | 2.69 us | 3.42 us | 5.61 us | 1.27x faster | 2.09x faster |
+| Batch1000 | 25.8 us | 30.6 us | 55.3 us | 1.19x faster | 2.14x faster |
 
 **Observations:**
-- Cramberry encoding is slower than Protobuf only for SmallMessage (5% difference)
-- For complex messages (Document, Event), Cramberry encoding is 1.67-1.95x faster than Protobuf
-- Cramberry encoding is consistently 1.8-4.8x faster than JSON
+- Cramberry encoding is comparable to Protobuf for simple messages
+- For complex messages (Document, Event), Cramberry encoding is 1.7-1.9x faster than Protobuf
+- Cramberry encoding is consistently 1.7-4.7x faster than JSON
 
 ---
 
@@ -30,18 +31,18 @@
 
 | Message Type | Cramberry | Protobuf | JSON | Cram vs PB | Cram vs JSON |
 |--------------|-----------|----------|------|------------|--------------|
-| SmallMessage | 26.8 ns | 68.2 ns | 389.8 ns | 2.55x faster | 14.5x faster |
-| Metrics | 42.9 ns | 111.7 ns | 1189 ns | 2.60x faster | 27.7x faster |
-| Person | 386.5 ns | 596.1 ns | 3657 ns | 1.54x faster | 9.46x faster |
-| Document | 749.6 ns | 1392 ns | 6568 ns | 1.86x faster | 8.76x faster |
-| Event | 373.2 ns | 677.0 ns | 2567 ns | 1.81x faster | 6.88x faster |
-| Batch100 | 2.93 μs | 6.99 μs | 36.3 μs | 2.39x faster | 12.4x faster |
-| Batch1000 | 26.7 μs | 61.3 μs | 337.9 μs | 2.30x faster | 12.7x faster |
+| SmallMessage | 27.8 ns | 67.5 ns | 402.6 ns | **2.43x faster** | 14.5x faster |
+| Metrics | 41.4 ns | 119.3 ns | 1170 ns | **2.88x faster** | 28.3x faster |
+| Person | 388.0 ns | 592.4 ns | 3641 ns | **1.53x faster** | 9.38x faster |
+| Document | 741.7 ns | 1394 ns | 6462 ns | **1.88x faster** | 8.71x faster |
+| Event | 382.6 ns | 683.3 ns | 2525 ns | **1.79x faster** | 6.60x faster |
+| Batch100 | 2.92 us | 6.76 us | 36.3 us | **2.32x faster** | 12.4x faster |
+| Batch1000 | 27.0 us | 61.4 us | 339.5 us | **2.27x faster** | 12.6x faster |
 
 **Observations:**
-- Cramberry decoding outperforms Protobuf across all message types (1.54-2.60x faster)
+- Cramberry decoding outperforms Protobuf across all message types (1.53-2.88x faster)
 - The largest decode performance gains are for simple messages (SmallMessage, Metrics)
-- Cramberry decoding is 6.9-27.7x faster than JSON
+- Cramberry decoding is 6.6-28.3x faster than JSON
 
 ---
 
@@ -68,13 +69,13 @@
 | Message Type | Cramberry | Protobuf | JSON |
 |--------------|-----------|----------|------|
 | SmallMessage | 16 B / 1 alloc | 96 B / 2 allocs | 264 B / 6 allocs |
-| Metrics | 0 B / 0 allocs | 128 B / 1 alloc | 296 B / 5 allocs |
+| Metrics | **0 B / 0 allocs** | 128 B / 1 alloc | 296 B / 5 allocs |
 | Person | 336 B / 20 allocs | 808 B / 23 allocs | 848 B / 30 allocs |
-| Document | 1048 B / 28 allocs | 2000 B / 51 allocs | 1880 B / 47 allocs |
+| Document | 1032 B / 28 allocs | 2000 B / 51 allocs | 1880 B / 47 allocs |
 | Batch1000 | 49.2 KB / 1008 allocs | 114.2 KB / 2028 allocs | 87.1 KB / 1029 allocs |
 
 **Observations:**
-- Metrics decoding achieves zero allocations in Cramberry
+- Metrics decoding achieves **zero allocations** in Cramberry
 - Cramberry decode allocations are typically 45-58% fewer than Protobuf
 - Memory usage during decode is 42-57% lower than Protobuf for most message types
 
@@ -105,29 +106,46 @@
 
 | Metric | Range | Notes |
 |--------|-------|-------|
-| Encode speed | 0.95x - 1.95x | Slower only for SmallMessage |
-| Decode speed | 1.54x - 2.60x | Faster across all types |
+| Encode speed | 0.92x - 1.90x | Faster for complex messages |
+| Decode speed | **1.53x - 2.88x** | Faster across all types |
 | Encode memory | 0.35x - 1.50x | Single allocation pattern |
 | Decode memory | 0.42x - 0.58x | Fewer allocations |
 | Encoded size | 0.95x - 1.12x | Within 12% of Protobuf |
 
 ### Strengths
 
-- Decode performance is consistently superior (1.5-2.6x faster than Protobuf)
-- Single-allocation encoding reduces GC pressure
+- **Decode performance is consistently superior** (1.5-2.9x faster than Protobuf)
+- **Zero-allocation decoding** for simple value types (Metrics)
+- **Single-allocation encoding** reduces GC pressure
 - Competitive encoded sizes, smaller for complex messages
+- Deterministic encoding for consensus/cryptographic applications
 
-### Weaknesses
+### Trade-offs
 
-- SmallMessage encoding is 5% slower than Protobuf
+- SmallMessage encoding is ~9% slower than Protobuf
 - SmallMessage encoded size is 12% larger (18 vs 16 bytes)
-- Decode still requires multiple allocations for messages with strings/slices
+- Decode still requires allocations for messages with strings/slices
 
 ### Use Case Fit
 
-- Read-heavy workloads benefit most from Cramberry's decode performance
-- Batch processing shows strong scaling characteristics
-- Applications sensitive to GC pauses benefit from reduced allocations
+- **Read-heavy workloads** benefit most from Cramberry's decode performance
+- **Batch processing** shows strong scaling characteristics (2.3x faster decode)
+- **Applications sensitive to GC pauses** benefit from reduced allocations
+- **Consensus systems** benefit from deterministic encoding
+
+---
+
+## 7. Security Features (v1.2.0)
+
+Cramberry v1.2.0 includes important security hardening:
+
+- **Integer overflow protection** in packed array writers/readers
+- **Zero-copy memory safety** with generation-based validation
+- **Cross-language varint consistency** (10-byte maximum)
+- **NaN canonicalization** for deterministic float encoding
+- **Thread-safe registries** in all language runtimes
+
+See [docs/SECURITY.md](docs/SECURITY.md) for security best practices.
 
 ---
 
@@ -139,4 +157,7 @@ go test -bench=. -benchmem ./benchmark/...
 
 # Size comparison
 go test ./benchmark/... -run TestEncodedSizes -v
+
+# Full benchmark suite with multiple iterations
+go test -bench=. -benchmem -count=5 ./benchmark/... | tee results.txt
 ```

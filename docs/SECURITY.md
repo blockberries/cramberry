@@ -6,6 +6,18 @@ This document describes security considerations when using Cramberry, including 
 
 Cramberry is designed with security in mind, particularly for systems processing untrusted input. The library includes configurable resource limits, input validation, and error handling to prevent common attack vectors.
 
+## Security Hardening (v1.1.0+)
+
+Version 1.1.0+ includes significant security improvements:
+
+| Feature | Protection |
+|---------|------------|
+| Integer overflow protection | Bounds checking in packed array writers/readers |
+| Zero-copy memory safety | Generation-based use-after-free detection (v1.2.0) |
+| Cross-language varint consistency | 10-byte maximum across Go, TypeScript, Rust |
+| NaN canonicalization | Deterministic float encoding for all NaN values |
+| Thread-safe registries | Safe concurrent type registration |
+
 ## Resource Limits
 
 ### Default Limits
@@ -129,8 +141,45 @@ StrictMode: true,  // Reject messages with unknown fields
 
 ```go
 // Only registered types can be decoded
-cramberry.MustRegister[AllowedType1]()
-cramberry.MustRegister[AllowedType2]()
+cramberry.RegisterOrGet[AllowedType1]()
+cramberry.RegisterOrGet[AllowedType2]()
+```
+
+### 7. Zero-Copy Use-After-Free (v1.2.0+)
+
+**Attack**: Zero-copy references used after Reader.Reset() causes memory corruption.
+
+**Mitigation**: Generation-based validation detects invalid references:
+
+```go
+r := cramberry.NewReader(data)
+zcs := r.ReadStringZeroCopy()  // Returns ZeroCopyString
+
+r.Reset(newData)  // Increments generation counter
+
+// Accessing the string now panics instead of returning corrupted data
+_ = zcs.String()  // PANICS: "cramberry: ZeroCopyString accessed after Reader.Reset()"
+
+// Can check validity without panicking
+if zcs.Valid() {
+    // Safe to use
+}
+```
+
+### 8. Integer Overflow in Packed Arrays (v1.1.0+)
+
+**Attack**: Malicious array length causes integer overflow in size calculation.
+
+**Mitigation**: Bounds checking before multiplication:
+
+```go
+// Protected by overflow constants
+const MaxPackedFloat32Length = (1 << 30) - 1  // ~1 billion elements
+
+// Writers/readers check bounds before allocation
+if len(values) > MaxPackedFloat32Length {
+    return ErrMaxArrayLength
+}
 ```
 
 ## Best Practices
@@ -183,27 +232,37 @@ cramberry.MustRegister[AllowedType2]()
 
 ### For Type Registration
 
-1. **Register types at startup**:
+1. **Register types at startup (idempotent)**:
    ```go
    func init() {
-       cramberry.MustRegister[SafeType1]()
-       cramberry.MustRegister[SafeType2]()
+       // RegisterOrGet is safe to call multiple times
+       cramberry.RegisterOrGet[SafeType1]()
+       cramberry.RegisterOrGet[SafeType2]()
    }
    ```
 
 2. **Use explicit type IDs for stability**:
    ```go
-   cramberry.MustRegisterWithID[User](128)
-   cramberry.MustRegisterWithID[Order](129)
+   cramberry.RegisterOrGetWithID[User](128)
+   cramberry.RegisterOrGetWithID[Order](129)
    ```
 
 3. **Don't register sensitive internal types**:
    ```go
    // DON'T expose internal types
-   // cramberry.MustRegister[internalConfig]()  // Bad!
+   // cramberry.RegisterOrGet[internalConfig]()  // Bad!
 
    // DO use separate DTOs
-   cramberry.MustRegister[PublicUserDTO]()  // Good
+   cramberry.RegisterOrGet[PublicUserDTO]()  // Good
+   ```
+
+4. **Avoid deprecated MustRegister functions**:
+   ```go
+   // Deprecated: can panic on duplicate registration
+   // cramberry.MustRegister[Type]()
+
+   // Recommended: idempotent registration
+   cramberry.RegisterOrGet[Type]()
    ```
 
 ## Error Handling
@@ -245,11 +304,26 @@ if err != nil {
 |-------|---------------------|
 | `ErrMaxDepthExceeded` | Possible stack overflow attempt |
 | `ErrMaxSizeExceeded` | Possible memory exhaustion attempt |
-| `ErrMaxArrayLength` | Possible billion laughs attack |
+| `ErrMaxArrayLength` | Possible billion laughs attack or overflow attempt |
 | `ErrMaxMapSize` | Possible memory exhaustion attempt |
+| `ErrMaxStringLength` | Oversized string allocation attempt |
+| `ErrMaxBytesLength` | Oversized bytes allocation attempt |
 | `ErrInvalidUTF8` | Malformed or malicious string |
 | `ErrUnknownType` | Type ID not in registry |
 | `ErrUnregisteredType` | Attempt to encode unknown type |
+| `ErrOverflow` | Integer overflow detected (v1.1.0+) |
+| `ErrVarintOverflow` | Varint exceeds 10-byte maximum |
+
+### Panic Conditions (v1.2.0+)
+
+Zero-copy wrapper types panic instead of returning corrupted data:
+
+| Panic Message | Cause |
+|--------------|-------|
+| `ZeroCopyString accessed after Reader.Reset()` | String reference used after Reader reset |
+| `ZeroCopyBytes accessed after Reader.Reset()` | Bytes reference used after Reader reset |
+
+Use `.Valid()` to check validity before access, or `.UnsafeString()`/`.UnsafeBytes()` to bypass validation.
 
 ## Deterministic Encoding
 
@@ -308,10 +382,13 @@ Cramberry does NOT protect against:
 - [ ] Enable `StrictMode` if schema evolution isn't needed
 - [ ] Register only necessary types for polymorphic decoding
 - [ ] Use explicit type IDs for wire format stability
+- [ ] Use `RegisterOrGet` instead of deprecated `MustRegister`
 - [ ] Log security-relevant errors for monitoring
 - [ ] Set request timeouts at the application level
 - [ ] Validate file sizes before processing
 - [ ] Use streaming for large datasets
+- [ ] Check `Valid()` on zero-copy references before use (v1.2.0+)
+- [ ] Upgrade to v1.2.0+ for zero-copy safety features
 
 ## Reporting Security Issues
 

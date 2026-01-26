@@ -10,12 +10,13 @@ A high-performance binary serialization library for Go with code generation for 
 
 Cramberry is designed for systems that demand **speed**, **determinism**, and **cross-language interoperability**:
 
-- **1.5-2.6x faster decoding** than Protocol Buffers
+- **1.5-2.9x faster decoding** than Protocol Buffers
 - **Deterministic encoding** - Sorted map keys produce byte-for-byte identical output, critical for consensus systems and cryptographic applications
 - **Compact wire format** - 2-3x smaller than JSON, comparable to Protobuf
 - **Polymorphic serialization** - Amino-style interface encoding with type registry
 - **Streaming support** - Efficient streaming encoder/decoder for large data
 - **Multi-language** - Full runtimes for Go, TypeScript, and Rust
+- **Security hardened** - Integer overflow protection, zero-copy safety, resource limits
 
 ## Table of Contents
 
@@ -124,8 +125,9 @@ func (c *Cat) Speak() string { return "Meow!" }
 
 func init() {
     // Register types (auto-assigns IDs starting at 128)
-    cramberry.MustRegister[Dog]()
-    cramberry.MustRegister[Cat]()
+    // RegisterOrGet is idempotent - safe to call multiple times
+    cramberry.RegisterOrGet[Dog]()
+    cramberry.RegisterOrGet[Cat]()
 }
 
 // Use in a container
@@ -253,10 +255,10 @@ Benchmarks on Apple M4 Pro comparing Cramberry to Protocol Buffers:
 
 | Message Type | Cramberry | Protobuf | Speedup |
 |--------------|-----------|----------|---------|
-| SmallMessage | 27 ns | 68 ns | **2.5x faster** |
-| Metrics | 43 ns | 112 ns | **2.6x faster** |
-| Person | 387 ns | 596 ns | **1.5x faster** |
-| Document | 750 ns | 1392 ns | **1.9x faster** |
+| SmallMessage | 28 ns | 68 ns | **2.4x faster** |
+| Metrics | 41 ns | 119 ns | **2.9x faster** |
+| Person | 388 ns | 592 ns | **1.5x faster** |
+| Document | 742 ns | 1394 ns | **1.9x faster** |
 | Batch1000 | 27 us | 61 us | **2.3x faster** |
 
 ### Memory Efficiency
@@ -265,7 +267,7 @@ Benchmarks on Apple M4 Pro comparing Cramberry to Protocol Buffers:
 |--------|----------------------|
 | Encode allocations | Single allocation pattern |
 | Decode allocations | 42-58% fewer |
-| Metrics decode | Zero allocations |
+| Metrics decode | **Zero allocations** |
 
 ### Encoded Size
 
@@ -334,8 +336,15 @@ func Size(v any) int
 ### Type Registry
 
 ```go
+// Idempotent registration (recommended)
+func RegisterOrGet[T any]() TypeID             // Auto-assign ID, safe to call multiple times
+func RegisterOrGetWithID[T any](id TypeID) TypeID // Explicit ID, safe to call multiple times
+
+// Error-returning registration
 func Register[T any]() (TypeID, error)         // Auto-assign ID
 func RegisterWithID[T any](id TypeID) error    // Explicit ID
+
+// Deprecated: can panic on duplicate registration
 func MustRegister[T any]() TypeID              // Panic on error
 func MustRegisterWithID[T any](id TypeID)      // Panic on error
 ```
@@ -420,12 +429,22 @@ go run ./examples/streaming
 
 ## Project Status
 
-Cramberry is production-ready for its core functionality. See [ROADMAP.md](ROADMAP.md) for planned enhancements including:
+Cramberry is **production-ready** with comprehensive security hardening (v1.2.0).
 
-- Reflection caching for 20-40% performance improvement
-- Full TypeScript/Rust streaming support
+### Recent Releases
+
+**v1.2.0** - Zero-copy memory safety with generation tracking (breaking API change)
+**v1.1.0** - Security hardening, schema compatibility checker, cross-language consistency
+
+### Implemented Features
+
+- Reflection caching for struct metadata
+- Full streaming support in Go, TypeScript, and Rust
 - Schema compatibility checker
-- IDE plugins and language server
+- Thread-safe registries across all languages
+- Fuzz testing for parser and codec
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## License
 

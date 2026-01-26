@@ -141,9 +141,13 @@ for it.Next(&msg) {
 Polymorphic type serialization:
 
 ```go
-// Register types for interface encoding
-cramberry.MustRegister[Dog]()           // Auto-assigns TypeID (128+)
-cramberry.RegisterWithID[Cat](129)      // Explicit TypeID
+// Register types for interface encoding (idempotent - safe to call multiple times)
+cramberry.RegisterOrGet[Dog]()          // Auto-assigns TypeID (128+)
+cramberry.RegisterOrGetWithID[Cat](129) // Explicit TypeID
+
+// Legacy registration (deprecated - can panic on duplicate)
+cramberry.MustRegister[Dog]()           // Deprecated: use RegisterOrGet
+cramberry.RegisterWithID[Cat](129)      // Deprecated: use RegisterOrGetWithID
 
 // TypeID ranges
 // 0      - Nil value
@@ -156,6 +160,7 @@ The registry is thread-safe (`sync.RWMutex`) and supports:
 - Lookup by TypeID, reflect.Type, or type name
 - Interface-to-implementations mapping
 - Collision detection on registration
+- Idempotent registration via `RegisterOrGet` (v1.1.0+)
 
 ## Wire Format
 
@@ -274,6 +279,34 @@ interface Principal {
 - **Parser** (`parser.go`) - Produces AST with error recovery
 - **Validator** (`validator.go`) - Semantic validation
 - **Writer** (`io.go`) - Serializes AST back to text
+- **Compatibility** (`compat.go`) - Schema compatibility checking (v1.1.0+)
+
+### Schema Compatibility Checker (v1.1.0+)
+
+Check for breaking changes between schema versions:
+
+```go
+import "github.com/blockberries/cramberry/pkg/schema"
+
+report := schema.CheckCompatibility(oldSchema, newSchema)
+if !report.IsCompatible() {
+    for _, change := range report.Breaking {
+        fmt.Printf("Breaking change: %s\n", change.Error())
+    }
+}
+```
+
+Detects breaking changes:
+- Message/enum removal
+- Field type changes (incompatible)
+- Required field added/removed
+- Enum value removed or number reused
+- Interface implementation removed or TypeID changed
+
+Allows compatible changes:
+- Adding optional fields
+- Integer widening (int32 → int64)
+- Optionality changes (pointer/non-pointer)
 
 ## Code Generation
 
@@ -327,7 +360,31 @@ The extractor:
 1. **Writer Pooling** - `sync.Pool` reduces allocations in hot paths
 2. **Size-Tiered Buffer Pools** - 6 size classes (64B to 64KB)
 3. **Single-Allocation Encoding** - Pre-calculate size, allocate once
-4. **Zero-Copy Reads** - Optional unsafe string/bytes decode
+4. **Zero-Copy Reads** - Generation-tracked string/bytes decode (v1.2.0+)
+
+### Zero-Copy Safety (v1.2.0+)
+
+Zero-copy methods return wrapper types with generation tracking:
+
+```go
+r := cramberry.NewReader(data)
+zcs := r.ReadStringZeroCopy()  // Returns ZeroCopyString
+zcb := r.ReadBytesNoCopy()     // Returns ZeroCopyBytes
+
+// Safe access - validates generation
+str := zcs.String()            // Panics if Reader was reset
+bytes := zcb.Bytes()           // Panics if Reader was reset
+
+// Check validity without panic
+if zcs.Valid() {
+    // Safe to use
+}
+
+// Bypass validation (use with caution)
+str := zcs.UnsafeString()      // No validation
+```
+
+This prevents use-after-free bugs where references become invalid after `Reader.Reset()`.
 
 ### Encoding Optimizations
 
@@ -348,19 +405,29 @@ Field metadata is cached on first access for O(1) lookup.
 
 | Metric         | Cramberry vs Protobuf |
 |----------------|----------------------|
-| Encode speed   | 0.95x - 1.95x        |
-| Decode speed   | 1.54x - 2.60x faster |
+| Encode speed   | 0.92x - 1.90x        |
+| Decode speed   | **1.53x - 2.88x faster** |
 | Encode memory  | 35-100% of Protobuf  |
 | Decode memory  | 42-58% of Protobuf   |
 | Encoded size   | 95-112% of Protobuf  |
 
 Key findings:
-- Decode is 1.5-2.6x faster across all message types
+- Decode is 1.5-2.9x faster across all message types
 - Single-allocation encoding reduces GC pressure
 - Metrics decoding achieves zero allocations
 - Larger messages encode 2-5% smaller than Protobuf
 
+See [BENCHMARKS.md](BENCHMARKS.md) for detailed performance data.
+
 ## Cross-Language Compatibility
+
+### Cross-Language Features (v1.1.0+)
+
+All three runtimes (Go, TypeScript, Rust) now share:
+- **Consistent varint encoding** - 10-byte maximum with identical overflow checking
+- **Thread-safe registries** - Safe for concurrent use
+- **Streaming support** - Length-delimited message streams
+- **Idempotent registration** - `RegisterOrGet` pattern
 
 ### Go-Only Types
 
@@ -391,6 +458,19 @@ Map keys must be primitive types for deterministic sorting:
 | Writer/Reader | Single-threaded per instance        |
 | Marshal/Unmarshal | Thread-safe (no shared state)   |
 | Pools         | Thread-safe (sync.Pool)             |
+| Rust Registry | Thread-safe (RwLock) - v1.1.0+      |
+
+## Security Hardening (v1.1.0+)
+
+| Feature | Protection |
+|---------|------------|
+| Integer overflow protection | Packed array bounds checking |
+| Zero-copy safety | Generation-based use-after-free detection |
+| Varint consistency | 10-byte max across all languages |
+| NaN canonicalization | Deterministic float encoding |
+| Resource limits | DoS protection via configurable limits |
+
+See [docs/SECURITY.md](docs/SECURITY.md) for security best practices.
 
 ## Error Handling
 
