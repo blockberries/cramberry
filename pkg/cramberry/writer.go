@@ -1,7 +1,6 @@
 package cramberry
 
 import (
-	"math"
 	"sync"
 
 	"github.com/blockberries/cramberry/internal/wire"
@@ -674,8 +673,21 @@ func SizeOfSFixed64(_ int64) int {
 	return Fixed64Size
 }
 
-// Suppress unused import warning
-var _ = math.Float32bits
+// Maximum safe array lengths for packed writers to prevent integer overflow.
+// These limits ensure that len(values) * elementSize doesn't overflow int.
+const (
+	// MaxPackedFloat32Length is the maximum safe length for WritePackedFloat32.
+	MaxPackedFloat32Length = (1 << 30) - 1 // ~1 billion elements (4GB)
+
+	// MaxPackedFloat64Length is the maximum safe length for WritePackedFloat64.
+	MaxPackedFloat64Length = (1 << 29) - 1 // ~536 million elements (4GB)
+
+	// MaxPackedFixed32Length is the maximum safe length for WritePackedFixed32.
+	MaxPackedFixed32Length = (1 << 30) - 1 // ~1 billion elements (4GB)
+
+	// MaxPackedFixed64Length is the maximum safe length for WritePackedFixed64.
+	MaxPackedFixed64Length = (1 << 29) - 1 // ~536 million elements (4GB)
+)
 
 // ============================================================================
 // Fast Packed Array Writers - Direct Memory Layout for Fixed-Size Types
@@ -683,6 +695,7 @@ var _ = math.Float32bits
 
 // WritePackedFloat32 writes a packed array of float32 values.
 // This is faster than writing element by element for large arrays.
+// The encoding is deterministic: NaN values are canonicalized.
 func (w *Writer) WritePackedFloat32(values []float32) {
 	if !w.checkWrite() {
 		return
@@ -690,10 +703,16 @@ func (w *Writer) WritePackedFloat32(values []float32) {
 	if len(values) == 0 {
 		return
 	}
+	// Overflow protection: check length before multiplication
+	if len(values) > MaxPackedFloat32Length {
+		w.setError(ErrMaxArrayLength)
+		return
+	}
 	byteSize := len(values) * 4
 	w.grow(byteSize)
 	for _, v := range values {
-		bits := math.Float32bits(v)
+		// Use canonical bits for deterministic encoding (handles NaN and -0)
+		bits := wire.CanonicalFloat32Bits(v)
 		w.buf = append(w.buf,
 			byte(bits),
 			byte(bits>>8),
@@ -703,6 +722,7 @@ func (w *Writer) WritePackedFloat32(values []float32) {
 }
 
 // WritePackedFloat64 writes a packed array of float64 values.
+// The encoding is deterministic: NaN values are canonicalized.
 func (w *Writer) WritePackedFloat64(values []float64) {
 	if !w.checkWrite() {
 		return
@@ -710,10 +730,16 @@ func (w *Writer) WritePackedFloat64(values []float64) {
 	if len(values) == 0 {
 		return
 	}
+	// Overflow protection: check length before multiplication
+	if len(values) > MaxPackedFloat64Length {
+		w.setError(ErrMaxArrayLength)
+		return
+	}
 	byteSize := len(values) * 8
 	w.grow(byteSize)
 	for _, v := range values {
-		bits := math.Float64bits(v)
+		// Use canonical bits for deterministic encoding (handles NaN and -0)
+		bits := wire.CanonicalFloat64Bits(v)
 		w.buf = append(w.buf,
 			byte(bits),
 			byte(bits>>8),
@@ -734,6 +760,11 @@ func (w *Writer) WritePackedFixed32(values []uint32) {
 	if len(values) == 0 {
 		return
 	}
+	// Overflow protection: check length before multiplication
+	if len(values) > MaxPackedFixed32Length {
+		w.setError(ErrMaxArrayLength)
+		return
+	}
 	byteSize := len(values) * 4
 	w.grow(byteSize)
 	for _, v := range values {
@@ -751,6 +782,11 @@ func (w *Writer) WritePackedFixed64(values []uint64) {
 		return
 	}
 	if len(values) == 0 {
+		return
+	}
+	// Overflow protection: check length before multiplication
+	if len(values) > MaxPackedFixed64Length {
+		w.setError(ErrMaxArrayLength)
 		return
 	}
 	byteSize := len(values) * 8

@@ -345,6 +345,10 @@ func typeName(t reflect.Type) string {
 
 // MustRegister is like Register but panics on error.
 // Returns the assigned TypeID.
+//
+// DEPRECATED: MustRegister can crash production services if called with
+// a duplicate type. Consider using RegisterOrGet() for idempotent registration
+// or Register() with proper error handling.
 func MustRegister[T any]() TypeID {
 	id, err := Register[T]()
 	if err != nil {
@@ -354,8 +358,118 @@ func MustRegister[T any]() TypeID {
 }
 
 // MustRegisterWithID is like RegisterWithID but panics on error.
+//
+// DEPRECATED: MustRegisterWithID can crash production services if called with
+// a duplicate type or ID. Consider using RegisterOrGetWithID() for idempotent
+// registration or RegisterWithID() with proper error handling.
 func MustRegisterWithID[T any](id TypeID) {
 	if err := RegisterWithID[T](id); err != nil {
 		panic(err)
 	}
+}
+
+// RegisterOrGet registers a type and returns its ID, or returns the existing
+// ID if the type is already registered. This is safe for concurrent use
+// and will never return an error for already-registered types.
+func RegisterOrGet[T any]() TypeID {
+	return DefaultRegistry.RegisterOrGetType(reflect.TypeOf((*T)(nil)).Elem())
+}
+
+// RegisterOrGetType registers a type and returns its ID, or returns the existing
+// ID if the type is already registered.
+func (r *Registry) RegisterOrGetType(t reflect.Type) TypeID {
+	// Get the concrete type (dereference pointers)
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	// Fast path: check if already registered (read lock)
+	r.mu.RLock()
+	if reg, ok := r.byType[t]; ok {
+		r.mu.RUnlock()
+		return reg.ID
+	}
+	r.mu.RUnlock()
+
+	// Slow path: register with write lock
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Double-check after acquiring write lock (another goroutine may have registered it)
+	if reg, ok := r.byType[t]; ok {
+		return reg.ID
+	}
+
+	// Register the type
+	id := r.nextID
+	r.nextID++
+
+	name := typeName(t)
+	reg := &TypeRegistration{
+		ID:   id,
+		Name: name,
+		Type: t,
+	}
+
+	r.byID[id] = reg
+	r.byType[t] = reg
+	r.byName[name] = reg
+
+	return id
+}
+
+// RegisterOrGetWithID registers a type with a specific ID, or returns the existing
+// ID if the type is already registered. If the type is already registered with a
+// different ID, the existing ID is returned (not the requested one).
+func RegisterOrGetWithID[T any](id TypeID) TypeID {
+	return DefaultRegistry.RegisterOrGetTypeWithID(reflect.TypeOf((*T)(nil)).Elem(), id)
+}
+
+// RegisterOrGetTypeWithID registers a type with a specific ID, or returns the existing
+// ID if the type is already registered.
+func (r *Registry) RegisterOrGetTypeWithID(t reflect.Type, id TypeID) TypeID {
+	// Get the concrete type (dereference pointers)
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	// Fast path: check if already registered (read lock)
+	r.mu.RLock()
+	if reg, ok := r.byType[t]; ok {
+		r.mu.RUnlock()
+		return reg.ID
+	}
+	r.mu.RUnlock()
+
+	// Slow path: register with write lock
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Double-check after acquiring write lock
+	if reg, ok := r.byType[t]; ok {
+		return reg.ID
+	}
+
+	// Check if the requested ID is already in use
+	if _, ok := r.byID[id]; ok {
+		// ID is in use, fall back to auto-assigned ID
+		id = r.nextID
+		r.nextID++
+	} else if id >= r.nextID {
+		// Ensure nextID stays ahead of manually assigned IDs
+		r.nextID = id + 1
+	}
+
+	name := typeName(t)
+	reg := &TypeRegistration{
+		ID:   id,
+		Name: name,
+		Type: t,
+	}
+
+	r.byID[id] = reg
+	r.byType[t] = reg
+	r.byName[name] = reg
+
+	return id
 }

@@ -9,6 +9,11 @@ pub struct Reader<'a> {
     pos: usize,
 }
 
+/// Maximum number of bytes for a varint-encoded uint64.
+/// A uint64 has 64 bits, and each varint byte encodes 7 bits,
+/// so we need ceil(64/7) = 10 bytes maximum.
+const MAX_VARINT_BYTES: usize = 10;
+
 impl<'a> Reader<'a> {
     /// Creates a new reader from a byte slice.
     pub fn new(data: &'a [u8]) -> Self {
@@ -58,14 +63,23 @@ impl<'a> Reader<'a> {
     }
 
     /// Reads an unsigned varint (LEB128).
+    /// For 32-bit values, this uses the same 10-byte limit as 64-bit for consistency,
+    /// but the result is capped to 32 bits.
     pub fn read_varint(&mut self) -> Result<u32> {
         let mut result: u32 = 0;
         let mut shift = 0;
 
-        while shift < 35 {
+        for i in 0..MAX_VARINT_BYTES {
             self.check_available(1)?;
             let b = self.buffer[self.pos];
             self.pos += 1;
+
+            // At the 5th byte (index 4), we've consumed 28 bits.
+            // The 5th byte can only contribute 4 more bits for a 32-bit value.
+            if i == 4 && (b & 0xf0) != 0 {
+                return Err(Error::VarintOverflow);
+            }
+
             result |= ((b & 0x7f) as u32) << shift;
             if b & 0x80 == 0 {
                 return Ok(result);
@@ -77,14 +91,29 @@ impl<'a> Reader<'a> {
     }
 
     /// Reads an unsigned 64-bit varint (LEB128).
+    /// Uses a maximum of 10 bytes, consistent with protobuf and Go implementation.
     pub fn read_varint64(&mut self) -> Result<u64> {
         let mut result: u64 = 0;
         let mut shift = 0;
 
-        while shift < 70 {
+        for i in 0..MAX_VARINT_BYTES {
             self.check_available(1)?;
             let b = self.buffer[self.pos];
             self.pos += 1;
+
+            // At the 10th byte (index 9), we've consumed 63 bits.
+            // The 10th byte can only contribute 1 more bit (bit 63 of uint64).
+            if i == 9 {
+                // If continuation bit is set, we'd need 11+ bytes
+                if b >= 0x80 {
+                    return Err(Error::VarintOverflow);
+                }
+                // If data portion is > 1, value would overflow uint64
+                if b > 1 {
+                    return Err(Error::VarintOverflow);
+                }
+            }
+
             result |= ((b & 0x7f) as u64) << shift;
             if b & 0x80 == 0 {
                 return Ok(result);

@@ -420,9 +420,37 @@ func (r *Reader) ReadString() string {
 }
 
 // ReadStringZeroCopy reads a length-prefixed string without allocating.
-// WARNING: The returned string references the underlying buffer and is only valid
-// until the Reader's data is modified or freed. Use only when the string lifetime
-// is shorter than the buffer lifetime.
+//
+// SAFETY WARNING: The returned string points directly into the Reader's buffer.
+// It is only valid under these conditions:
+//   - The Reader must NOT be Reset() while the string is in use
+//   - The underlying data buffer must NOT be modified or freed
+//   - The Reader must remain in scope
+//
+// Failure to observe these constraints will cause undefined behavior,
+// including memory corruption, crashes, or data races.
+//
+// For safe usage, prefer ReadString() instead. Use ReadStringZeroCopy() only when:
+//   - Performance is critical and profiling shows ReadString() as a bottleneck
+//   - You can guarantee the Reader outlives all returned strings
+//   - You will NOT call Reset() while strings are in use
+//   - You will NOT store the returned string beyond the current function scope
+//
+// Example of UNSAFE usage (DO NOT DO THIS):
+//
+//	r := cramberry.NewReader(data)
+//	s := r.ReadStringZeroCopy()
+//	r.Reset(newData)  // UNDEFINED BEHAVIOR: s now points to invalid memory
+//	fmt.Println(s)    // CRASH or data corruption
+//
+// Example of safe usage:
+//
+//	func processMessage(data []byte) string {
+//	    r := cramberry.NewReader(data)
+//	    s := r.ReadStringZeroCopy()
+//	    result := processString(s)  // Use s immediately, don't store it
+//	    return result               // Don't return s itself
+//	}
 func (r *Reader) ReadStringZeroCopy() string {
 	if !r.checkRead() {
 		return ""
@@ -481,7 +509,35 @@ func (r *Reader) ReadBytes() []byte {
 }
 
 // ReadBytesNoCopy reads a length-prefixed byte slice without copying.
-// The returned slice is only valid until the next operation on the reader's data.
+//
+// SAFETY WARNING: The returned slice points directly into the Reader's buffer.
+// It is only valid under these conditions:
+//   - The Reader must NOT be Reset() while the slice is in use
+//   - The underlying data buffer must NOT be modified or freed
+//   - The Reader must remain in scope
+//   - You must NOT modify the returned slice
+//
+// Failure to observe these constraints will cause undefined behavior,
+// including memory corruption, crashes, or data races.
+//
+// For safe usage, prefer ReadBytes() instead. Use ReadBytesNoCopy() only when:
+//   - Performance is critical and profiling shows ReadBytes() as a bottleneck
+//   - You can guarantee the Reader outlives all returned slices
+//   - You will NOT call Reset() while slices are in use
+//   - You will NOT store the returned slice beyond the current function scope
+//   - You need read-only access to the data
+//
+// Example of UNSAFE usage (DO NOT DO THIS):
+//
+//	r := cramberry.NewReader(data)
+//	b := r.ReadBytesNoCopy()
+//	r.Reset(newData)  // UNDEFINED BEHAVIOR: b now points to invalid memory
+//	fmt.Println(b)    // CRASH or data corruption
+//
+// Example of another UNSAFE pattern:
+//
+//	b := r.ReadBytesNoCopy()
+//	b[0] = 'x'  // UNDEFINED BEHAVIOR: modifying shared buffer
 func (r *Reader) ReadBytesNoCopy() []byte {
 	if !r.checkRead() {
 		return nil
@@ -524,6 +580,10 @@ func (r *Reader) ReadRawBytes(n int) []byte {
 }
 
 // ReadRawBytesNoCopy reads exactly n bytes without copying.
+//
+// SAFETY WARNING: The returned slice points directly into the Reader's buffer.
+// See ReadBytesNoCopy documentation for safety requirements.
+// For safe usage, prefer ReadRawBytes() instead.
 func (r *Reader) ReadRawBytesNoCopy(n int) []byte {
 	if n < 0 {
 		r.setError(ErrNegativeLength)
@@ -708,6 +768,11 @@ func (r *Reader) ReadPackedFloat32(count int) []float32 {
 	if count <= 0 {
 		return nil
 	}
+	// Overflow protection: check count before multiplication
+	if count > MaxPackedFloat32Length {
+		r.setError(ErrMaxArrayLength)
+		return nil
+	}
 	byteSize := count * 4
 	if !r.ensure(byteSize) {
 		return nil
@@ -729,6 +794,11 @@ func (r *Reader) ReadPackedFloat32(count int) []float32 {
 // ReadPackedFloat64 reads a packed array of float64 values directly.
 func (r *Reader) ReadPackedFloat64(count int) []float64 {
 	if count <= 0 {
+		return nil
+	}
+	// Overflow protection: check count before multiplication
+	if count > MaxPackedFloat64Length {
+		r.setError(ErrMaxArrayLength)
 		return nil
 	}
 	byteSize := count * 8
@@ -758,6 +828,11 @@ func (r *Reader) ReadPackedFixed32(count int) []uint32 {
 	if count <= 0 {
 		return nil
 	}
+	// Overflow protection: check count before multiplication
+	if count > MaxPackedFixed32Length {
+		r.setError(ErrMaxArrayLength)
+		return nil
+	}
 	byteSize := count * 4
 	if !r.ensure(byteSize) {
 		return nil
@@ -778,6 +853,11 @@ func (r *Reader) ReadPackedFixed32(count int) []uint32 {
 // ReadPackedFixed64 reads a packed array of fixed 64-bit values directly.
 func (r *Reader) ReadPackedFixed64(count int) []uint64 {
 	if count <= 0 {
+		return nil
+	}
+	// Overflow protection: check count before multiplication
+	if count > MaxPackedFixed64Length {
+		r.setError(ErrMaxArrayLength)
 		return nil
 	}
 	byteSize := count * 8

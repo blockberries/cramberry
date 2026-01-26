@@ -1,6 +1,7 @@
 //! Type registry for polymorphic encoding/decoding.
 
 use std::collections::HashMap;
+use std::sync::RwLock;
 
 use crate::error::{Error, Result};
 use crate::reader::Reader;
@@ -27,34 +28,62 @@ struct TypeRegistration {
     decoder: AnyDecoder,
 }
 
-/// Registry manages type registrations for polymorphic encoding/decoding.
-pub struct Registry {
+/// Internal data structure holding registry state.
+struct RegistryInner {
     by_id: HashMap<TypeId, TypeRegistration>,
     by_name: HashMap<String, TypeId>,
     next_type_id: TypeId,
+}
+
+/// Registry manages type registrations for polymorphic encoding/decoding.
+/// Thread-safe: uses RwLock for concurrent read access.
+pub struct Registry {
+    inner: RwLock<RegistryInner>,
 }
 
 impl Registry {
     /// Creates a new empty registry.
     pub fn new() -> Self {
         Self {
-            by_id: HashMap::new(),
-            by_name: HashMap::new(),
-            next_type_id: 128, // User types start at 128
+            inner: RwLock::new(RegistryInner {
+                by_id: HashMap::new(),
+                by_name: HashMap::new(),
+                next_type_id: 128, // User types start at 128
+            }),
         }
     }
 
     /// Registers a type with automatic ID assignment.
-    pub fn register<T>(&mut self, name: &str, encoder: Encoder<T>, decoder: Decoder<T>) -> TypeId
+    /// Thread-safe: acquires write lock.
+    pub fn register<T>(&self, name: &str, encoder: Encoder<T>, decoder: Decoder<T>) -> TypeId
     where
         T: 'static + Send + Sync,
     {
-        self.register_with_id(name, self.next_type_id, encoder, decoder)
+        let mut inner = self.inner.write().unwrap();
+        let type_id = inner.next_type_id;
+        self.register_with_id_inner(&mut inner, name, type_id, encoder, decoder)
     }
 
     /// Registers a type with a specific ID.
+    /// Thread-safe: acquires write lock.
     pub fn register_with_id<T>(
-        &mut self,
+        &self,
+        name: &str,
+        type_id: TypeId,
+        encoder: Encoder<T>,
+        decoder: Decoder<T>,
+    ) -> TypeId
+    where
+        T: 'static + Send + Sync,
+    {
+        let mut inner = self.inner.write().unwrap();
+        self.register_with_id_inner(&mut inner, name, type_id, encoder, decoder)
+    }
+
+    /// Internal registration helper (caller must hold write lock).
+    fn register_with_id_inner<T>(
+        &self,
+        inner: &mut RegistryInner,
         name: &str,
         type_id: TypeId,
         encoder: Encoder<T>,
@@ -83,43 +112,78 @@ impl Registry {
             decoder: any_decoder,
         };
 
-        self.by_id.insert(type_id, registration);
-        self.by_name.insert(name.to_string(), type_id);
+        inner.by_id.insert(type_id, registration);
+        inner.by_name.insert(name.to_string(), type_id);
 
-        if type_id >= self.next_type_id {
-            self.next_type_id = type_id + 1;
+        if type_id >= inner.next_type_id {
+            inner.next_type_id = type_id + 1;
         }
 
         type_id
     }
 
+    /// Registers a type if not already registered; returns existing ID if registered.
+    /// Thread-safe: uses read-write pattern for efficiency.
+    pub fn register_or_get<T>(&self, name: &str, encoder: Encoder<T>, decoder: Decoder<T>) -> TypeId
+    where
+        T: 'static + Send + Sync,
+    {
+        // Fast path: check if already registered (read lock)
+        {
+            let inner = self.inner.read().unwrap();
+            if let Some(&type_id) = inner.by_name.get(name) {
+                return type_id;
+            }
+        }
+
+        // Slow path: register with write lock
+        let mut inner = self.inner.write().unwrap();
+
+        // Double-check after acquiring write lock
+        if let Some(&type_id) = inner.by_name.get(name) {
+            return type_id;
+        }
+
+        let type_id = inner.next_type_id;
+        self.register_with_id_inner(&mut inner, name, type_id, encoder, decoder)
+    }
+
     /// Gets the type ID for a registered type name.
+    /// Thread-safe: acquires read lock.
     pub fn get_type_id(&self, name: &str) -> Result<TypeId> {
-        self.by_name
+        let inner = self.inner.read().unwrap();
+        inner.by_name
             .get(name)
             .copied()
             .ok_or_else(|| Error::TypeNotRegistered(name.to_string()))
     }
 
     /// Gets the type name for a registered type ID.
-    pub fn get_type_name(&self, type_id: TypeId) -> Result<&str> {
-        self.by_id
+    /// Thread-safe: acquires read lock.
+    pub fn get_type_name(&self, type_id: TypeId) -> Result<String> {
+        let inner = self.inner.read().unwrap();
+        inner.by_id
             .get(&type_id)
-            .map(|r| r.name.as_str())
+            .map(|r| r.name.clone())
             .ok_or_else(|| Error::UnknownTypeId(type_id))
     }
 
     /// Checks if a type name is registered.
+    /// Thread-safe: acquires read lock.
     pub fn is_registered(&self, name: &str) -> bool {
-        self.by_name.contains_key(name)
+        let inner = self.inner.read().unwrap();
+        inner.by_name.contains_key(name)
     }
 
     /// Checks if a type ID is registered.
+    /// Thread-safe: acquires read lock.
     pub fn is_registered_id(&self, type_id: TypeId) -> bool {
-        self.by_id.contains_key(&type_id)
+        let inner = self.inner.read().unwrap();
+        inner.by_id.contains_key(&type_id)
     }
 
     /// Encodes a polymorphic value with its type ID.
+    /// Thread-safe: acquires read lock.
     pub fn encode_polymorphic<T>(
         &self,
         writer: &mut Writer,
@@ -130,8 +194,12 @@ impl Registry {
     where
         T: 'static,
     {
-        let type_id = self.get_type_id(name)?;
-        let reg = self.by_id.get(&type_id).unwrap();
+        let inner = self.inner.read().unwrap();
+        let type_id = inner.by_name
+            .get(name)
+            .copied()
+            .ok_or_else(|| Error::TypeNotRegistered(name.to_string()))?;
+        let reg = inner.by_id.get(&type_id).unwrap();
 
         // Write field tag with TypeRef wire type
         writer.write_tag(field_number, WireType::TypeRef)?;
@@ -150,6 +218,7 @@ impl Registry {
     }
 
     /// Decodes a polymorphic value and returns its type name.
+    /// Thread-safe: acquires read lock.
     pub fn decode_polymorphic(
         &self,
         reader: &mut Reader,
@@ -157,7 +226,8 @@ impl Registry {
         // Read type ID
         let type_id = reader.read_varint()?;
 
-        let reg = self
+        let inner = self.inner.read().unwrap();
+        let reg = inner
             .by_id
             .get(&type_id)
             .ok_or_else(|| Error::UnknownTypeId(type_id))?;
@@ -173,10 +243,12 @@ impl Registry {
     }
 
     /// Clears all registrations.
-    pub fn clear(&mut self) {
-        self.by_id.clear();
-        self.by_name.clear();
-        self.next_type_id = 128;
+    /// Thread-safe: acquires write lock.
+    pub fn clear(&self) {
+        let mut inner = self.inner.write().unwrap();
+        inner.by_id.clear();
+        inner.by_name.clear();
+        inner.next_type_id = 128;
     }
 }
 
@@ -220,7 +292,7 @@ mod tests {
 
     #[test]
     fn test_registry_register() {
-        let mut registry = Registry::new();
+        let registry = Registry::new();
         let type_id = registry.register("TestMessage", encode_test_message, decode_test_message);
 
         assert_eq!(type_id, 128);
@@ -228,5 +300,43 @@ mod tests {
         assert!(registry.is_registered_id(128));
         assert_eq!(registry.get_type_id("TestMessage").unwrap(), 128);
         assert_eq!(registry.get_type_name(128).unwrap(), "TestMessage");
+    }
+
+    #[test]
+    fn test_registry_thread_safe() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let registry = Arc::new(Registry::new());
+
+        // Register type from main thread
+        registry.register("TestMessage", encode_test_message, decode_test_message);
+
+        // Access from multiple threads
+        let handles: Vec<_> = (0..4).map(|_| {
+            let reg = Arc::clone(&registry);
+            thread::spawn(move || {
+                assert!(reg.is_registered("TestMessage"));
+                assert_eq!(reg.get_type_id("TestMessage").unwrap(), 128);
+            })
+        }).collect();
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+    }
+
+    #[test]
+    fn test_register_or_get() {
+        let registry = Registry::new();
+
+        // First registration
+        let id1 = registry.register_or_get("TestMessage", encode_test_message, decode_test_message);
+        assert_eq!(id1, 128);
+
+        // Subsequent call returns the same ID
+        let id2 = registry.register_or_get("TestMessage", encode_test_message, decode_test_message);
+        assert_eq!(id2, 128);
+        assert_eq!(id1, id2);
     }
 }

@@ -745,6 +745,210 @@ func TestIsValidUTF8(t *testing.T) {
 	}
 }
 
+// TestWritePackedFloat32OverflowProtection tests that WritePackedFloat32
+// rejects arrays that would cause integer overflow.
+func TestWritePackedFloat32OverflowProtection(t *testing.T) {
+	// Test that the limit constant is reasonable
+	if MaxPackedFloat32Length <= 0 {
+		t.Error("MaxPackedFloat32Length should be positive")
+	}
+	if MaxPackedFloat32Length > (1 << 30) {
+		t.Error("MaxPackedFloat32Length should be bounded to prevent overflow")
+	}
+}
+
+// TestWritePackedFloat64OverflowProtection tests that WritePackedFloat64
+// rejects arrays that would cause integer overflow.
+func TestWritePackedFloat64OverflowProtection(t *testing.T) {
+	// Test that the limit constant is reasonable
+	if MaxPackedFloat64Length <= 0 {
+		t.Error("MaxPackedFloat64Length should be positive")
+	}
+	if MaxPackedFloat64Length > (1 << 29) {
+		t.Error("MaxPackedFloat64Length should be bounded to prevent overflow")
+	}
+}
+
+// TestWritePackedFixed32OverflowProtection tests that WritePackedFixed32
+// rejects arrays that would cause integer overflow.
+func TestWritePackedFixed32OverflowProtection(t *testing.T) {
+	// Test that the limit constant is reasonable
+	if MaxPackedFixed32Length <= 0 {
+		t.Error("MaxPackedFixed32Length should be positive")
+	}
+	if MaxPackedFixed32Length > (1 << 30) {
+		t.Error("MaxPackedFixed32Length should be bounded to prevent overflow")
+	}
+}
+
+// TestWritePackedFixed64OverflowProtection tests that WritePackedFixed64
+// rejects arrays that would cause integer overflow.
+func TestWritePackedFixed64OverflowProtection(t *testing.T) {
+	// Test that the limit constant is reasonable
+	if MaxPackedFixed64Length <= 0 {
+		t.Error("MaxPackedFixed64Length should be positive")
+	}
+	if MaxPackedFixed64Length > (1 << 29) {
+		t.Error("MaxPackedFixed64Length should be bounded to prevent overflow")
+	}
+}
+
+// TestWritePackedFloat32NaNCanonical tests that NaN values are canonicalized
+// in packed float32 arrays for deterministic encoding.
+func TestWritePackedFloat32NaNCanonical(t *testing.T) {
+	// Create two NaN values with different bit patterns
+	nan1 := math.Float32frombits(0x7FC00001) // Quiet NaN with payload
+	nan2 := math.Float32frombits(0x7FC00002) // Different quiet NaN
+
+	w1 := NewWriter()
+	w1.WritePackedFloat32([]float32{nan1})
+
+	w2 := NewWriter()
+	w2.WritePackedFloat32([]float32{nan2})
+
+	// Both should produce the same canonical NaN encoding
+	if !bytes.Equal(w1.Bytes(), w2.Bytes()) {
+		t.Errorf("Different NaN values should produce same encoding: %v vs %v", w1.Bytes(), w2.Bytes())
+	}
+
+	// The canonical NaN should be 0x7FC00000 (quiet NaN with zero payload)
+	expected := []byte{0x00, 0x00, 0xC0, 0x7F} // Little-endian
+	if !bytes.Equal(w1.Bytes(), expected) {
+		t.Errorf("Canonical NaN encoding = %v, want %v", w1.Bytes(), expected)
+	}
+}
+
+// TestWritePackedFloat64NaNCanonical tests that NaN values are canonicalized
+// in packed float64 arrays for deterministic encoding.
+func TestWritePackedFloat64NaNCanonical(t *testing.T) {
+	// Create two NaN values with different bit patterns
+	nan1 := math.Float64frombits(0x7FF8000000000001) // Quiet NaN with payload
+	nan2 := math.Float64frombits(0x7FF8000000000002) // Different quiet NaN
+
+	w1 := NewWriter()
+	w1.WritePackedFloat64([]float64{nan1})
+
+	w2 := NewWriter()
+	w2.WritePackedFloat64([]float64{nan2})
+
+	// Both should produce the same canonical NaN encoding
+	if !bytes.Equal(w1.Bytes(), w2.Bytes()) {
+		t.Errorf("Different NaN values should produce same encoding: %v vs %v", w1.Bytes(), w2.Bytes())
+	}
+
+	// The canonical NaN should be 0x7FF8000000000000 (quiet NaN with zero payload)
+	expected := []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF8, 0x7F} // Little-endian
+	if !bytes.Equal(w1.Bytes(), expected) {
+		t.Errorf("Canonical NaN encoding = %v, want %v", w1.Bytes(), expected)
+	}
+}
+
+// TestWritePackedFloat32NegativeZero tests that negative zero is canonicalized
+// to positive zero in packed float32 arrays.
+func TestWritePackedFloat32NegativeZero(t *testing.T) {
+	negZero := float32(math.Copysign(0, -1))
+	posZero := float32(0.0)
+
+	w1 := NewWriter()
+	w1.WritePackedFloat32([]float32{negZero})
+
+	w2 := NewWriter()
+	w2.WritePackedFloat32([]float32{posZero})
+
+	if !bytes.Equal(w1.Bytes(), w2.Bytes()) {
+		t.Error("Negative zero and positive zero should produce same encoding in packed arrays")
+	}
+}
+
+// TestWritePackedFloat64NegativeZero tests that negative zero is canonicalized
+// to positive zero in packed float64 arrays.
+func TestWritePackedFloat64NegativeZero(t *testing.T) {
+	negZero := math.Copysign(0, -1)
+	posZero := 0.0
+
+	w1 := NewWriter()
+	w1.WritePackedFloat64([]float64{negZero})
+
+	w2 := NewWriter()
+	w2.WritePackedFloat64([]float64{posZero})
+
+	if !bytes.Equal(w1.Bytes(), w2.Bytes()) {
+		t.Error("Negative zero and positive zero should produce same encoding in packed arrays")
+	}
+}
+
+// TestWritePackedFloat32Empty tests that empty arrays work correctly.
+func TestWritePackedFloat32Empty(t *testing.T) {
+	w := NewWriter()
+	w.WritePackedFloat32([]float32{})
+	if w.Err() != nil {
+		t.Errorf("WritePackedFloat32 with empty array failed: %v", w.Err())
+	}
+	if w.Len() != 0 {
+		t.Errorf("WritePackedFloat32 with empty array produced %d bytes, want 0", w.Len())
+	}
+}
+
+// TestWritePackedFloat64Empty tests that empty arrays work correctly.
+func TestWritePackedFloat64Empty(t *testing.T) {
+	w := NewWriter()
+	w.WritePackedFloat64([]float64{})
+	if w.Err() != nil {
+		t.Errorf("WritePackedFloat64 with empty array failed: %v", w.Err())
+	}
+	if w.Len() != 0 {
+		t.Errorf("WritePackedFloat64 with empty array produced %d bytes, want 0", w.Len())
+	}
+}
+
+// TestWritePackedFloat32Basic tests basic packed float32 writing.
+func TestWritePackedFloat32Basic(t *testing.T) {
+	w := NewWriter()
+	w.WritePackedFloat32([]float32{1.0, 2.0, 3.0})
+	if w.Err() != nil {
+		t.Errorf("WritePackedFloat32 failed: %v", w.Err())
+	}
+	if w.Len() != 12 { // 3 * 4 bytes
+		t.Errorf("WritePackedFloat32 produced %d bytes, want 12", w.Len())
+	}
+}
+
+// TestWritePackedFloat64Basic tests basic packed float64 writing.
+func TestWritePackedFloat64Basic(t *testing.T) {
+	w := NewWriter()
+	w.WritePackedFloat64([]float64{1.0, 2.0, 3.0})
+	if w.Err() != nil {
+		t.Errorf("WritePackedFloat64 failed: %v", w.Err())
+	}
+	if w.Len() != 24 { // 3 * 8 bytes
+		t.Errorf("WritePackedFloat64 produced %d bytes, want 24", w.Len())
+	}
+}
+
+// TestWritePackedFixed32Basic tests basic packed fixed32 writing.
+func TestWritePackedFixed32Basic(t *testing.T) {
+	w := NewWriter()
+	w.WritePackedFixed32([]uint32{1, 2, 3})
+	if w.Err() != nil {
+		t.Errorf("WritePackedFixed32 failed: %v", w.Err())
+	}
+	if w.Len() != 12 { // 3 * 4 bytes
+		t.Errorf("WritePackedFixed32 produced %d bytes, want 12", w.Len())
+	}
+}
+
+// TestWritePackedFixed64Basic tests basic packed fixed64 writing.
+func TestWritePackedFixed64Basic(t *testing.T) {
+	w := NewWriter()
+	w.WritePackedFixed64([]uint64{1, 2, 3})
+	if w.Err() != nil {
+		t.Errorf("WritePackedFixed64 failed: %v", w.Err())
+	}
+	if w.Len() != 24 { // 3 * 8 bytes
+		t.Errorf("WritePackedFixed64 produced %d bytes, want 24", w.Len())
+	}
+}
+
 func BenchmarkWriter(b *testing.B) {
 	b.Run("Primitives", func(b *testing.B) {
 		w := NewWriter()

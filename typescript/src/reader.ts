@@ -69,15 +69,31 @@ export class Reader {
   }
 
   /**
+   * Maximum number of bytes for a varint (64-bit value encoded as varint).
+   * A uint64 has 64 bits, and each varint byte encodes 7 bits,
+   * so we need ceil(64/7) = 10 bytes maximum.
+   */
+  private static readonly MAX_VARINT_BYTES = 10;
+
+  /**
    * Reads an unsigned varint (LEB128).
+   * For 32-bit values, this uses the same 10-byte limit as 64-bit for consistency,
+   * but the result is capped to 32 bits.
    */
   readVarint(): number {
     let result = 0;
     let shift = 0;
 
-    while (shift < 35) {
+    for (let i = 0; i < Reader.MAX_VARINT_BYTES; i++) {
       this.checkAvailable(1);
       const b = this.buffer[this.pos++];
+
+      // At the 5th byte (index 4), we've consumed 28 bits.
+      // The 5th byte can only contribute 4 more bits for a 32-bit value.
+      if (i === 4 && (b & 0xf0) !== 0) {
+        throw new DecodeError("Varint overflow: value exceeds 32 bits");
+      }
+
       result |= (b & 0x7f) << shift;
       if ((b & 0x80) === 0) {
         return result >>> 0; // Ensure unsigned
@@ -85,27 +101,43 @@ export class Reader {
       shift += 7;
     }
 
-    throw new DecodeError("Varint overflow");
+    throw new DecodeError("Varint overflow: exceeded 10 bytes");
   }
 
   /**
    * Reads an unsigned 64-bit varint (LEB128).
+   * Uses a maximum of 10 bytes, consistent with protobuf and Go implementation.
    */
   readVarint64(): bigint {
     let result = 0n;
     let shift = 0n;
 
-    while (shift < 70n) {
+    for (let i = 0; i < Reader.MAX_VARINT_BYTES; i++) {
       this.checkAvailable(1);
-      const b = BigInt(this.buffer[this.pos++]);
-      result |= (b & 0x7fn) << shift;
-      if ((b & 0x80n) === 0n) {
+      const b = this.buffer[this.pos++];
+      const bBigInt = BigInt(b);
+
+      // At the 10th byte (index 9), we've consumed 63 bits.
+      // The 10th byte can only contribute 1 more bit (bit 63 of uint64).
+      if (i === 9) {
+        // If continuation bit is set, we'd need 11+ bytes
+        if (b >= 0x80) {
+          throw new DecodeError("Varint64 overflow: exceeded 10 bytes");
+        }
+        // If data portion is > 1, value would overflow uint64
+        if (b > 1) {
+          throw new DecodeError("Varint64 overflow: 10th byte must be 0 or 1");
+        }
+      }
+
+      result |= (bBigInt & 0x7fn) << shift;
+      if ((b & 0x80) === 0) {
         return result;
       }
       shift += 7n;
     }
 
-    throw new DecodeError("Varint64 overflow");
+    throw new DecodeError("Varint64 overflow: exceeded 10 bytes");
   }
 
   /**

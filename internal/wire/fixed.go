@@ -239,3 +239,17 @@ func IsNegativeZero32(v float32) bool {
 func IsNegativeZero64(v float64) bool {
 	return math.Float64bits(v) == 0x8000000000000000
 }
+
+// CanonicalFloat32Bits returns the canonical bit representation of a float32.
+// NaN values are converted to the canonical NaN (0x7FC00000).
+// Negative zero is converted to positive zero.
+func CanonicalFloat32Bits(v float32) uint32 {
+	return canonicalizeFloat32(v)
+}
+
+// CanonicalFloat64Bits returns the canonical bit representation of a float64.
+// NaN values are converted to the canonical NaN (0x7FF8000000000000).
+// Negative zero is converted to positive zero.
+func CanonicalFloat64Bits(v float64) uint64 {
+	return canonicalizeFloat64(v)
+}
