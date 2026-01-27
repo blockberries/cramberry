@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-01-27
+
+### Security
+- **[MEDIUM]** Fixed missing bounds check in `SkipValueV2` for Fixed32/Fixed64 wire types
+  - Added `ensure(4)` and `ensure(8)` calls before incrementing position
+  - Prevents improper field skipping when malicious message has Fixed32/Fixed64 tag near buffer end
+
 ## [1.4.2] - 2026-01-27
 
 ### Security

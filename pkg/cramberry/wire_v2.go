@@ -266,9 +266,15 @@ func (r *Reader) SkipValueV2(wireType byte) {
 		r.setError(ErrInvalidVarint)
 
 	case WireTypeV2Fixed32:
+		if !r.ensure(4) {
+			return
+		}
 		r.pos += 4
 
 	case WireTypeV2Fixed64:
+		if !r.ensure(8) {
+			return
+		}
 		r.pos += 8
 
 	case WireTypeV2Bytes:
