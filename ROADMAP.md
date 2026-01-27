@@ -45,7 +45,7 @@ Cramberry is in **pre-release stabilization** with active security hardening:
 
 - [x] Remove TODO placeholders from generated code
 - [x] Fix unknown field handling (skip, don't break)
-- [ ] Add forward compatibility tests
+- [x] Add forward compatibility tests
 
 ### S4: API Cleanup
 

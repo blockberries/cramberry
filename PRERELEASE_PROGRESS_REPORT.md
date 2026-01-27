@@ -347,13 +347,31 @@ All tests pass:
 
 ---
 
+### 3.3 Add Forward Compatibility Tests
+
+**Files created:**
+- `pkg/cramberry/forward_compat_test.go` - Comprehensive forward compatibility test suite
+
+**Test coverage:**
+- **Basic types**: String, int32, float64, bool fields added in V2
+- **Slices and maps**: New slice fields, scalar fields after slices
+- **Nested messages**: V2 nested messages with extra fields decoded by V1
+- **All wire types**: Varint, fixed32, fixed64, bytes unknown fields skipped correctly
+- **Field ordering**: Unknown fields at start, middle, end of message
+- **Strict mode**: Verifies unknown fields are rejected in strict mode
+- **Round-trip**: Confirms V1 re-encoding doesn't include V2 fields
+- **Edge cases**: Empty strings, zero values, large unknown fields
+
+### Test Summary
+
+All tests pass:
+- `pkg/cramberry`: 74.1% coverage
+- 10 new test functions with multiple subtests
+
+---
+
 ## Remaining Work
 
-### Phase 3.3: Forward Compatibility Tests (Pending)
-- Generate code from schema v1
-- Add new field to schema v2
-- Verify v1 generated code can decode v2 data
-
 ### Phase 5: Testing & Validation
-- Extended fuzz testing (1+ hour)
+- Extended fuzz testing (1+ hour, no crashes)
 - Cross-language conformance tests
