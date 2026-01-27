@@ -212,12 +212,6 @@ func computePackable(t reflect.Type) bool {
 	}
 }
 
-// isPackableType returns whether a type supports packed encoding.
-// Deprecated: Use isPackableTypeCached for better performance.
-func isPackableType(t reflect.Type) bool {
-	return computePackable(t)
-}
-
 // encodePackedSlice encodes a slice of primitive types in packed format.
 // Format: [count:varint][elem1][elem2]...[elemN]
 // Elements are encoded without individual tags, contiguously.
@@ -444,12 +438,6 @@ func computeWireTypeV2(t reflect.Type) byte {
 	default:
 		return WireTypeV2Bytes
 	}
-}
-
-// getWireTypeV2 returns the V2 wire type for a reflect.Type.
-// Deprecated: Use getWireTypeV2Cached for better performance.
-func getWireTypeV2(t reflect.Type) byte {
-	return computeWireTypeV2(t)
 }
 
 // fieldInfo holds metadata about a struct field.
