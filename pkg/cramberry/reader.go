@@ -1,6 +1,7 @@
 package cramberry
 
 import (
+	"math"
 	"unsafe"
 
 	"github.com/blockberries/cramberry/internal/wire"
@@ -954,7 +955,8 @@ func (r *Reader) ReadPackedFloat32(count int) []float32 {
 		return nil
 	}
 	// Overflow protection: check count before multiplication
-	if count > MaxPackedFloat32Length {
+	// Use math.MaxInt to handle both 32-bit and 64-bit systems safely
+	if count > MaxPackedFloat32Length || count > math.MaxInt/4 {
 		r.setError(ErrMaxArrayLength)
 		return nil
 	}
@@ -982,7 +984,8 @@ func (r *Reader) ReadPackedFloat64(count int) []float64 {
 		return nil
 	}
 	// Overflow protection: check count before multiplication
-	if count > MaxPackedFloat64Length {
+	// Use math.MaxInt to handle both 32-bit and 64-bit systems safely
+	if count > MaxPackedFloat64Length || count > math.MaxInt/8 {
 		r.setError(ErrMaxArrayLength)
 		return nil
 	}
@@ -1014,7 +1017,8 @@ func (r *Reader) ReadPackedFixed32(count int) []uint32 {
 		return nil
 	}
 	// Overflow protection: check count before multiplication
-	if count > MaxPackedFixed32Length {
+	// Use math.MaxInt to handle both 32-bit and 64-bit systems safely
+	if count > MaxPackedFixed32Length || count > math.MaxInt/4 {
 		r.setError(ErrMaxArrayLength)
 		return nil
 	}
@@ -1041,7 +1045,8 @@ func (r *Reader) ReadPackedFixed64(count int) []uint64 {
 		return nil
 	}
 	// Overflow protection: check count before multiplication
-	if count > MaxPackedFixed64Length {
+	// Use math.MaxInt to handle both 32-bit and 64-bit systems safely
+	if count > MaxPackedFixed64Length || count > math.MaxInt/8 {
 		r.setError(ErrMaxArrayLength)
 		return nil
 	}

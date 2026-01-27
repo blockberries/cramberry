@@ -95,7 +95,7 @@ export {
 /**
  * Library version.
  */
-export const VERSION = "1.4.1";
+export const VERSION = "1.4.2";
 
 /**
  * Marshal encodes a value using a custom encoder function.

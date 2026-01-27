@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-01-27
+
+### Security
+- **[HIGH]** Fixed integer multiplication overflow in packed array readers on 32-bit systems
+  - `ReadPackedFloat32`, `ReadPackedFloat64`, `ReadPackedFixed32`, `ReadPackedFixed64` now check `count > math.MaxInt/elementSize` before multiplication
+  - Prevents potential memory corruption when malicious input specifies large array counts that overflow 32-bit int
+
 ## [1.4.1] - 2026-01-27
 
 ### Fixed
