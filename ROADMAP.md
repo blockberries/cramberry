@@ -53,7 +53,7 @@ Cramberry is in **pre-release stabilization** with active security hardening:
 
 - [x] Remove deprecated `MustRegister`/`MustRegisterWithID` functions
 - [x] Improve ZeroCopy API ergonomics
-- [ ] Add field number uniqueness validation
+- [x] Add field number uniqueness validation
 
 ---
 

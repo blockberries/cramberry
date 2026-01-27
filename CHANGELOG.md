@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `MustString()` / `MustBytes()` - explicit naming for panicking methods
   - `StringOrEmpty()` / `BytesOrNil()` - non-panicking accessors returning default values
   - `TryString()` / `TryBytes()` - return (value, ok) tuple for explicit error checking
+- Field number uniqueness validation - panics with clear error message if two fields have same number
 - Comprehensive tests for zero-copy safety mechanisms
 
 ### Security

@@ -455,27 +455,24 @@ default:
 - [x] Add `TryString()` / `TryBytes()` for explicit (value, ok) checking
 - [x] Update documentation prominently
 
-### 4.3 Validate Field Number Uniqueness
+### 4.3 Validate Field Number Uniqueness ✅ COMPLETED
 
 **Problem:** Duplicate field numbers silently overwrite.
 
-**Location:** `pkg/cramberry/marshal.go:472+` (`getStructInfo`)
+**Location:** `pkg/cramberry/marshal.go:439+` (`getStructInfo`)
 
-**Fix:**
+**Implementation:** Added field number tracking to detect duplicates at struct registration time. Panics with clear error message showing the conflicting field names.
+
 ```go
-func getStructInfo(t reflect.Type) *structInfo {
-    // ... existing logic ...
+// Track seen field numbers for uniqueness validation
+seenFieldNums := make(map[int]string)
 
-    seenFieldNums := make(map[int]string)
-    for i := 0; i < t.NumField(); i++ {
-        // ... parse field ...
-        if existing, ok := seenFieldNums[fieldNum]; ok {
-            panic(fmt.Sprintf("cramberry: duplicate field number %d in %s (fields %s and %s)",
-                fieldNum, t.Name(), existing, field.Name))
-        }
-        seenFieldNums[fieldNum] = field.Name
-    }
+// In the field parsing loop:
+if existingField, ok := seenFieldNums[fi.num]; ok {
+    panic(fmt.Sprintf("cramberry: duplicate field number %d in %s (fields %q and %q)",
+        fi.num, t.Name(), existingField, f.Name))
 }
+seenFieldNums[fi.num] = f.Name
 ```
 
 ---

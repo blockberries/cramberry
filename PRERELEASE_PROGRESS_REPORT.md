@@ -322,13 +322,38 @@ All tests pass including 12 new tests for ergonomic API:
 
 ---
 
+### 4.3 Add Field Number Uniqueness Validation
+
+**Files modified:**
+- `pkg/cramberry/marshal.go` - Added validation in getStructInfo
+- `pkg/cramberry/marshal_test.go` - Added comprehensive tests
+
+**Implementation:**
+- Added `seenFieldNums` map to track field numbers during struct parsing
+- After parsing each field's tag, check if field number was already used
+- If duplicate detected, panic with clear error message showing both field names
+- Validation happens at first use of struct type (cached afterward)
+
+**Test coverage:**
+- Duplicate explicit field numbers (panic expected)
+- Valid field numbers with gaps (allowed)
+- Skipped fields with conflicting numbers (panic expected)
+
+### Test Summary
+
+All tests pass:
+- `pkg/cramberry`: 73.9% coverage
+- 4 new tests for field number validation
+
+---
+
 ## Remaining Work
 
-### Phase 4.3: Field Number Uniqueness Validation (Pending)
-- Detect duplicate field numbers in struct tags
-- Panic with helpful error message at registration time
+### Phase 3.3: Forward Compatibility Tests (Pending)
+- Generate code from schema v1
+- Add new field to schema v2
+- Verify v1 generated code can decode v2 data
 
 ### Phase 5: Testing & Validation
-- Forward compatibility tests
 - Extended fuzz testing (1+ hour)
 - Cross-language conformance tests

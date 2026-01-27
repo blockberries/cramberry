@@ -1,6 +1,7 @@
 package cramberry
 
 import (
+	"fmt"
 	"math"
 	"reflect"
 	"sort"
@@ -445,6 +446,9 @@ func getStructInfo(t reflect.Type) *structInfo {
 		fields: make([]fieldInfo, 0, t.NumField()),
 	}
 
+	// Track seen field numbers for uniqueness validation
+	seenFieldNums := make(map[int]string)
+
 	fieldNum := 1
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
@@ -469,6 +473,13 @@ func getStructInfo(t reflect.Type) *structInfo {
 		} else {
 			fi.num = fieldNum
 		}
+
+		// Validate field number uniqueness
+		if existingField, ok := seenFieldNums[fi.num]; ok {
+			panic(fmt.Sprintf("cramberry: duplicate field number %d in %s (fields %q and %q)",
+				fi.num, t.Name(), existingField, f.Name))
+		}
+		seenFieldNums[fi.num] = f.Name
 
 		info.fields = append(info.fields, fi)
 		fieldNum++

@@ -830,3 +830,89 @@ func TestMarshalMapKeyValidation(t *testing.T) {
 		}
 	})
 }
+
+// Test types with duplicate field numbers (defined here to test panic behavior)
+type DuplicateFieldNumber struct {
+	Field1 string `cramberry:"1"`
+	Field2 string `cramberry:"1"` // Duplicate!
+}
+
+type DuplicateWithImplicit struct {
+	Field1 string `cramberry:"2"`
+	Field2 string // Gets implicit field number 2
+	Field3 string `cramberry:"2"` // Also 2!
+}
+
+type ValidFieldNumbers struct {
+	A string `cramberry:"1"`
+	B string `cramberry:"2"`
+	C string `cramberry:"5"` // Gaps are OK
+	D string `cramberry:"10"`
+}
+
+func TestFieldNumberUniqueness(t *testing.T) {
+	t.Run("duplicate explicit field numbers panic", func(t *testing.T) {
+		defer func() {
+			r := recover()
+			if r == nil {
+				t.Fatal("expected panic for duplicate field numbers")
+			}
+			msg, ok := r.(string)
+			if !ok {
+				t.Fatalf("expected string panic, got %T: %v", r, r)
+			}
+			if !bytes.Contains([]byte(msg), []byte("duplicate field number 1")) {
+				t.Errorf("panic message should mention duplicate field number 1, got: %s", msg)
+			}
+			if !bytes.Contains([]byte(msg), []byte("Field1")) || !bytes.Contains([]byte(msg), []byte("Field2")) {
+				t.Errorf("panic message should mention both field names, got: %s", msg)
+			}
+		}()
+
+		// This should panic
+		_, _ = Marshal(DuplicateFieldNumber{})
+	})
+
+	t.Run("valid field numbers do not panic", func(t *testing.T) {
+		// This should not panic
+		data, err := Marshal(ValidFieldNumbers{A: "a", B: "b", C: "c", D: "d"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(data) == 0 {
+			t.Error("expected non-empty data")
+		}
+	})
+
+	t.Run("gaps in field numbers are allowed", func(t *testing.T) {
+		type WithGaps struct {
+			First  string `cramberry:"1"`
+			Third  string `cramberry:"3"`
+			Tenth  string `cramberry:"10"`
+			Hundth string `cramberry:"100"`
+		}
+		data, err := Marshal(WithGaps{First: "a", Third: "b", Tenth: "c", Hundth: "d"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(data) == 0 {
+			t.Error("expected non-empty data")
+		}
+	})
+
+	t.Run("skipped fields don't conflict", func(t *testing.T) {
+		type WithSkipped struct {
+			A       string `cramberry:"1"`
+			Skipped string `cramberry:"-"`
+			B       string `cramberry:"1"` // Would conflict if Skipped wasn't skipped... wait, this SHOULD conflict
+		}
+		// Actually this should panic because A and B both have field number 1
+		defer func() {
+			r := recover()
+			if r == nil {
+				t.Fatal("expected panic for duplicate field numbers even with skipped field between")
+			}
+		}()
+		_, _ = Marshal(WithSkipped{})
+	})
+}
