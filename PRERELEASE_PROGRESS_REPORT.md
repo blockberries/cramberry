@@ -405,4 +405,38 @@ All tests pass:
 ## Remaining Work
 
 ### Cross-language conformance tests
-- Verify Go, TypeScript, Rust produce identical output for test vectors
+
+**Status:** Blocked - Wire format incompatibility
+
+**Investigation (2026-01-27):**
+
+The TypeScript and Rust runtimes use a different wire format than Go's V2 compact tags:
+
+| Aspect | Go V2 | TypeScript/Rust |
+|--------|-------|-----------------|
+| Tag format | Compact: `[fieldNum:4][wireType:3][ext:1]` | Protobuf: `(fieldNum << 3) \| wireType` |
+| Struct encoding | End marker (0x00) | Field count prefix |
+| Wire type 3 | Fixed32 | Reserved |
+| Wire type 4 | SVarint | Reserved |
+| Wire type 5 | - | Fixed32 |
+| Wire type 6 | - | SVarint |
+
+**Required changes to achieve conformance:**
+
+1. **TypeScript runtime** (`typescript/src/`):
+   - Update `encodeTag()` / `decodeTag()` in `types.ts` to use V2 compact tags
+   - Update wire type constants to match Go V2 (0-4)
+   - Replace field count prefix with end marker in struct encoding
+   - Update `Reader.readTag()` and `Writer.writeTag()` methods
+
+2. **Rust runtime** (`rust/src/`):
+   - Same changes as TypeScript
+   - Update `writer.rs` and `reader.rs` for V2 compact tags
+
+3. **Integration tests** (`tests/integration/`):
+   - Update TypeScript and Rust interop tests to use V2 format
+   - Golden files are already in V2 format (Go-generated)
+
+**Impact:**
+- Breaking change for any existing TypeScript/Rust users
+- Required for v1.0.0 release cross-language compatibility guarantee
