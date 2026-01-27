@@ -199,13 +199,13 @@ describe('Writer', () => {
   });
 
   describe('typeRef', () => {
-    it('writes and reads typeRef', () => {
+    it('writes and reads typeRef field', () => {
       // Create some value data
       const valueWriter = new Writer();
       valueWriter.writeString('polymorphic value');
       const valueData = valueWriter.bytes();
 
-      // Write a typeRef field
+      // Write a typeRef field (encoded as Bytes in V2)
       const writer = new Writer();
       writer.writeTypeRefField(1, 128, valueData);
       const data = writer.bytes();
@@ -214,9 +214,12 @@ describe('Writer', () => {
       const reader = new Reader(data);
       const tag = reader.readTag();
       expect(tag.fieldNumber).toBe(1);
-      expect(tag.wireType).toBe(WireType.TypeRef);
+      expect(tag.wireType).toBe(WireType.Bytes); // V2 uses Bytes for type refs
 
-      const { typeId, reader: subReader } = reader.readTypeRef();
+      // Read the outer length-prefixed bytes, then extract type ref
+      const outerBytes = reader.readLengthPrefixedBytes();
+      const innerReader = new Reader(outerBytes);
+      const { typeId, reader: subReader } = innerReader.readTypeRef();
       expect(typeId).toBe(128);
       expect(subReader.readString()).toBe('polymorphic value');
     });

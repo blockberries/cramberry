@@ -1,7 +1,7 @@
 //! Cramberry encoder.
 
 use crate::error::Result;
-use crate::types::{zigzag_encode_32, zigzag_encode_64, FieldTag, WireType};
+use crate::types::{zigzag_encode_32, zigzag_encode_64, FieldTag, WireType, END_MARKER};
 
 const INITIAL_CAPACITY: usize = 256;
 
@@ -48,10 +48,18 @@ impl Writer {
         self.buffer.clear();
     }
 
-    /// Writes a field tag.
+    /// Writes a V2 compact field tag.
     pub fn write_tag(&mut self, field_number: u32, wire_type: WireType) -> Result<()> {
         let tag = FieldTag::new(field_number, wire_type);
-        self.write_varint(tag.encode())
+        let encoded = tag.encode_compact();
+        self.buffer.extend_from_slice(&encoded);
+        Ok(())
+    }
+
+    /// Writes the end marker (0x00) to signal end of struct fields.
+    pub fn write_end_marker(&mut self) -> Result<()> {
+        self.buffer.push(END_MARKER);
+        Ok(())
     }
 
     /// Writes a raw byte.

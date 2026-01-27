@@ -402,41 +402,102 @@ All tests pass:
 
 ---
 
+## Phase 6: Cross-language V2 Conformance - COMPLETED
+
+**Date:** 2026-01-27
+
+### 6.1 Update TypeScript Runtime to V2 Format
+
+**Files modified:**
+- `typescript/src/types.ts`
+  - Updated wire type enum values: `Fixed32=3`, `SVarint=4` (removed `TypeRef=7`)
+  - Added V2 compact tag constants: `END_MARKER`, `TAG_EXTENDED_BIT`, `TAG_WIRE_TYPE_MASK`, etc.
+  - Added `encodeCompactTag()` function for V2 tag encoding
+  - Added `decodeCompactTag()` function for V2 tag decoding
+  - Deprecated legacy `encodeTag()`/`decodeTag()` functions
+
+- `typescript/src/writer.ts`
+  - Updated `writeTag()` to use V2 compact tag format
+  - Added `writeEndMarker()` method
+  - Updated `writeTypeRefField()` to use `WireType.Bytes` instead of removed `TypeRef`
+
+- `typescript/src/reader.ts`
+  - Completely rewrote `readTag()` to decode V2 compact tags
+  - Added `isEndMarker()` static method
+  - Updated `skipField()` for V2 wire type values
+
+- `typescript/src/index.ts`
+  - Exported new V2 constants and functions
+
+- `typescript/src/types.test.ts`
+  - Added 9 new tests for V2 compact tag encoding/decoding
+  - Updated legacy tests to not use `TypeRef`
+
+- `typescript/src/writer.test.ts`
+  - Updated typeRef test to expect `WireType.Bytes`
+
+**Test results:** 49 unit tests pass, 8 integration tests pass, encoding matches golden files
+
+### 6.2 Update Rust Runtime to V2 Format
+
+**Files modified:**
+- `rust/src/types.rs`
+  - Updated wire type enum: `Varint=0`, `Fixed64=1`, `Bytes=2`, `Fixed32=3`, `SVarint=4`
+  - Removed `TypeRef=7`
+  - Added V2 compact tag constants and encoding/decoding functions
+  - Added `CompactTagResult` struct and `decode_compact_tag()` function
+  - Added `encode_compact()` method to `FieldTag`
+  - Added 9 new tests for V2 compact tags
+
+- `rust/src/writer.rs`
+  - Updated `write_tag()` to use V2 compact format
+  - Added `write_end_marker()` method
+
+- `rust/src/reader.rs`
+  - Rewrote `read_tag()` for V2 compact decoding
+  - Added `peek_end_marker()` and `is_end_marker()` methods
+  - Updated `skip_field()` to remove TypeRef case
+
+- `rust/src/registry.rs`
+  - Updated `encode_polymorphic()` to use `WireType::Bytes` instead of `TypeRef`
+  - Updated tests to use end markers
+
+- `rust/src/lib.rs`
+  - Updated doc example to show V2 format with end marker
+  - Exported new V2 constants and functions
+
+**Test results:** 29 unit tests pass, 8 integration tests pass, encoding matches golden files
+
+### 6.3 Update Integration Tests
+
+**Files modified:**
+- `tests/integration/ts/interop.test.ts`
+  - Updated all encoder functions to V2 format (no field count, use end marker)
+  - Updated all decoder functions to check for end marker
+  - Updated wire types: `SVarint` for signed integers
+
+- `tests/integration/rust/src/interop_test.rs`
+  - Updated all encoder functions to V2 format
+  - Updated all decoder functions to check for end marker
+  - Updated wire types: `SVarint` for signed integers
+
+- `tests/integration/rust/src/interop.rs`
+  - Fixed TypeRef reference to use Bytes
+
+**Cross-language conformance verified:**
+
+| Test | Go | TypeScript | Rust |
+|------|-----|------------|------|
+| NestedMessage | ✓ | ✓ | ✓ |
+| ScalarTypes | ✓ | ✓ | ✓ |
+| AllFieldNumbers | ✓ | ✓ | ✓ |
+| Varint encoding | ✓ | ✓ | ✓ |
+| ZigZag encoding | ✓ | ✓ | ✓ |
+
+All tests produce identical binary encoding across all three runtimes.
+
+---
+
 ## Remaining Work
 
-### Cross-language conformance tests
-
-**Status:** Blocked - Wire format incompatibility
-
-**Investigation (2026-01-27):**
-
-The TypeScript and Rust runtimes use a different wire format than Go's V2 compact tags:
-
-| Aspect | Go V2 | TypeScript/Rust |
-|--------|-------|-----------------|
-| Tag format | Compact: `[fieldNum:4][wireType:3][ext:1]` | Protobuf: `(fieldNum << 3) \| wireType` |
-| Struct encoding | End marker (0x00) | Field count prefix |
-| Wire type 3 | Fixed32 | Reserved |
-| Wire type 4 | SVarint | Reserved |
-| Wire type 5 | - | Fixed32 |
-| Wire type 6 | - | SVarint |
-
-**Required changes to achieve conformance:**
-
-1. **TypeScript runtime** (`typescript/src/`):
-   - Update `encodeTag()` / `decodeTag()` in `types.ts` to use V2 compact tags
-   - Update wire type constants to match Go V2 (0-4)
-   - Replace field count prefix with end marker in struct encoding
-   - Update `Reader.readTag()` and `Writer.writeTag()` methods
-
-2. **Rust runtime** (`rust/src/`):
-   - Same changes as TypeScript
-   - Update `writer.rs` and `reader.rs` for V2 compact tags
-
-3. **Integration tests** (`tests/integration/`):
-   - Update TypeScript and Rust interop tests to use V2 format
-   - Golden files are already in V2 format (Go-generated)
-
-**Impact:**
-- Breaking change for any existing TypeScript/Rust users
-- Required for v1.0.0 release cross-language compatibility guarantee
+None - All planned pre-release remediation tasks completed.

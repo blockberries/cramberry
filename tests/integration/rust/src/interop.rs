@@ -363,12 +363,15 @@ pub fn encode_complex_types(writer: &mut Writer, msg: &ComplexTypes) -> Result<(
     writer.write_svarint(msg.status as i32)?;
 
     // Field 2: optional_nested
-    writer.write_tag(2, WireType::TypeRef)?;
+    writer.write_tag(2, WireType::Bytes)?;
     if let Some(inner) = &msg.optional_nested {
-        encode_nested_message(writer, &inner)
+        let mut sub_writer = Writer::new();
+        encode_nested_message(&mut sub_writer, &inner)?;
+        writer.write_length_prefixed_bytes(sub_writer.as_bytes())?;
     } else {
-        Ok(())
-    }?;
+        // Write nil marker (empty bytes)
+        writer.write_length_prefixed_bytes(&[])?;
+    }
 
     // Field 3: required_nested
     writer.write_tag(3, WireType::Bytes)?;

@@ -1,5 +1,5 @@
 import { BufferUnderflowError, InvalidWireTypeError, DecodeError } from "./errors";
-import { WireType, TypeID, FieldTag, decodeTag, zigzagDecode, zigzagDecode64 } from "./types";
+import { WireType, TypeID, FieldTag, decodeCompactTag, zigzagDecode, zigzagDecode64, END_MARKER, TAG_EXTENDED_BIT, TAG_WIRE_TYPE_MASK, TAG_WIRE_TYPE_SHIFT, TAG_FIELD_NUM_SHIFT } from "./types";
 
 // Module-level singleton to avoid repeated instantiation
 const textDecoder = new TextDecoder();
@@ -155,11 +155,54 @@ export class Reader {
   }
 
   /**
-   * Reads a field tag.
+   * Reads a V2 compact field tag.
+   * Returns fieldNumber 0 for end marker.
    */
   readTag(): FieldTag {
-    const tag = this.readVarint();
-    return decodeTag(tag);
+    this.checkAvailable(1);
+    const tag = this.buffer[this.pos];
+
+    // Check for end marker
+    if (tag === END_MARKER) {
+      this.pos++;
+      return { fieldNumber: 0, wireType: 0 };
+    }
+
+    const wireType = ((tag & TAG_WIRE_TYPE_MASK) >> TAG_WIRE_TYPE_SHIFT) as WireType;
+
+    if ((tag & TAG_EXTENDED_BIT) === 0) {
+      // Compact format: field number in upper 4 bits
+      const fieldNumber = tag >> TAG_FIELD_NUM_SHIFT;
+      this.pos++;
+      return { fieldNumber, wireType };
+    }
+
+    // Extended format: read varint field number
+    this.pos++; // Skip the marker byte
+    let fieldNumber = 0;
+    let shift = 0;
+
+    for (let i = 0; i < 10; i++) {
+      this.checkAvailable(1);
+      const b = this.buffer[this.pos++];
+      fieldNumber |= (b & 0x7f) << shift;
+      if ((b & 0x80) === 0) {
+        return { fieldNumber, wireType };
+      }
+      shift += 7;
+    }
+
+    throw new DecodeError("Invalid compact tag: varint overflow");
+  }
+
+  /**
+   * Checks if the next byte is an end marker without consuming it.
+   */
+  isEndMarker(): boolean {
+    if (this.pos >= this.end) {
+      return true; // Treat end of buffer as implicit end marker
+    }
+    return this.buffer[this.pos] === END_MARKER;
   }
 
   /**
@@ -312,33 +355,26 @@ export class Reader {
   }
 
   /**
-   * Skips a field based on its wire type.
+   * Skips a field based on its V2 wire type.
    */
   skipField(wireType: WireType): void {
     switch (wireType) {
-      case WireType.Varint:
-      case WireType.SVarint:
+      case WireType.Varint: // 0
+      case WireType.SVarint: // 4
         this.readVarint();
         break;
-      case WireType.Fixed64:
+      case WireType.Fixed64: // 1
         this.checkAvailable(8);
         this.pos += 8;
         break;
-      case WireType.Bytes:
+      case WireType.Bytes: // 2
         const length = this.readVarint();
         this.checkAvailable(length);
         this.pos += length;
         break;
-      case WireType.Fixed32:
+      case WireType.Fixed32: // 3
         this.checkAvailable(4);
         this.pos += 4;
-        break;
-      case WireType.TypeRef:
-        this.readVarint(); // Type ID
-        // Then skip the actual value (as Bytes)
-        const valueLength = this.readVarint();
-        this.checkAvailable(valueLength);
-        this.pos += valueLength;
         break;
       default:
         throw new InvalidWireTypeError(-1, wireType);

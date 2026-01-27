@@ -1,4 +1,4 @@
-import { WireType, TypeID, encodeTag, zigzagEncode, zigzagEncode64 } from "./types";
+import { WireType, TypeID, encodeCompactTag, zigzagEncode, zigzagEncode64, END_MARKER } from "./types";
 
 const INITIAL_CAPACITY = 256;
 const GROWTH_FACTOR = 2;
@@ -62,10 +62,18 @@ export class Writer {
   }
 
   /**
-   * Writes a field tag.
+   * Writes a V2 compact field tag.
    */
   writeTag(fieldNumber: number, wireType: WireType): void {
-    this.writeVarint(encodeTag(fieldNumber, wireType));
+    const tagBytes = encodeCompactTag(fieldNumber, wireType);
+    this.writeBytes(tagBytes);
+  }
+
+  /**
+   * Writes the end marker (0x00) to signal end of struct fields.
+   */
+  writeEndMarker(): void {
+    this.writeByte(END_MARKER);
   }
 
   /**
@@ -294,9 +302,14 @@ export class Writer {
 
   /**
    * Writes a tagged field with a type reference value.
+   * In V2 format, type references are encoded as Bytes with type ID prefix.
    */
   writeTypeRefField(fieldNumber: number, typeId: TypeID, data: Uint8Array): void {
-    this.writeTag(fieldNumber, WireType.TypeRef);
-    this.writeTypeRef(typeId, data);
+    this.writeTag(fieldNumber, WireType.Bytes);
+    // Write type ID + data as length-prefixed bytes
+    const typeRefWriter = new Writer();
+    typeRefWriter.writeVarint(typeId);
+    typeRefWriter.writeLengthPrefixedBytes(data);
+    this.writeLengthPrefixedBytes(typeRefWriter.bytes());
   }
 }

@@ -82,34 +82,34 @@ const TestData = {
   } as AllFieldNumbers,
 };
 
-// Encoder functions for each message type
+// Encoder functions for each message type using V2 format
+// V2 uses end markers instead of field counts, and SVarint wire type for signed ints
 function encodeNestedMessage(writer: Writer, msg: NestedMessage): void {
-  const fieldCount = 2;
-  writer.writeVarint(fieldCount);
-
   // Field 1: name (string)
   writer.writeTag(1, WireType.Bytes);
   writer.writeString(msg.name);
 
-  // Field 2: value (int32) - Go uses Varint wire type but zigzag encoding
-  writer.writeTag(2, WireType.Varint);
+  // Field 2: value (int32) - uses SVarint wire type
+  writer.writeTag(2, WireType.SVarint);
   writer.writeSVarint(msg.value);
+
+  // End marker
+  writer.writeEndMarker();
 }
 
 function encodeScalarTypes(writer: Writer, msg: ScalarTypes): void {
-  const fieldCount = 9;
-  writer.writeVarint(fieldCount);
+  // V2 format: no field count prefix, uses end marker
 
   // Field 1: boolVal
   writer.writeTag(1, WireType.Varint);
   writer.writeBool(msg.boolVal);
 
-  // Field 2: int32Val - Go uses Varint wire type but zigzag encoding
-  writer.writeTag(2, WireType.Varint);
+  // Field 2: int32Val - uses SVarint wire type
+  writer.writeTag(2, WireType.SVarint);
   writer.writeSVarint(msg.int32Val);
 
-  // Field 3: int64Val - Go uses Varint wire type but zigzag encoding
-  writer.writeTag(3, WireType.Varint);
+  // Field 3: int64Val - uses SVarint wire type
+  writer.writeTag(3, WireType.SVarint);
   writer.writeSVarint64(msg.int64Val);
 
   // Field 4: uint32Val
@@ -135,11 +135,13 @@ function encodeScalarTypes(writer: Writer, msg: ScalarTypes): void {
   // Field 9: bytesVal
   writer.writeTag(9, WireType.Bytes);
   writer.writeLengthPrefixedBytes(msg.bytesVal);
+
+  // End marker
+  writer.writeEndMarker();
 }
 
 function encodeRepeatedTypes(writer: Writer, msg: RepeatedTypes): void {
-  const fieldCount = 3;
-  writer.writeVarint(fieldCount);
+  // V2 format: no field count prefix, uses end marker
 
   // Field 1: int32List
   writer.writeTag(1, WireType.Bytes);
@@ -167,45 +169,33 @@ function encodeRepeatedTypes(writer: Writer, msg: RepeatedTypes): void {
     bytesWriter.writeLengthPrefixedBytes(v);
   }
   writer.writeLengthPrefixedBytes(bytesWriter.bytes());
+
+  // End marker
+  writer.writeEndMarker();
 }
 
 function encodeEdgeCases(writer: Writer, msg: EdgeCases): void {
-  // Count non-zero fields
-  let fieldCount = 0;
-  if (msg.zeroInt !== 0) fieldCount++;
-  if (msg.negativeOne !== 0) fieldCount++;
-  if (msg.maxInt32 !== 0) fieldCount++;
-  if (msg.minInt32 !== 0) fieldCount++;
-  if (msg.maxInt64 !== 0n) fieldCount++;
-  if (msg.minInt64 !== 0n) fieldCount++;
-  if (msg.maxUint32 !== 0) fieldCount++;
-  if (msg.maxUint64 !== 0n) fieldCount++;
-  if (msg.emptyString !== '') fieldCount++;
-  if (msg.unicodeString !== '') fieldCount++;
-  if (msg.emptyBytes.length > 0) fieldCount++;
+  // V2 format: no field count prefix, uses end marker
+  // Only encode non-zero/non-empty fields to match Go's omitempty behavior
 
-  // For this test, we encode only the non-zero/non-empty fields
-  // to match Go's omitempty behavior
-  writer.writeVarint(8); // All edge case fields except zeros
-
-  // Field 2: negativeOne - Go uses Varint wire type but zigzag encoding
-  writer.writeTag(2, WireType.Varint);
+  // Field 2: negativeOne - uses SVarint wire type
+  writer.writeTag(2, WireType.SVarint);
   writer.writeSVarint(msg.negativeOne);
 
-  // Field 3: maxInt32 - Go uses Varint wire type but zigzag encoding
-  writer.writeTag(3, WireType.Varint);
+  // Field 3: maxInt32 - uses SVarint wire type
+  writer.writeTag(3, WireType.SVarint);
   writer.writeSVarint(msg.maxInt32);
 
-  // Field 4: minInt32 - Go uses Varint wire type but zigzag encoding
-  writer.writeTag(4, WireType.Varint);
+  // Field 4: minInt32 - uses SVarint wire type
+  writer.writeTag(4, WireType.SVarint);
   writer.writeSVarint(msg.minInt32);
 
-  // Field 5: maxInt64 - Go uses Varint wire type but zigzag encoding
-  writer.writeTag(5, WireType.Varint);
+  // Field 5: maxInt64 - uses SVarint wire type
+  writer.writeTag(5, WireType.SVarint);
   writer.writeSVarint64(msg.maxInt64);
 
-  // Field 6: minInt64 - Go uses Varint wire type but zigzag encoding
-  writer.writeTag(6, WireType.Varint);
+  // Field 6: minInt64 - uses SVarint wire type
+  writer.writeTag(6, WireType.SVarint);
   writer.writeSVarint64(msg.minInt64);
 
   // Field 7: maxUint32
@@ -219,39 +209,45 @@ function encodeEdgeCases(writer: Writer, msg: EdgeCases): void {
   // Field 10: unicodeString
   writer.writeTag(10, WireType.Bytes);
   writer.writeString(msg.unicodeString);
+
+  // End marker
+  writer.writeEndMarker();
 }
 
 function encodeAllFieldNumbers(writer: Writer, msg: AllFieldNumbers): void {
-  const fieldCount = 6;
-  writer.writeVarint(fieldCount);
+  // V2 format: no field count prefix, uses end marker
+  // All int32 fields use SVarint wire type
 
-  // All int32 fields use Varint wire type but zigzag encoding
-  writer.writeTag(1, WireType.Varint);
+  writer.writeTag(1, WireType.SVarint);
   writer.writeSVarint(msg.field1);
 
-  writer.writeTag(15, WireType.Varint);
+  writer.writeTag(15, WireType.SVarint);
   writer.writeSVarint(msg.field15);
 
-  writer.writeTag(16, WireType.Varint);
+  writer.writeTag(16, WireType.SVarint);
   writer.writeSVarint(msg.field16);
 
-  writer.writeTag(127, WireType.Varint);
+  writer.writeTag(127, WireType.SVarint);
   writer.writeSVarint(msg.field127);
 
-  writer.writeTag(128, WireType.Varint);
+  writer.writeTag(128, WireType.SVarint);
   writer.writeSVarint(msg.field128);
 
-  writer.writeTag(1000, WireType.Varint);
+  writer.writeTag(1000, WireType.SVarint);
   writer.writeSVarint(msg.field1000);
+
+  // End marker
+  writer.writeEndMarker();
 }
 
-// Decoder functions
+// Decoder functions - V2 format uses end marker (fieldNumber === 0) instead of field count
 function decodeNestedMessage(reader: Reader): NestedMessage {
-  const fieldCount = reader.readVarint();
   const result: Partial<NestedMessage> = {};
 
-  for (let i = 0; i < fieldCount; i++) {
+  while (reader.hasMore) {
     const tag = reader.readTag();
+    if (tag.fieldNumber === 0) break; // End marker
+
     switch (tag.fieldNumber) {
       case 1:
         result.name = reader.readString();
@@ -268,11 +264,12 @@ function decodeNestedMessage(reader: Reader): NestedMessage {
 }
 
 function decodeScalarTypes(reader: Reader): ScalarTypes {
-  const fieldCount = reader.readVarint();
   const result: Partial<ScalarTypes> = {};
 
-  for (let i = 0; i < fieldCount; i++) {
+  while (reader.hasMore) {
     const tag = reader.readTag();
+    if (tag.fieldNumber === 0) break; // End marker
+
     switch (tag.fieldNumber) {
       case 1:
         result.boolVal = reader.readBool();
@@ -411,14 +408,14 @@ describe('TypeScript Interoperability Tests', () => {
 
       console.log('AllFieldNumbers encoded:', toHex(encoded));
 
-      // Decode
+      // Decode - V2 format uses end marker
       const reader = new Reader(encoded);
-      const fieldCount = reader.readVarint();
-      expect(fieldCount).toBe(6);
-
       const decoded: Partial<AllFieldNumbers> = {};
-      for (let i = 0; i < fieldCount; i++) {
+
+      while (reader.hasMore) {
         const tag = reader.readTag();
+        if (tag.fieldNumber === 0) break; // End marker
+
         switch (tag.fieldNumber) {
           case 1: decoded.field1 = reader.readSVarint(); break;
           case 15: decoded.field15 = reader.readSVarint(); break;
@@ -426,6 +423,7 @@ describe('TypeScript Interoperability Tests', () => {
           case 127: decoded.field127 = reader.readSVarint(); break;
           case 128: decoded.field128 = reader.readSVarint(); break;
           case 1000: decoded.field1000 = reader.readSVarint(); break;
+          default: reader.skipField(tag.wireType);
         }
       }
 
@@ -446,12 +444,14 @@ describe('TypeScript Interoperability Tests', () => {
 
       console.log('Golden AllFieldNumbers hex:', toHex(golden));
 
+      // Decode - V2 format uses end marker
       const reader = new Reader(golden);
-      const fieldCount = reader.readVarint();
-
       const decoded: Partial<AllFieldNumbers> = {};
-      for (let i = 0; i < fieldCount; i++) {
+
+      while (reader.hasMore) {
         const tag = reader.readTag();
+        if (tag.fieldNumber === 0) break; // End marker
+
         switch (tag.fieldNumber) {
           case 1: decoded.field1 = reader.readSVarint(); break;
           case 15: decoded.field15 = reader.readSVarint(); break;

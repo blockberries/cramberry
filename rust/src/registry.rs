@@ -183,6 +183,7 @@ impl Registry {
     }
 
     /// Encodes a polymorphic value with its type ID.
+    /// In V2 format, type references are encoded as Bytes with [type_id + length-prefixed data].
     /// Thread-safe: acquires read lock.
     pub fn encode_polymorphic<T>(
         &self,
@@ -201,18 +202,22 @@ impl Registry {
             .ok_or_else(|| Error::TypeNotRegistered(name.to_string()))?;
         let reg = inner.by_id.get(&type_id).unwrap();
 
-        // Write field tag with TypeRef wire type
-        writer.write_tag(field_number, WireType::TypeRef)?;
+        // Write field tag with Bytes wire type (V2 format)
+        writer.write_tag(field_number, WireType::Bytes)?;
 
-        // Write type ID
-        writer.write_varint(type_id)?;
+        // Create a temporary writer for the type ref content
+        let mut type_ref_writer = Writer::new();
+        type_ref_writer.write_varint(type_id)?;
 
-        // Create a temporary writer for the value
-        let mut temp_writer = Writer::new();
-        (reg.encoder)(&mut temp_writer, value)?;
+        // Create another temporary writer for the value
+        let mut value_writer = Writer::new();
+        (reg.encoder)(&mut value_writer, value)?;
 
-        // Write length-prefixed value bytes
-        writer.write_length_prefixed_bytes(temp_writer.as_bytes())?;
+        // Write length-prefixed value bytes to type_ref_writer
+        type_ref_writer.write_length_prefixed_bytes(value_writer.as_bytes())?;
+
+        // Write the entire type ref as length-prefixed bytes
+        writer.write_length_prefixed_bytes(type_ref_writer.as_bytes())?;
 
         Ok(())
     }
@@ -271,6 +276,7 @@ mod tests {
     fn encode_test_message(writer: &mut Writer, msg: &TestMessage) -> Result<()> {
         writer.write_int32_field(1, msg.value)?;
         writer.write_string_field(2, &msg.name)?;
+        writer.write_end_marker()?;
         Ok(())
     }
 
@@ -280,6 +286,9 @@ mod tests {
 
         while reader.has_more() {
             let tag = reader.read_tag()?;
+            if Reader::is_end_marker(&tag) {
+                break;
+            }
             match tag.field_number {
                 1 => value = reader.read_int32()?,
                 2 => name = reader.read_string()?.to_string(),

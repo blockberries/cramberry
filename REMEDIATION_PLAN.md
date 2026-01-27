@@ -644,7 +644,7 @@ Before release:
 - [x] Zero V1 references in codebase
 - [x] All security tests passing
 - [x] Fuzz tests run for 1+ hour with no crashes (2+ hours, 663M+ executions)
-- [ ] Cross-language conformance tests passing
+- [x] Cross-language conformance tests passing (Go, TypeScript, Rust all produce identical encoding)
 - [x] Documentation updated and reviewed
 - [x] `make check` passes with no warnings
 

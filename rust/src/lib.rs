@@ -6,16 +6,20 @@
 //! use cramberry::{Writer, Reader, Result, WireType};
 //!
 //! fn main() -> Result<()> {
-//!     // Encoding
+//!     // Encoding (V2 format with end marker)
 //!     let mut writer = Writer::new();
 //!     writer.write_int32_field(1, 42)?;
 //!     writer.write_string_field(2, "hello")?;
+//!     writer.write_end_marker()?;
 //!     let data = writer.into_bytes();
 //!
-//!     // Decoding
+//!     // Decoding (V2 format uses end marker)
 //!     let mut reader = Reader::new(&data);
 //!     while reader.has_more() {
 //!         let tag = reader.read_tag()?;
+//!         if Reader::is_end_marker(&tag) {
+//!             break;
+//!         }
 //!         match tag.field_number {
 //!             1 => {
 //!                 let value = reader.read_int32()?;
@@ -43,7 +47,12 @@ pub use error::{Error, Result};
 pub use reader::Reader;
 pub use registry::{Decoder, Encoder, Registry};
 pub use stream::{StreamReader, StreamWriter};
-pub use types::{FieldTag, TypeId, WireType};
+pub use types::{
+    decode_compact_tag, CompactTagResult, FieldTag, TypeId, WireType,
+    // V2 compact tag constants
+    END_MARKER, MAX_COMPACT_FIELD_NUM, TAG_EXTENDED_BIT, TAG_FIELD_NUM_SHIFT, TAG_WIRE_TYPE_MASK,
+    TAG_WIRE_TYPE_SHIFT,
+};
 pub use writer::Writer;
 
 /// Library version.

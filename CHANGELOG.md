@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-01-27
+
+### Breaking Changes
+- **TypeScript runtime**: Wire type values changed to match Go V2 format:
+  - `Fixed32` changed from `5` to `3`
+  - `SVarint` changed from `6` to `4`
+  - `TypeRef` wire type removed (use `Bytes` for polymorphic types)
+- **Rust runtime**: Same wire type value changes as TypeScript
+- **Struct encoding format**: Field count prefix replaced with end marker (`0x00`)
+
+### Added
+- **Cross-language V2 wire format conformance**: Go, TypeScript, and Rust now produce identical binary encodings
+- V2 compact tag format in TypeScript and Rust:
+  - Single-byte tags for fields 1-15: `[fieldNum:4][wireType:3][ext:1]`
+  - Extended format for fields 16+: marker byte + varint field number
+- `Writer.writeEndMarker()` in TypeScript and Rust for struct termination
+- `Reader.isEndMarker()` in TypeScript and Rust for end-of-struct detection
+- `encodeCompactTag()` / `decodeCompactTag()` functions exported in TypeScript
+- `decode_compact_tag()` function and `CompactTagResult` struct exported in Rust
+- V2 tag constants exported: `END_MARKER`, `TAG_EXTENDED_BIT`, `TAG_WIRE_TYPE_MASK`, etc.
+- Comprehensive cross-language integration tests verifying identical encoding
+
+### Fixed
+- TypeScript and Rust integration tests now pass against Go-generated golden files
+- Polymorphic type encoding in Rust now uses `Bytes` wire type correctly
+
+### Security
+- All pre-release security remediation items completed (see REMEDIATION_PLAN.md)
+- Fuzz testing validated: 663M+ executions across 8 test targets with zero crashes
+
 ## [1.2.0] - 2026-01-26
 
 ### Breaking Changes

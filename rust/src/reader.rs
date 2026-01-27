@@ -1,7 +1,9 @@
 //! Cramberry decoder.
 
 use crate::error::{Error, Result};
-use crate::types::{zigzag_decode_32, zigzag_decode_64, FieldTag, WireType};
+use crate::types::{
+    decode_compact_tag, zigzag_decode_32, zigzag_decode_64, FieldTag, WireType, END_MARKER,
+};
 
 /// Reader decodes Cramberry data from a binary buffer.
 pub struct Reader<'a> {
@@ -134,10 +136,29 @@ impl<'a> Reader<'a> {
         Ok(zigzag_decode_64(self.read_varint64()?))
     }
 
-    /// Reads a field tag.
+    /// Reads a V2 compact field tag.
+    /// Returns a FieldTag with field_number=0 for end marker.
     pub fn read_tag(&mut self) -> Result<FieldTag> {
-        let tag = self.read_varint()?;
-        FieldTag::decode(tag).ok_or_else(|| Error::InvalidWireType((tag & 0x07) as u8))
+        let remaining = &self.buffer[self.pos..];
+        if remaining.is_empty() {
+            return Err(Error::buffer_underflow(1, 0));
+        }
+
+        let result = decode_compact_tag(remaining)
+            .ok_or_else(|| Error::InvalidWireType(remaining[0]))?;
+
+        self.pos += result.bytes_read;
+        Ok(FieldTag::new(result.field_number, result.wire_type))
+    }
+
+    /// Checks if the next byte is the end marker without consuming it.
+    pub fn peek_end_marker(&self) -> bool {
+        self.pos < self.buffer.len() && self.buffer[self.pos] == END_MARKER
+    }
+
+    /// Checks if the given tag is an end marker.
+    pub fn is_end_marker(tag: &FieldTag) -> bool {
+        tag.field_number == 0
     }
 
     /// Reads a boolean.
@@ -210,7 +231,7 @@ impl<'a> Reader<'a> {
     pub fn skip_field(&mut self, wire_type: WireType) -> Result<()> {
         match wire_type {
             WireType::Varint | WireType::SVarint => {
-                self.read_varint()?;
+                self.read_varint64()?; // Use 64-bit to handle large varints
             }
             WireType::Fixed64 => {
                 self.check_available(8)?;
@@ -224,12 +245,6 @@ impl<'a> Reader<'a> {
             WireType::Fixed32 => {
                 self.check_available(4)?;
                 self.pos += 4;
-            }
-            WireType::TypeRef => {
-                self.read_varint()?; // Type ID
-                let length = self.read_varint()? as usize;
-                self.check_available(length)?;
-                self.pos += length;
             }
         }
         Ok(())
@@ -285,6 +300,52 @@ mod tests {
     }
 
     #[test]
+    fn test_read_v2_compact_tag() {
+        // Field 1, wire type Varint: (1 << 4) | (0 << 1) = 0x10
+        let mut reader = Reader::new(&[0x10]);
+        let tag = reader.read_tag().unwrap();
+        assert_eq!(tag.field_number, 1);
+        assert_eq!(tag.wire_type, WireType::Varint);
+
+        // Field 2, wire type SVarint: (2 << 4) | (4 << 1) = 0x28
+        let mut reader = Reader::new(&[0x28]);
+        let tag = reader.read_tag().unwrap();
+        assert_eq!(tag.field_number, 2);
+        assert_eq!(tag.wire_type, WireType::SVarint);
+
+        // Field 15, wire type Bytes: (15 << 4) | (2 << 1) = 0xf4
+        let mut reader = Reader::new(&[0xf4]);
+        let tag = reader.read_tag().unwrap();
+        assert_eq!(tag.field_number, 15);
+        assert_eq!(tag.wire_type, WireType::Bytes);
+    }
+
+    #[test]
+    fn test_read_v2_extended_tag() {
+        // Field 16, wire type Varint: extended marker + varint 16
+        // Extended: (0 << 1) | 1 = 0x01, then varint 16
+        let mut reader = Reader::new(&[0x01, 16]);
+        let tag = reader.read_tag().unwrap();
+        assert_eq!(tag.field_number, 16);
+        assert_eq!(tag.wire_type, WireType::Varint);
+
+        // Field 1000, wire type SVarint
+        // Extended: (4 << 1) | 1 = 0x09, then varint 1000 (0xe8, 0x07)
+        let mut reader = Reader::new(&[0x09, 0xe8, 0x07]);
+        let tag = reader.read_tag().unwrap();
+        assert_eq!(tag.field_number, 1000);
+        assert_eq!(tag.wire_type, WireType::SVarint);
+    }
+
+    #[test]
+    fn test_read_end_marker() {
+        let mut reader = Reader::new(&[END_MARKER]);
+        let tag = reader.read_tag().unwrap();
+        assert_eq!(tag.field_number, 0);
+        assert!(Reader::is_end_marker(&tag));
+    }
+
+    #[test]
     fn test_read_write_roundtrip() {
         use crate::writer::Writer;
 
@@ -292,6 +353,7 @@ mod tests {
         writer.write_int32_field(1, -42).unwrap();
         writer.write_string_field(2, "hello").unwrap();
         writer.write_bool_field(3, true).unwrap();
+        writer.write_end_marker().unwrap();
 
         let data = writer.into_bytes();
         let mut reader = Reader::new(&data);
@@ -311,6 +373,29 @@ mod tests {
         assert_eq!(tag3.wire_type, WireType::Varint);
         assert!(reader.read_bool().unwrap());
 
+        // Read end marker
+        let end_tag = reader.read_tag().unwrap();
+        assert!(Reader::is_end_marker(&end_tag));
+
         assert!(!reader.has_more());
+    }
+
+    #[test]
+    fn test_peek_end_marker() {
+        let mut reader = Reader::new(&[0x10, END_MARKER]);
+
+        // First, peek - should not be end marker
+        assert!(!reader.peek_end_marker());
+
+        // Read the first tag
+        let tag = reader.read_tag().unwrap();
+        assert_eq!(tag.field_number, 1);
+
+        // Now peek - should be end marker
+        assert!(reader.peek_end_marker());
+
+        // Read it
+        let end_tag = reader.read_tag().unwrap();
+        assert!(Reader::is_end_marker(&end_tag));
     }
 }

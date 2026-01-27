@@ -27,10 +27,21 @@ export {
   WireType,
   TypeID,
   FieldTag,
+  CompactTagResult,
   MaxVarint32,
   MaxVarint64,
   MinInt64,
   MaxInt64,
+  // V2 compact tag format
+  END_MARKER,
+  TAG_EXTENDED_BIT,
+  TAG_WIRE_TYPE_MASK,
+  TAG_WIRE_TYPE_SHIFT,
+  TAG_FIELD_NUM_SHIFT,
+  MAX_COMPACT_FIELD_NUM,
+  encodeCompactTag,
+  decodeCompactTag,
+  // Legacy (deprecated)
   encodeTag,
   decodeTag,
   zigzagEncode,
@@ -72,7 +83,7 @@ export {
 /**
  * Library version.
  */
-export const VERSION = "0.1.0";
+export const VERSION = "1.3.0";
 
 /**
  * Marshal encodes a value using a custom encoder function.

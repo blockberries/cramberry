@@ -60,29 +60,31 @@ fn test_edge_cases() -> EdgeCases {
     }
 }
 
-// Encoder functions
+// Encoder functions - V2 format uses end marker instead of field count
 fn encode_nested_message(writer: &mut Writer, msg: &NestedMessage) -> Result<()> {
-    // Field count
-    writer.write_varint(2)?;
-
     // Field 1: name
     writer.write_tag(1, WireType::Bytes)?;
     writer.write_string(&msg.name)?;
 
-    // Field 2: value - Go uses Varint wire type but zigzag encoding
-    writer.write_tag(2, WireType::Varint)?;
+    // Field 2: value - uses SVarint wire type
+    writer.write_tag(2, WireType::SVarint)?;
     writer.write_svarint(msg.value)?;
+
+    // End marker
+    writer.write_end_marker()?;
 
     Ok(())
 }
 
 fn decode_nested_message(reader: &mut Reader) -> Result<NestedMessage> {
-    let field_count = reader.read_varint()?;
     let mut name = String::new();
     let mut value = 0i32;
 
-    for _ in 0..field_count {
+    while reader.has_more() {
         let tag = reader.read_tag()?;
+        if Reader::is_end_marker(&tag) {
+            break;
+        }
         match tag.field_number {
             1 => name = reader.read_string()?.to_string(),
             2 => value = reader.read_svarint()?,
@@ -94,19 +96,18 @@ fn decode_nested_message(reader: &mut Reader) -> Result<NestedMessage> {
 }
 
 fn encode_scalar_types(writer: &mut Writer, msg: &ScalarTypes) -> Result<()> {
-    // Field count
-    writer.write_varint(9)?;
+    // V2 format: no field count prefix, uses end marker
 
     // Field 1: bool_val
     writer.write_tag(1, WireType::Varint)?;
     writer.write_bool(msg.bool_val)?;
 
-    // Field 2: int32_val - Go uses Varint wire type but zigzag encoding
-    writer.write_tag(2, WireType::Varint)?;
+    // Field 2: int32_val - uses SVarint wire type
+    writer.write_tag(2, WireType::SVarint)?;
     writer.write_svarint(msg.int32_val)?;
 
-    // Field 3: int64_val - Go uses Varint wire type but zigzag encoding
-    writer.write_tag(3, WireType::Varint)?;
+    // Field 3: int64_val - uses SVarint wire type
+    writer.write_tag(3, WireType::SVarint)?;
     writer.write_svarint64(msg.int64_val)?;
 
     // Field 4: uint32_val
@@ -133,11 +134,13 @@ fn encode_scalar_types(writer: &mut Writer, msg: &ScalarTypes) -> Result<()> {
     writer.write_tag(9, WireType::Bytes)?;
     writer.write_length_prefixed_bytes(&msg.bytes_val)?;
 
+    // End marker
+    writer.write_end_marker()?;
+
     Ok(())
 }
 
 fn decode_scalar_types(reader: &mut Reader) -> Result<ScalarTypes> {
-    let field_count = reader.read_varint()?;
     let mut result = ScalarTypes {
         bool_val: false,
         int32_val: 0,
@@ -150,8 +153,11 @@ fn decode_scalar_types(reader: &mut Reader) -> Result<ScalarTypes> {
         bytes_val: vec![],
     };
 
-    for _ in 0..field_count {
+    while reader.has_more() {
         let tag = reader.read_tag()?;
+        if Reader::is_end_marker(&tag) {
+            break;
+        }
         match tag.field_number {
             1 => result.bool_val = reader.read_bool()?,
             2 => result.int32_val = reader.read_svarint()?,
@@ -170,32 +176,34 @@ fn decode_scalar_types(reader: &mut Reader) -> Result<ScalarTypes> {
 }
 
 fn encode_all_field_numbers(writer: &mut Writer, msg: &AllFieldNumbers) -> Result<()> {
-    writer.write_varint(6)?;
+    // V2 format: no field count prefix, uses end marker
+    // All int32 fields use SVarint wire type
 
-    // All int32 fields use Varint wire type but zigzag encoding
-    writer.write_tag(1, WireType::Varint)?;
+    writer.write_tag(1, WireType::SVarint)?;
     writer.write_svarint(msg.field_1)?;
 
-    writer.write_tag(15, WireType::Varint)?;
+    writer.write_tag(15, WireType::SVarint)?;
     writer.write_svarint(msg.field_15)?;
 
-    writer.write_tag(16, WireType::Varint)?;
+    writer.write_tag(16, WireType::SVarint)?;
     writer.write_svarint(msg.field_16)?;
 
-    writer.write_tag(127, WireType::Varint)?;
+    writer.write_tag(127, WireType::SVarint)?;
     writer.write_svarint(msg.field_127)?;
 
-    writer.write_tag(128, WireType::Varint)?;
+    writer.write_tag(128, WireType::SVarint)?;
     writer.write_svarint(msg.field_128)?;
 
-    writer.write_tag(1000, WireType::Varint)?;
+    writer.write_tag(1000, WireType::SVarint)?;
     writer.write_svarint(msg.field_1000)?;
+
+    // End marker
+    writer.write_end_marker()?;
 
     Ok(())
 }
 
 fn decode_all_field_numbers(reader: &mut Reader) -> Result<AllFieldNumbers> {
-    let field_count = reader.read_varint()?;
     let mut result = AllFieldNumbers {
         field_1: 0,
         field_15: 0,
@@ -205,8 +213,11 @@ fn decode_all_field_numbers(reader: &mut Reader) -> Result<AllFieldNumbers> {
         field_1000: 0,
     };
 
-    for _ in 0..field_count {
+    while reader.has_more() {
         let tag = reader.read_tag()?;
+        if Reader::is_end_marker(&tag) {
+            break;
+        }
         match tag.field_number {
             1 => result.field_1 = reader.read_svarint()?,
             15 => result.field_15 = reader.read_svarint()?,
