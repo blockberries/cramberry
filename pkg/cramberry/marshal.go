@@ -164,7 +164,7 @@ func encodeSlice(w *Writer, v reflect.Value) error {
 	}
 
 	// Use packed encoding for primitive types (no depth tracking needed for primitives)
-	if isPackableType(v.Type().Elem()) {
+	if isPackableTypeCached(v.Type().Elem()) {
 		return encodePackedSlice(w, v)
 	}
 
@@ -189,7 +189,18 @@ func encodeSlice(w *Writer, v reflect.Value) error {
 
 // isPackableType returns true if the type can be packed in a contiguous byte sequence.
 // Packable types are fixed-size primitives: integers, floats, and bools.
-func isPackableType(t reflect.Type) bool {
+// isPackableTypeCached returns whether the type supports packed encoding, using cache.
+func isPackableTypeCached(t reflect.Type) bool {
+	if p, ok := packableCache.Load(t); ok {
+		return p.(bool)
+	}
+	computed := computePackable(t)
+	packableCache.Store(t, computed)
+	return computed
+}
+
+// computePackable computes whether a type can be packed.
+func computePackable(t reflect.Type) bool {
 	switch t.Kind() {
 	case reflect.Bool,
 		reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int,
@@ -199,6 +210,12 @@ func isPackableType(t reflect.Type) bool {
 	default:
 		return false
 	}
+}
+
+// isPackableType returns whether a type supports packed encoding.
+// Deprecated: Use isPackableTypeCached for better performance.
+func isPackableType(t reflect.Type) bool {
+	return computePackable(t)
 }
 
 // encodePackedSlice encodes a slice of primitive types in packed format.
@@ -250,7 +267,7 @@ func encodePackedSlice(w *Writer, v reflect.Value) error {
 // encodeArray encodes an array value.
 func encodeArray(w *Writer, v reflect.Value) error {
 	// Use packed encoding for primitive types (no depth tracking needed for primitives)
-	if isPackableType(v.Type().Elem()) {
+	if isPackableTypeCached(v.Type().Elem()) {
 		return encodePackedArray(w, v)
 	}
 
@@ -380,7 +397,7 @@ func encodeStruct(w *Writer, v reflect.Value) error {
 		}
 
 		// Write compact field tag
-		w.WriteCompactTag(field.num, getWireTypeV2(fv.Type()))
+		w.WriteCompactTag(field.num, getWireTypeV2Cached(fv.Type()))
 		if w.Err() != nil {
 			return w.Err()
 		}
@@ -396,8 +413,18 @@ func encodeStruct(w *Writer, v reflect.Value) error {
 	return w.Err()
 }
 
-// getWireTypeV2 returns the V2 wire type for a reflect.Type.
-func getWireTypeV2(t reflect.Type) byte {
+// getWireTypeV2Cached returns the V2 wire type for a reflect.Type, using cache.
+func getWireTypeV2Cached(t reflect.Type) byte {
+	if wt, ok := wireTypeCache.Load(t); ok {
+		return wt.(byte)
+	}
+	computed := computeWireTypeV2(t)
+	wireTypeCache.Store(t, computed)
+	return computed
+}
+
+// computeWireTypeV2 computes the V2 wire type for a reflect.Type.
+func computeWireTypeV2(t reflect.Type) byte {
 	switch t.Kind() {
 	case reflect.Bool, reflect.Uint8, reflect.Uint16, reflect.Uint32,
 		reflect.Uint, reflect.Uint64, reflect.Uintptr:
@@ -419,6 +446,12 @@ func getWireTypeV2(t reflect.Type) byte {
 	}
 }
 
+// getWireTypeV2 returns the V2 wire type for a reflect.Type.
+// Deprecated: Use getWireTypeV2Cached for better performance.
+func getWireTypeV2(t reflect.Type) byte {
+	return computeWireTypeV2(t)
+}
+
 // fieldInfo holds metadata about a struct field.
 type fieldInfo struct {
 	name      string
@@ -430,11 +463,18 @@ type fieldInfo struct {
 
 // structInfo holds cached metadata about a struct type.
 type structInfo struct {
-	fields []fieldInfo
+	fields     []fieldInfo
+	fieldByNum map[int]*fieldInfo // Pre-computed lookup for O(1) decode access
 }
 
 // structInfoCache caches struct metadata for performance.
 var structInfoCache sync.Map
+
+// wireTypeCache caches V2 wire types by reflect.Type for performance.
+var wireTypeCache sync.Map
+
+// packableCache caches whether element types support packed encoding.
+var packableCache sync.Map
 
 // getStructInfo returns cached struct metadata.
 func getStructInfo(t reflect.Type) *structInfo {
@@ -489,6 +529,12 @@ func getStructInfo(t reflect.Type) *structInfo {
 	sort.Slice(info.fields, func(i, j int) bool {
 		return info.fields[i].num < info.fields[j].num
 	})
+
+	// Build fieldByNum lookup map for O(1) decode access
+	info.fieldByNum = make(map[int]*fieldInfo, len(info.fields))
+	for i := range info.fields {
+		info.fieldByNum[info.fields[i].num] = &info.fields[i]
+	}
 
 	structInfoCache.Store(t, info)
 	return info

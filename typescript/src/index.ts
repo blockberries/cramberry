@@ -60,7 +60,19 @@ export {
   UnknownTypeError,
   TypeNotRegisteredError,
   InvalidWireTypeError,
+  EndOfStreamError,
+  MessageSizeExceededError,
+  StreamClosedError,
 } from "./errors";
+
+// Streaming support
+export {
+  StreamWriter,
+  StreamWriterOptions,
+  StreamReader,
+  StreamReaderOptions,
+  MessageIterator,
+} from "./stream";
 
 // Writer
 import { Writer } from "./writer";
@@ -83,7 +95,7 @@ export {
 /**
  * Library version.
  */
-export const VERSION = "1.3.0";
+export const VERSION = "1.4.0";
 
 /**
  * Marshal encodes a value using a custom encoder function.

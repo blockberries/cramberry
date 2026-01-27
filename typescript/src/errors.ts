@@ -77,3 +77,33 @@ export class InvalidWireTypeError extends DecodeError {
     this.name = "InvalidWireTypeError";
   }
 }
+
+/**
+ * Error thrown when end of stream is reached unexpectedly.
+ */
+export class EndOfStreamError extends DecodeError {
+  constructor(message: string = "Unexpected end of stream") {
+    super(message);
+    this.name = "EndOfStreamError";
+  }
+}
+
+/**
+ * Error thrown when message size exceeds the configured maximum.
+ */
+export class MessageSizeExceededError extends DecodeError {
+  constructor(size: number, maxSize: number) {
+    super(`Message size ${size} exceeds maximum ${maxSize}`);
+    this.name = "MessageSizeExceededError";
+  }
+}
+
+/**
+ * Error thrown when the stream writer is already closed.
+ */
+export class StreamClosedError extends EncodeError {
+  constructor() {
+    super("Stream writer is closed");
+    this.name = "StreamClosedError";
+  }
+}

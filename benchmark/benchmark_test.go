@@ -10,6 +10,7 @@ import (
 
 	cramgen "github.com/blockberries/cramberry/benchmark/gen/cramberry"
 	pb "github.com/blockberries/cramberry/benchmark/gen/protobuf"
+	"github.com/blockberries/cramberry/pkg/cramberry"
 )
 
 // ============================================================================
@@ -1107,6 +1108,153 @@ func BenchmarkBatch1000_JSON_Decode(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		var result JSONBatchRequest
 		_ = json.Unmarshal(data, &result)
+	}
+}
+
+// ============================================================================
+// Benchmarks - Reflection-Based API (cramberry.Marshal/Unmarshal)
+// ============================================================================
+
+// These benchmarks use the reflection-based Marshal/Unmarshal API instead of
+// generated code. This shows the overhead of reflection vs generated code.
+
+func BenchmarkSmallMessage_Reflection_Encode(b *testing.B) {
+	msg := makeCramberrySmallMessage()
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = cramberry.Marshal(msg)
+	}
+}
+
+func BenchmarkSmallMessage_Reflection_Decode(b *testing.B) {
+	msg := makeCramberrySmallMessage()
+	data, _ := cramberry.Marshal(msg)
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		var result cramgen.SmallMessage
+		_ = cramberry.Unmarshal(data, &result)
+	}
+}
+
+func BenchmarkMetrics_Reflection_Encode(b *testing.B) {
+	msg := makeCramberryMetrics()
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = cramberry.Marshal(msg)
+	}
+}
+
+func BenchmarkMetrics_Reflection_Decode(b *testing.B) {
+	msg := makeCramberryMetrics()
+	data, _ := cramberry.Marshal(msg)
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		var result cramgen.Metrics
+		_ = cramberry.Unmarshal(data, &result)
+	}
+}
+
+func BenchmarkPerson_Reflection_Encode(b *testing.B) {
+	msg := makeCramberryPerson()
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = cramberry.Marshal(msg)
+	}
+}
+
+func BenchmarkPerson_Reflection_Decode(b *testing.B) {
+	msg := makeCramberryPerson()
+	data, _ := cramberry.Marshal(msg)
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		var result cramgen.Person
+		_ = cramberry.Unmarshal(data, &result)
+	}
+}
+
+func BenchmarkDocument_Reflection_Encode(b *testing.B) {
+	msg := makeCramberryDocument()
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = cramberry.Marshal(msg)
+	}
+}
+
+func BenchmarkDocument_Reflection_Decode(b *testing.B) {
+	msg := makeCramberryDocument()
+	data, _ := cramberry.Marshal(msg)
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		var result cramgen.Document
+		_ = cramberry.Unmarshal(data, &result)
+	}
+}
+
+func BenchmarkEvent_Reflection_Encode(b *testing.B) {
+	msg := makeCramberryEvent()
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = cramberry.Marshal(msg)
+	}
+}
+
+func BenchmarkEvent_Reflection_Decode(b *testing.B) {
+	msg := makeCramberryEvent()
+	data, _ := cramberry.Marshal(msg)
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		var result cramgen.Event
+		_ = cramberry.Unmarshal(data, &result)
+	}
+}
+
+func BenchmarkBatch100_Reflection_Encode(b *testing.B) {
+	msg := makeCramberryBatchRequest(100)
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = cramberry.Marshal(msg)
+	}
+}
+
+func BenchmarkBatch100_Reflection_Decode(b *testing.B) {
+	msg := makeCramberryBatchRequest(100)
+	data, _ := cramberry.Marshal(msg)
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		var result cramgen.BatchRequest
+		_ = cramberry.Unmarshal(data, &result)
+	}
+}
+
+func BenchmarkBatch1000_Reflection_Encode(b *testing.B) {
+	msg := makeCramberryBatchRequest(1000)
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _ = cramberry.Marshal(msg)
+	}
+}
+
+func BenchmarkBatch1000_Reflection_Decode(b *testing.B) {
+	msg := makeCramberryBatchRequest(1000)
+	data, _ := cramberry.Marshal(msg)
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		var result cramgen.BatchRequest
+		_ = cramberry.Unmarshal(data, &result)
 	}
 }
 

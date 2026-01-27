@@ -78,6 +78,19 @@ mv benchmark/schemas/messages.pb.go benchmark/gen/protobuf/
 | Batch100 | 100 repeated messages |
 | Batch1000 | 1000 repeated messages |
 
+### Reflection vs Generated Code
+
+The benchmark suite includes tests comparing generated code (MarshalCramberry methods)
+against the reflection-based API (cramberry.Marshal/Unmarshal):
+
+```bash
+# Run reflection benchmarks only
+go test ./benchmark/... -bench=Reflection -benchmem
+```
+
+Typical results show generated code is 1.7-2.4x faster for encoding and 2.9-11.6x
+faster for decoding compared to reflection.
+
 ## Typical Results
 
 On Apple M4 Pro (example):

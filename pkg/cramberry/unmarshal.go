@@ -113,7 +113,7 @@ func decodePointer(r *Reader, v reflect.Value) error {
 // decodeSlice decodes a slice value.
 func decodeSlice(r *Reader, v reflect.Value) error {
 	// Use packed decoding for primitive types (no depth tracking needed for primitives)
-	if isPackableType(v.Type().Elem()) {
+	if isPackableTypeCached(v.Type().Elem()) {
 		return decodePackedSlice(r, v)
 	}
 
@@ -200,7 +200,7 @@ func decodePackedSlice(r *Reader, v reflect.Value) error {
 // decodeArray decodes an array value.
 func decodeArray(r *Reader, v reflect.Value) error {
 	// Use packed decoding for primitive types (no depth tracking needed for primitives)
-	if isPackableType(v.Type().Elem()) {
+	if isPackableTypeCached(v.Type().Elem()) {
 		return decodePackedArray(r, v)
 	}
 
@@ -335,12 +335,6 @@ func decodeStruct(r *Reader, v reflect.Value) error {
 
 	info := getStructInfo(v.Type())
 
-	// Create a map of field number to field info for quick lookup
-	fieldMap := make(map[int]*fieldInfo, len(info.fields))
-	for i := range info.fields {
-		fieldMap[info.fields[i].num] = &info.fields[i]
-	}
-
 	// Track which fields were set (for required field checking)
 	fieldsSeen := make(map[int]bool)
 
@@ -356,7 +350,7 @@ func decodeStruct(r *Reader, v reflect.Value) error {
 			break
 		}
 
-		fi, ok := fieldMap[fieldNum]
+		fi, ok := info.fieldByNum[fieldNum]
 		if !ok {
 			// Unknown field - skip it in non-strict mode
 			if r.Options().StrictMode {

@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-01-27
+
+### Added
+- **TypeScript streaming support**: Full streaming parity with Go and Rust
+  - `StreamWriter` class for writing length-delimited messages
+  - `StreamReader` class for reading length-delimited messages with async iteration
+  - `MessageIterator<T>` class for automatic decoding during iteration
+  - New error classes: `EndOfStreamError`, `MessageSizeExceededError`, `StreamClosedError`
+  - Wire format: `[length: varint][message_data: bytes]` (compatible with Go/Rust)
+
+### Changed
+- **Go reflection caching improvements**: 13-29% decode speedup
+  - Pre-computed `fieldByNum` map in `structInfo` eliminates per-decode allocation
+  - Added wire type cache (`wireTypeCache`) for `getWireTypeV2()` lookups
+  - Added packable type cache (`packableCache`) for `isPackableType()` lookups
+  - Benchmark results:
+    - `UnmarshalSmall`: 106ns → 75ns (29% faster)
+    - `UnmarshalMedium`: 298ns → 256ns (14% faster)
+    - `UnmarshalLarge`: 1482ns → 1288ns (13% faster, 3 fewer allocations)
+    - `UnmarshalNested`: 336ns → 255ns (24% faster)
+
+### Performance
+- Go reflection-based decode is now 13-29% faster (exceeds 10-20% target)
+- Large struct unmarshaling reduced from 40 to 37 allocations
+
 ## [1.3.0] - 2026-01-27
 
 ### Breaking Changes

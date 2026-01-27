@@ -6,9 +6,9 @@ This document describes security considerations when using Cramberry, including 
 
 Cramberry is designed with security in mind, particularly for systems processing untrusted input. The library includes configurable resource limits, input validation, and error handling to prevent common attack vectors.
 
-## Security Hardening (v1.1.0+)
+## Security Hardening (v1.3.0)
 
-Version 1.1.0+ includes significant security improvements:
+Version 1.3.0 includes comprehensive security improvements:
 
 | Feature | Protection |
 |---------|------------|
@@ -17,6 +17,8 @@ Version 1.1.0+ includes significant security improvements:
 | Cross-language varint consistency | 10-byte maximum across Go, TypeScript, Rust |
 | NaN canonicalization | Deterministic float encoding for all NaN values |
 | Thread-safe registries | Safe concurrent type registration |
+| V2 wire format conformance | Identical encoding across all languages (v1.3.0) |
+| Fuzz testing validation | 663M+ executions, zero crashes (v1.3.0) |
 
 ## Resource Limits
 
@@ -395,7 +397,7 @@ Cramberry does NOT protect against:
 - [ ] Validate file sizes before processing
 - [ ] Use streaming for large datasets
 - [ ] Check `Valid()` on zero-copy references before use (v1.2.0+)
-- [ ] Upgrade to v1.2.0+ for zero-copy safety features
+- [ ] Upgrade to v1.3.0+ for complete security features and V2 conformance
 
 ## Reporting Security Issues
 

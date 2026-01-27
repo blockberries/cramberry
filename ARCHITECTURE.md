@@ -394,29 +394,44 @@ Field metadata is cached on first access for O(1) lookup.
 
 | Metric         | Cramberry vs Protobuf |
 |----------------|----------------------|
-| Encode speed   | 0.92x - 1.90x        |
-| Decode speed   | **1.53x - 2.88x faster** |
+| Encode speed   | 0.91x - 1.99x        |
+| Decode speed   | **1.48x - 2.68x faster** |
 | Encode memory  | 35-100% of Protobuf  |
 | Decode memory  | 42-58% of Protobuf   |
 | Encoded size   | 95-112% of Protobuf  |
 
+### Generated Code vs Reflection
+
+| Metric | Speedup |
+|--------|---------|
+| Encode | 1.7x - 2.4x faster |
+| Decode | 2.9x - 11.6x faster |
+
 Key findings:
-- Decode is 1.5-2.9x faster across all message types
+- Decode is 1.5-2.7x faster across all message types
+- Generated code is 3-12x faster than reflection for decoding
 - Single-allocation encoding reduces GC pressure
-- Metrics decoding achieves zero allocations
+- Metrics decoding achieves zero allocations with generated code
 - Larger messages encode 2-5% smaller than Protobuf
 
 See [BENCHMARKS.md](BENCHMARKS.md) for detailed performance data.
 
 ## Cross-Language Compatibility
 
-### Cross-Language Features (v1.1.0+)
+### Cross-Language Features (v1.3.0)
 
 All three runtimes (Go, TypeScript, Rust) now share:
+- **V2 wire format conformance** - Identical binary encoding across all languages
+- **Compact tag encoding** - Single byte for fields 1-15 with wire type
+- **End marker termination** - 0x00 signals end of struct
 - **Consistent varint encoding** - 10-byte maximum with identical overflow checking
 - **Thread-safe registries** - Safe for concurrent use
-- **Streaming support** - Length-delimited message streams
 - **Idempotent registration** - `RegisterOrGet` pattern
+
+Streaming support:
+- **Go** - Full streaming (StreamWriter, StreamReader, MessageIterator)
+- **Rust** - Full streaming (StreamWriter, StreamReader)
+- **TypeScript** - Full streaming (StreamWriter, StreamReader, MessageIterator)
 
 ### Go-Only Types
 
@@ -449,7 +464,7 @@ Map keys must be primitive types for deterministic sorting:
 | Pools         | Thread-safe (sync.Pool)             |
 | Rust Registry | Thread-safe (RwLock) - v1.1.0+      |
 
-## Security Hardening (v1.1.0+)
+## Security Hardening (v1.3.0)
 
 | Feature | Protection |
 |---------|------------|
@@ -458,6 +473,9 @@ Map keys must be primitive types for deterministic sorting:
 | Varint consistency | 10-byte max across all languages |
 | NaN canonicalization | Deterministic float encoding |
 | Resource limits | DoS protection via configurable limits |
+| V2 wire format conformance | Cross-language encoding consistency |
+
+Fuzz testing: 663M+ executions across 8 test targets with zero crashes (v1.3.0).
 
 See [docs/SECURITY.md](docs/SECURITY.md) for security best practices.
 

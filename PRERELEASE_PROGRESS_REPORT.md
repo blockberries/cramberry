@@ -498,6 +498,186 @@ All tests produce identical binary encoding across all three runtimes.
 
 ---
 
+## Phase 7: Documentation Audit and Benchmark Update - COMPLETED
+
+**Date:** 2026-01-27
+
+### 7.1 Add Reflection-Based Benchmarks
+
+**Files modified:**
+- `benchmark/benchmark_test.go` - Added reflection-based benchmark functions
+- `benchmark/README.md` - Documented reflection vs generated code benchmarks
+
+**Implementation:**
+- Added 14 new benchmark functions comparing reflection API vs generated code:
+  - `BenchmarkSmallMessage_Reflection_Encode/Decode`
+  - `BenchmarkMetrics_Reflection_Encode/Decode`
+  - `BenchmarkPerson_Reflection_Encode/Decode`
+  - `BenchmarkDocument_Reflection_Encode/Decode`
+  - `BenchmarkEvent_Reflection_Encode/Decode`
+  - `BenchmarkBatch100_Reflection_Encode/Decode`
+  - `BenchmarkBatch1000_Reflection_Decode/Decode`
+
+**Results:**
+- Generated code is 1.7-2.4x faster for encoding
+- Generated code is 2.9-11.6x faster for decoding
+- Metrics decode achieves zero allocations with generated code (impossible with reflection)
+
+### 7.2 Update BENCHMARKS.md
+
+**Files modified:**
+- `BENCHMARKS.md` - Complete rewrite with fresh benchmark data
+
+**Key updates:**
+- Updated version to 1.3.0
+- Added new Section 3: Generated Code vs Reflection API comparison
+- Updated all performance numbers based on fresh benchmark run
+- Updated security features section for v1.3.0
+- Added reflection benchmark command examples
+
+### 7.3 Update README.md
+
+**Files modified:**
+- `README.md` - Updated performance data and version references
+
+**Key updates:**
+- Updated performance table with fresh decode speed numbers
+- Added "Generated Code vs Reflection" performance section
+- Updated project status to v1.3.0
+- Added v1.3.0 to recent releases
+- Added note about TypeScript lacking streaming support
+- Added compatibility note about streaming (Go/Rust have it, TypeScript pending)
+
+### 7.4 Update ARCHITECTURE.md
+
+**Files modified:**
+- `ARCHITECTURE.md` - Updated for v1.3.0 accuracy
+
+**Key updates:**
+- Updated benchmark comparison table
+- Added Generated Code vs Reflection speedup table
+- Updated cross-language features section to v1.3.0
+- Clarified streaming support status (Go/Rust: full, TypeScript: pending)
+- Updated security hardening section with fuzz testing results
+
+### 7.5 Update SECURITY.md
+
+**Files modified:**
+- `docs/SECURITY.md` - Updated for v1.3.0
+
+**Key updates:**
+- Updated version reference from v1.1.0+ to v1.3.0
+- Added V2 wire format conformance to security features table
+- Added fuzz testing validation to security features
+- Updated checklist to reference v1.3.0+
+
+### 7.6 Update ROADMAP.md
+
+**Files modified:**
+- `ROADMAP.md` - Updated to reflect current release status
+
+**Key updates:**
+- Updated current status from "Pre-Release" to v1.3.0
+- Changed stabilization phase to "Completed"
+- Added checkmarks to completed items
+- Updated version history table with v1.0.0-v1.3.0 as released
+- Added v1.4.0 as next planned version
+
+---
+
+## Phase 8: Performance Optimizations and TypeScript Streaming - COMPLETED
+
+**Date:** 2026-01-27
+
+### 8.1 Go Reflection Caching Improvements
+
+**Files modified:**
+- `pkg/cramberry/marshal.go` - Added tiered caching for reflection operations
+- `pkg/cramberry/unmarshal.go` - Use pre-computed fieldByNum map
+
+**Implementation:**
+
+1. **Extended structInfo with fieldByNum map:**
+   - Added `fieldByNum map[int]*fieldInfo` to `structInfo` struct
+   - Pre-computed during `getStructInfo()` after sorting fields
+   - Eliminates per-decode map allocation (was creating a new map every decode)
+
+2. **Added wire type cache:**
+   - Added `wireTypeCache sync.Map` for caching wire types by reflect.Type
+   - Created `getWireTypeV2Cached()` function
+   - Updated `encodeStruct()` to use cached version
+
+3. **Added packable type cache:**
+   - Added `packableCache sync.Map` for caching packability by element type
+   - Created `isPackableTypeCached()` function
+   - Updated all callers in marshal.go and unmarshal.go
+
+**Benchmark Results:**
+
+| Benchmark | Before | After | Improvement |
+|-----------|--------|-------|-------------|
+| UnmarshalSmall | 106 ns | 75 ns | **29% faster** |
+| UnmarshalMedium | 298 ns | 256 ns | **14% faster** |
+| UnmarshalLarge | 1482 ns | 1288 ns | **13% faster** |
+| UnmarshalNested | 336 ns | 255 ns | **24% faster** |
+| Large allocs | 40 | 37 | **3 fewer allocs** |
+
+**Target met:** 13-29% improvement exceeds the 10-20% target.
+
+### 8.2 TypeScript Streaming Support
+
+**Files created:**
+- `typescript/src/stream.ts` - StreamWriter, StreamReader, MessageIterator classes
+- `typescript/src/stream.test.ts` - Comprehensive test suite (41 tests)
+
+**Files modified:**
+- `typescript/src/errors.ts` - Added streaming error classes
+- `typescript/src/index.ts` - Added streaming exports
+
+**Implementation:**
+
+1. **New error classes:**
+   - `EndOfStreamError` - Unexpected end of stream
+   - `MessageSizeExceededError` - Message exceeds max size
+   - `StreamClosedError` - Writing to closed stream
+
+2. **StreamWriter class:**
+   - `writeMessage(data: Uint8Array)` - Write length-prefixed message
+   - `writeEncoded<T>(value, encoder)` - Encode and write
+   - `bytes()` - Get encoded data
+   - `reset()` - Clear for reuse
+   - `close()` - Prevent further writes
+
+3. **StreamReader class:**
+   - `readMessage()` - Read length-prefixed message
+   - `tryReadMessage()` - Returns null at EOF
+   - `readDecoded<T>(decoder)` - Read and decode
+   - `skipMessage()` - Skip without reading
+   - `[Symbol.asyncIterator]()` - Async iteration support
+   - `messages()` - Sync generator
+
+4. **MessageIterator<T> class:**
+   - Automatic decoding during iteration
+   - `next()` - Read and decode next message
+   - `[Symbol.iterator]()` - Sync iteration
+   - `[Symbol.asyncIterator]()` - Async iteration
+   - `toArray()` - Collect all messages
+
+**Wire format:** `[length: varint][message_data: bytes]` - Compatible with Go and Rust.
+
+**Test coverage:** 41 new tests covering basic operations, error handling, iteration patterns, and cross-language wire format compatibility.
+
+### 8.3 Documentation Updates
+
+**Files modified:**
+- `ARCHITECTURE.md` - Updated streaming support status for TypeScript
+- `ROADMAP.md` - Marked P1 (reflection caching) as complete, updated version history
+- `README.md` - Updated streaming support status and "What's Next" section
+
+---
+
 ## Remaining Work
 
-None - All planned pre-release remediation tasks completed.
+None - All v1.4.0 features completed:
+- Reflection caching improvements (13-29% decode speedup)
+- TypeScript streaming support (full parity with Go and Rust)

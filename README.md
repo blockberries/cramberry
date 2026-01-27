@@ -251,11 +251,11 @@ Benchmarks on Apple M4 Pro comparing Cramberry to Protocol Buffers:
 
 | Message Type | Cramberry | Protobuf | Speedup |
 |--------------|-----------|----------|---------|
-| SmallMessage | 28 ns | 68 ns | **2.4x faster** |
-| Metrics | 41 ns | 119 ns | **2.9x faster** |
-| Person | 388 ns | 592 ns | **1.5x faster** |
-| Document | 742 ns | 1394 ns | **1.9x faster** |
-| Batch1000 | 27 us | 61 us | **2.3x faster** |
+| SmallMessage | 27 ns | 69 ns | **2.6x faster** |
+| Metrics | 42 ns | 112 ns | **2.7x faster** |
+| Person | 395 ns | 586 ns | **1.5x faster** |
+| Document | 822 ns | 1381 ns | **1.7x faster** |
+| Batch1000 | 28 us | 62 us | **2.2x faster** |
 
 ### Memory Efficiency
 
@@ -264,6 +264,13 @@ Benchmarks on Apple M4 Pro comparing Cramberry to Protocol Buffers:
 | Encode allocations | Single allocation pattern |
 | Decode allocations | 42-58% fewer |
 | Metrics decode | **Zero allocations** |
+
+### Generated Code vs Reflection
+
+| Metric | Generated Code Advantage |
+|--------|-------------------------|
+| Encode | 1.7-2.4x faster |
+| Decode | 2.9-11.6x faster |
 
 ### Encoded Size
 
@@ -308,6 +315,7 @@ let data = writer.into_bytes();
 - **complex64/complex128** - Go only (no TypeScript/Rust support)
 - **int/uint** - Platform-dependent size; prefer explicit `int32`/`int64`
 - **Map keys** - Must be primitives (string, integers, floats, bool)
+- **Streaming** - Full streaming support across all three runtimes (Go, TypeScript, Rust)
 
 ## API Reference
 
@@ -421,18 +429,23 @@ go run ./examples/streaming
 
 ## Project Status
 
-Cramberry is **production-ready** with comprehensive security hardening (v1.2.0).
+Cramberry is **production-ready** with comprehensive security hardening and cross-language conformance (v1.3.0).
 
 ### Recent Releases
 
+**v1.3.0** - Cross-language V2 wire format conformance (Go, TypeScript, Rust produce identical encodings)
 **v1.2.0** - Zero-copy memory safety with generation tracking (breaking API change)
 **v1.1.0** - Security hardening, schema compatibility checker, cross-language consistency
 
 ### What's Next
 
-Upcoming priorities include:
-- Performance optimizations (reflection caching, SIMD acceleration)
-- TypeScript/Rust code generator improvements
+**v1.4.0** (in development):
+- Reflection caching improvements (13-29% decode speedup achieved)
+- TypeScript streaming support (now complete)
+
+Upcoming priorities:
+- SIMD-accelerated encoding (ARM64 NEON, x86-64 AVX2)
+- Arena allocator support for batch decoding
 - gRPC integration
 - Python code generator
 
