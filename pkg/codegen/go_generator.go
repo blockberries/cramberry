@@ -218,8 +218,13 @@ func (c *goContext) encodeValueV2(t schema.TypeRef, varName string, isPointer bo
 			%s
 			%s
 		}`, varName, varName, c.encodeValueV2(typ.Key, "k", false), c.encodeValueV2(typ.Value, "v", false))
+	case *schema.PointerType:
+		// For pointer types, encode the underlying element
+		// The nil check should already be handled at the field level
+		return c.encodeValueV2(typ.Element, varName, true)
 	default:
-		return fmt.Sprintf("// TODO: encode %s", varName)
+		// This should not be reached for valid schema types
+		return fmt.Sprintf("/* unsupported type for encode: %T */", t)
 	}
 }
 
@@ -256,7 +261,8 @@ func (c *goContext) encodeScalarV2(typeName, varName string) string {
 	case "bytes":
 		return fmt.Sprintf("w.WriteBytes(%s)", varName)
 	default:
-		return fmt.Sprintf("// TODO: encode %s", typeName)
+		// This should not be reached for valid scalar types
+		return fmt.Sprintf("/* unsupported scalar type: %s */", typeName)
 	}
 }
 
@@ -265,7 +271,8 @@ func (c *goContext) encodePackedElementV2(t schema.TypeRef) string {
 	case *schema.ScalarType:
 		return c.encodeScalarV2(typ.Name, "v")
 	default:
-		return "// TODO: encode packed element"
+		// Packed encoding only supports scalar types
+		return fmt.Sprintf("/* unsupported packed element type: %T */", t)
 	}
 }
 
@@ -367,8 +374,17 @@ func (c *goContext) decodeValueV2(t schema.TypeRef, varName string) string {
 			%s
 			%s[k] = v
 		}`, varName, keyType, valType, keyType, c.decodeValueV2(typ.Key, "k"), valType, c.decodeValueV2(typ.Value, "v"), varName)
+	case *schema.PointerType:
+		// For pointer types, allocate and decode the underlying element
+		elemType := c.goTypeInternal(typ.Element, false)
+		return fmt.Sprintf(`{
+			var v %s
+			%s
+			%s = &v
+		}`, elemType, c.decodeValueV2(typ.Element, "v"), varName)
 	default:
-		return fmt.Sprintf("// TODO: decode %s", varName)
+		// This should not be reached for valid schema types
+		return fmt.Sprintf("/* unsupported type for decode: %T */", t)
 	}
 }
 
@@ -405,7 +421,8 @@ func (c *goContext) decodeScalarV2(typeName, varName string) string {
 	case "bytes":
 		return fmt.Sprintf("%s = r.ReadBytes()", varName)
 	default:
-		return fmt.Sprintf("// TODO: decode %s", typeName)
+		// This should not be reached for valid scalar types
+		return fmt.Sprintf("/* unsupported scalar type: %s */", typeName)
 	}
 }
 
@@ -414,7 +431,8 @@ func (c *goContext) decodePackedElementV2(t schema.TypeRef, varName string) stri
 	case *schema.ScalarType:
 		return c.decodeScalarV2(typ.Name, varName)
 	default:
-		return "// TODO: decode packed element"
+		// Packed decoding only supports scalar types
+		return fmt.Sprintf("/* unsupported packed element type: %T */", t)
 	}
 }
 
@@ -801,7 +819,7 @@ func (m *{{goMessageType $msg}}) UnmarshalCramberry(data []byte) error {
 // decodeFrom decodes the message from the reader using V2 format.
 func (m *{{goMessageType $msg}}) decodeFrom(r *cramberry.Reader) {
 	for {
-		fieldNum, _ := r.ReadCompactTag()
+		fieldNum, wireType := r.ReadCompactTag()
 		if fieldNum == 0 {
 			break
 		}
@@ -811,9 +829,8 @@ func (m *{{goMessageType $msg}}) decodeFrom(r *cramberry.Reader) {
 			{{decodeFieldV2 .}}
 {{- end}}
 		default:
-			// Skip unknown field - read wire type would have been needed
-			// For now, just break as we can't determine how to skip
-			break
+			// Skip unknown field for forward compatibility
+			r.SkipValueV2(wireType)
 		}
 		if r.Err() != nil {
 			return

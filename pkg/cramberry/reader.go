@@ -61,6 +61,31 @@ func (zcs ZeroCopyString) Len() int {
 	return len(zcs.s)
 }
 
+// MustString returns the string value, panicking if the Reader has been reset.
+// This is an alias for String() that makes the panic behavior explicit in the name.
+func (zcs ZeroCopyString) MustString() string {
+	return zcs.String()
+}
+
+// StringOrEmpty returns the string value if valid, or an empty string if the
+// Reader has been reset. This is a non-panicking alternative to String().
+func (zcs ZeroCopyString) StringOrEmpty() string {
+	if !zcs.Valid() {
+		return ""
+	}
+	return zcs.s
+}
+
+// TryString returns the string value and a boolean indicating validity.
+// Returns ("", false) if the Reader has been reset, otherwise (value, true).
+// This allows explicit error checking without panics.
+func (zcs ZeroCopyString) TryString() (string, bool) {
+	if !zcs.Valid() {
+		return "", false
+	}
+	return zcs.s, true
+}
+
 // ZeroCopyBytes is a byte slice that references the Reader's buffer directly.
 // It validates that the Reader hasn't been reset before allowing access.
 //
@@ -109,6 +134,49 @@ func (zcb ZeroCopyBytes) String() string {
 		panic("cramberry: ZeroCopyBytes accessed after Reader.Reset() - this would cause memory corruption")
 	}
 	return string(zcb.b)
+}
+
+// MustBytes returns the byte slice, panicking if the Reader has been reset.
+// This is an alias for Bytes() that makes the panic behavior explicit in the name.
+func (zcb ZeroCopyBytes) MustBytes() []byte {
+	return zcb.Bytes()
+}
+
+// BytesOrNil returns the byte slice if valid, or nil if the Reader has been reset.
+// This is a non-panicking alternative to Bytes().
+func (zcb ZeroCopyBytes) BytesOrNil() []byte {
+	if !zcb.Valid() {
+		return nil
+	}
+	return zcb.b
+}
+
+// TryBytes returns the byte slice and a boolean indicating validity.
+// Returns (nil, false) if the Reader has been reset, otherwise (value, true).
+// This allows explicit error checking without panics.
+func (zcb ZeroCopyBytes) TryBytes() ([]byte, bool) {
+	if !zcb.Valid() {
+		return nil, false
+	}
+	return zcb.b, true
+}
+
+// StringOrEmpty returns the bytes as a string if valid, or an empty string if
+// the Reader has been reset. This is a non-panicking alternative to String().
+func (zcb ZeroCopyBytes) StringOrEmpty() string {
+	if !zcb.Valid() {
+		return ""
+	}
+	return string(zcb.b)
+}
+
+// TryString returns the bytes as a string and a boolean indicating validity.
+// Returns ("", false) if the Reader has been reset, otherwise (value, true).
+func (zcb ZeroCopyBytes) TryString() (string, bool) {
+	if !zcb.Valid() {
+		return "", false
+	}
+	return string(zcb.b), true
 }
 
 // NewReader creates a new Reader for the given data.

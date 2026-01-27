@@ -2,19 +2,62 @@
 
 This document outlines the development roadmap for Cramberry, including planned features, improvements, and long-term goals.
 
-## Current Status (v1.2.0)
+## Current Status (Pre-Release)
 
-Cramberry is **production-ready** with:
+Cramberry is in **pre-release stabilization** with active security hardening:
+
 - High-performance binary serialization (1.5-2.9x faster decode than Protobuf)
 - Deterministic encoding for consensus/cryptographic applications
-- Full cross-language support (Go, TypeScript, Rust)
-- Security hardening with zero-copy memory safety
+- Cross-language support (Go, TypeScript, Rust)
 - Schema language with compatibility checking
 - Streaming support across all runtimes
 
+**See [REMEDIATION_PLAN.md](REMEDIATION_PLAN.md) for the detailed stabilization work.**
+
 ---
 
-## Short-Term Goals (v1.3.x)
+## Stabilization Phase (v1.0.0-rc)
+
+### S1: Security Hardening (BLOCKING)
+
+**Priority:** P0 - Must complete before any release
+
+- [x] Fix integer overflow in V2 compact tag decoding
+- [x] Fix length overflow in SkipValueV2
+- [x] Fix packed slice/array decoding overflow
+- [x] Enforce depth limiting in all recursive paths
+- [x] Fix NaN handling in deterministic map sorting
+- [x] Add comprehensive security test suite
+- [ ] Fuzz testing validation (1+ hour, no crashes)
+
+### S2: Wire Format Consolidation
+
+**Priority:** P0 - Must complete before any release
+
+- [x] Remove V1 wire format entirely (never released, no compatibility needed)
+- [x] Centralize varint decoding in `internal/wire/`
+- [x] Apply V1-level safety rigor to all V2 code paths
+- [x] Update all documentation to remove V1 references
+
+### S3: Code Generator Fixes
+
+**Priority:** P0 - Must complete before any release
+
+- [x] Remove TODO placeholders from generated code
+- [x] Fix unknown field handling (skip, don't break)
+- [ ] Add forward compatibility tests
+
+### S4: API Cleanup
+
+**Priority:** P1
+
+- [x] Remove deprecated `MustRegister`/`MustRegisterWithID` functions
+- [x] Improve ZeroCopy API ergonomics
+- [ ] Add field number uniqueness validation
+
+---
+
+## Short-Term Goals (v1.1.x)
 
 ### Performance Optimizations
 
@@ -41,9 +84,9 @@ Cramberry is **production-ready** with:
 - Provide wire format debug output
 
 #### D2: Schema Linting
-- Warn about deprecated patterns
+- Warn about potential issues (complex types, platform-dependent sizes)
 - Suggest field number gaps for future compatibility
-- Check for potential cross-language issues
+- Check for cross-language compatibility issues
 
 #### D3: IDE Integration
 - VS Code extension for `.cram` files
@@ -52,7 +95,7 @@ Cramberry is **production-ready** with:
 
 ---
 
-## Medium-Term Goals (v1.4.x - v1.5.x)
+## Medium-Term Goals (v1.2.x - v1.3.x)
 
 ### Code Generation Enhancements
 
@@ -104,14 +147,14 @@ Cramberry is **production-ready** with:
 
 ## Long-Term Goals (v2.0+)
 
-### Wire Format V3
+### Wire Format Enhancements
 
-#### V3.1: Backward-Compatible Enhancements
+#### W1: Backward-Compatible Improvements
 - Optional field presence tracking
 - Default value encoding optimization
 - Extended type metadata
 
-#### V3.2: Breaking Changes (Major Version)
+#### W2: Breaking Changes (Major Version)
 - Unified tag format across all wire types
 - Native timestamp/duration types
 - Built-in decimal type for financial applications
@@ -152,17 +195,16 @@ Cramberry is **production-ready** with:
 
 ---
 
-## Deprecation Timeline
+## Version History
 
-### V1 Wire Format
-- **v1.3.0**: Emit deprecation warning when using `V1Options`
-- **v1.5.0**: Remove V1 wire format support from new code
-- **v2.0.0**: Complete removal of V1 format
-
-### Legacy Registration Functions
-- **v1.2.0** (current): `MustRegister` and `RegisterWithID` marked deprecated
-- **v1.4.0**: Emit compile-time deprecation warnings
-- **v2.0.0**: Remove deprecated registration functions
+| Version | Status | Highlights |
+|---------|--------|------------|
+| v1.0.0-rc | In Progress | Security hardening, V1 removal, stabilization |
+| v1.0.0 | Planned | First stable release |
+| v1.1.0 | Planned | Performance optimizations |
+| v1.2.0 | Planned | TypeScript/Rust generator improvements |
+| v1.3.0 | Planned | gRPC integration |
+| v2.0.0 | Future | Wire format enhancements, breaking changes |
 
 ---
 
@@ -170,26 +212,12 @@ Cramberry is **production-ready** with:
 
 We welcome contributions! Priority areas:
 
-1. **Performance benchmarks** - Help identify optimization opportunities
+1. **Security review** - Help identify and fix vulnerabilities
 2. **Cross-language testing** - Ensure compatibility across runtimes
 3. **Documentation** - Improve examples and tutorials
-4. **Bug fixes** - Report and fix issues
+4. **Performance benchmarks** - Help identify optimization opportunities
 
 See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidelines.
-
----
-
-## Version History
-
-| Version | Status | Highlights |
-|---------|--------|------------|
-| v1.0.0 | Released | Initial stable release |
-| v1.1.0 | Released | Security hardening, schema compatibility |
-| v1.2.0 | Current | Zero-copy memory safety |
-| v1.3.0 | Planned | Performance optimizations |
-| v1.4.0 | Planned | TypeScript/Rust generator improvements |
-| v1.5.0 | Planned | gRPC integration |
-| v2.0.0 | Future | Wire format V3, breaking changes |
 
 ---
 

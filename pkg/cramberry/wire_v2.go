@@ -1,5 +1,9 @@
 package cramberry
 
+import (
+	"github.com/blockberries/cramberry/internal/wire"
+)
+
 // Wire Format V2 - Optimized encoding format
 //
 // Key changes from V1:
@@ -103,20 +107,33 @@ func DecodeCompactTag(data []byte) (fieldNum int, wireType byte, n int) {
 		return 0, 0, 0 // Need more data
 	}
 
-	// Decode varint
+	// Decode varint with safety limits matching internal/wire/varint.go
 	var shift uint
 	n = 1
-	for i := 1; i < len(data); i++ {
+	for i := 1; i < len(data) && i <= wire.MaxVarintLen64; i++ {
 		b := data[i]
+
+		// At the 10th byte (index 10 in data, 9th varint byte), check for overflow
+		// We've consumed 63 bits; only 1 more bit allowed
+		if i == 10 {
+			if b >= 0x80 {
+				return 0, 0, 0 // Varint too long
+			}
+			if b > 1 {
+				return 0, 0, 0 // Would overflow uint64/int
+			}
+		}
+
 		fieldNum |= int(b&0x7F) << shift
 		n++
 		if b < 0x80 {
-			break
+			return fieldNum, wireType, n
 		}
 		shift += 7
 	}
 
-	return fieldNum, wireType, n
+	// Reached max length without termination
+	return 0, 0, 0
 }
 
 // CompactTagSize returns the encoded size of a compact tag.
@@ -175,7 +192,7 @@ func (w *Writer) WriteEndMarker() {
 }
 
 // ReadCompactTag reads a compact tag from the reader.
-// Returns fieldNum=0 for end marker.
+// Returns fieldNum=0 for end marker or on error.
 func (r *Reader) ReadCompactTag() (fieldNum int, wireType byte) {
 	if r.err != nil || r.pos >= len(r.data) {
 		return 0, 0
@@ -197,19 +214,36 @@ func (r *Reader) ReadCompactTag() (fieldNum int, wireType byte) {
 		return fieldNum, wireType
 	}
 
-	// Extended format: read varint field number
+	// Extended format: read varint field number with safety limits
+	// Matches the rigor of internal/wire/varint.go:DecodeUvarint
 	var shift uint
-	for r.pos < len(r.data) {
+	for i := 0; i < wire.MaxVarintLen64 && r.pos < len(r.data); i++ {
 		b := r.data[r.pos]
 		r.pos++
+
+		// At the 10th byte (index 9), check for overflow
+		// We've consumed 63 bits; only 1 more bit allowed
+		if i == 9 {
+			if b >= 0x80 {
+				r.setError(ErrInvalidVarint)
+				return 0, 0
+			}
+			if b > 1 {
+				r.setError(ErrOverflow)
+				return 0, 0
+			}
+		}
+
 		fieldNum |= int(b&0x7F) << shift
 		if b < 0x80 {
-			break
+			return fieldNum, wireType
 		}
 		shift += 7
 	}
 
-	return fieldNum, wireType
+	// Reached max length without termination or ran out of data
+	r.setError(ErrInvalidVarint)
+	return 0, 0
 }
 
 // SkipValueV2 skips a value based on V2 wire type.
@@ -220,14 +254,16 @@ func (r *Reader) SkipValueV2(wireType byte) {
 
 	switch wireType {
 	case WireTypeV2Varint, WireTypeV2SVarint:
-		// Skip varint
-		for r.pos < len(r.data) {
+		// Skip varint with max length limit
+		for i := 0; i < wire.MaxVarintLen64 && r.pos < len(r.data); i++ {
 			b := r.data[r.pos]
 			r.pos++
 			if b < 0x80 {
-				break
+				return
 			}
 		}
+		// Either ran out of data or exceeded max varint length
+		r.setError(ErrInvalidVarint)
 
 	case WireTypeV2Fixed32:
 		r.pos += 4
@@ -238,6 +274,15 @@ func (r *Reader) SkipValueV2(wireType byte) {
 	case WireTypeV2Bytes:
 		// Read length, then skip that many bytes
 		length := r.ReadUvarint()
+		if r.err != nil {
+			return
+		}
+		// Check for overflow before converting to int
+		remaining := len(r.data) - r.pos
+		if length > uint64(remaining) {
+			r.setError(ErrUnexpectedEOF)
+			return
+		}
 		r.pos += int(length)
 
 	default:

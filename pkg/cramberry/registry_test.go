@@ -348,24 +348,6 @@ func TestDefaultRegistry(t *testing.T) {
 	DefaultRegistry.Clear()
 }
 
-func TestMustRegister(t *testing.T) {
-	r := NewRegistry()
-	savedRegistry := DefaultRegistry
-	DefaultRegistry = r // Temporarily replace
-	defer func() { DefaultRegistry = savedRegistry }()
-
-	// Should not panic
-	MustRegister[Person]()
-
-	// Duplicate with different ID should panic
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("MustRegister should panic on duplicate")
-		}
-	}()
-	MustRegisterWithID[Person](TypeID(999))
-}
-
 func TestAutoIncrementID(t *testing.T) {
 	r := NewRegistry()
 

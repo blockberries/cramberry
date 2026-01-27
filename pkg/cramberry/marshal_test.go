@@ -673,8 +673,8 @@ func TestPolymorphicEncoding(t *testing.T) {
 	defer DefaultRegistry.Clear()
 
 	// Register types
-	MustRegister[EnglishGreeter]()
-	MustRegister[SpanishGreeter]()
+	RegisterOrGet[EnglishGreeter]()
+	RegisterOrGet[SpanishGreeter]()
 
 	t.Run("EnglishGreeter", func(t *testing.T) {
 		// Polymorphic encoding works through struct fields with interface types

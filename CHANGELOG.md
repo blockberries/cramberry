@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Generation counter in `Reader` to detect use-after-reset of zero-copy references
 - `Reader.Generation()` method to access current generation counter
 - `Valid()` method on wrapper types to check if reference is still valid
+- Ergonomic accessor methods for zero-copy types:
+  - `MustString()` / `MustBytes()` - explicit naming for panicking methods
+  - `StringOrEmpty()` / `BytesOrNil()` - non-panicking accessors returning default values
+  - `TryString()` / `TryBytes()` - return (value, ok) tuple for explicit error checking
 - Comprehensive tests for zero-copy safety mechanisms
 
 ### Security
@@ -50,7 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **[HIGH]** NaN canonicalization in packed float arrays - all NaN values now encode to canonical quiet NaN
 - **[HIGH]** Overflow protection in packed readers (`ReadPackedFloat32`, `ReadPackedFloat64`, etc.)
 
-### Deprecated
+### Removed
 - `MustRegister()` - Use `RegisterOrGet()` for idempotent registration or `Register()` with error handling
 - `MustRegisterWithID()` - Use `RegisterOrGetWithID()` for idempotent registration or `RegisterWithID()` with error handling
 
@@ -66,7 +70,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial public release of Cramberry serialization library
 - Core runtime library (`pkg/cramberry`) with reflection-based Marshal/Unmarshal
 - V2 wire format with compact tags and end markers for optimal performance
-- V1 wire format support for backward compatibility
 - Polymorphic type serialization via type registry
 - Streaming support with `StreamWriter`, `StreamReader`, and `MessageIterator`
 - Writer/Reader pooling for reduced allocations
@@ -98,8 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comparable or smaller encoded sizes than Protobuf
 
 ### Wire Format
-- V2 format (default): Compact single-byte tags for fields 1-15, end markers
-- V1 format (legacy): Field count prefix, full varint tags
+- V2 format: Compact single-byte tags for fields 1-15, end markers
 - Packed arrays for primitive types
 - Deterministic map encoding with sorted keys
 - ZigZag encoding for signed integers
@@ -117,7 +119,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Deprecated
-- `V1Options` - Use V2 format for new code; V1 maintained for compatibility
 
 ### Removed
 

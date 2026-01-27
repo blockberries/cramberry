@@ -162,7 +162,7 @@ func TestV2StructEncoding(t *testing.T) {
 	}
 }
 
-func TestV2VsV1Size(t *testing.T) {
+func TestV2StructEncodeSize(t *testing.T) {
 	type TestStruct struct {
 		Field1  int32  `cramberry:"1"`
 		Field2  string `cramberry:"2"`
@@ -179,23 +179,23 @@ func TestV2VsV1Size(t *testing.T) {
 		Field15: false,
 	}
 
-	// Marshal with V2
-	v2Data, err := MarshalWithOptions(original, DefaultOptions)
+	// Marshal with default options
+	data, err := Marshal(original)
 	if err != nil {
-		t.Fatalf("V2 Marshal error: %v", err)
+		t.Fatalf("Marshal error: %v", err)
 	}
 
-	// Marshal with V1
-	v1Data, err := MarshalWithOptions(original, V1Options)
+	t.Logf("Encoded size: %d bytes", len(data))
+
+	// Verify round-trip
+	var decoded TestStruct
+	err = Unmarshal(data, &decoded)
 	if err != nil {
-		t.Fatalf("V1 Marshal error: %v", err)
+		t.Fatalf("Unmarshal error: %v", err)
 	}
-
-	t.Logf("V1 size: %d bytes, V2 size: %d bytes", len(v1Data), len(v2Data))
-
-	// V2 should typically be smaller or similar for small structs with fields 1-15
-	// V2 has: 4 compact tags (1 byte each) + end marker (1 byte) = 5 bytes overhead
-	// V1 has: field count (1 byte) + 4 tags (varying size)
+	if decoded != original {
+		t.Errorf("Round-trip failed: got %+v, want %+v", decoded, original)
+	}
 }
 
 func TestV2NestedStruct(t *testing.T) {
@@ -431,8 +431,8 @@ func TestPackedSliceInStruct(t *testing.T) {
 	}
 }
 
-func TestPackedVsUnpackedSize(t *testing.T) {
-	// Compare packed V2 encoding size to V1
+func TestPackedSliceEncodingSize(t *testing.T) {
+	// Verify packed encoding size is efficient
 	type IntSliceStruct struct {
 		Values []int32 `cramberry:"1"`
 	}
@@ -444,15 +444,23 @@ func TestPackedVsUnpackedSize(t *testing.T) {
 		original.Values[i] = int32(i * 10)
 	}
 
-	v2Data, _ := MarshalWithOptions(original, DefaultOptions)
-	v1Data, _ := MarshalWithOptions(original, V1Options)
+	data, err := MarshalWithOptions(original, DefaultOptions)
+	if err != nil {
+		t.Fatalf("Marshal error: %v", err)
+	}
 
-	t.Logf("100 int32 values - V1: %d bytes, V2: %d bytes (%.1f%% smaller)",
-		len(v1Data), len(v2Data), 100*(1-float64(len(v2Data))/float64(len(v1Data))))
+	// Packed encoding format: compact tag + count + values (no per-element tags)
+	// Expected size breakdown:
+	// - 1 byte: compact tag for field 1
+	// - 1 byte: count (100 as varint)
+	// - ~175 bytes: 100 ZigZag-encoded int32 values (0, 10, 20, ... 990)
+	// - 1 byte: end marker
+	// Total should be well under 300 bytes
+	if len(data) > 300 {
+		t.Errorf("Packed encoding too large: %d bytes (expected < 300)", len(data))
+	}
 
-	// V2 should be smaller because:
-	// V1: 1 (field count) + tag + 100*(tag + varint) per element
-	// V2: compact tag + count + 100*varint (no per-element tags)
+	t.Logf("100 int32 values encoded to %d bytes", len(data))
 }
 
 func TestEmptyPackedSlice(t *testing.T) {

@@ -112,10 +112,16 @@ func decodePointer(r *Reader, v reflect.Value) error {
 
 // decodeSlice decodes a slice value.
 func decodeSlice(r *Reader, v reflect.Value) error {
-	// Use packed decoding for primitive types in V2
-	if r.Options().WireVersion == WireVersionV2 && isPackableType(v.Type().Elem()) {
+	// Use packed decoding for primitive types (no depth tracking needed for primitives)
+	if isPackableType(v.Type().Elem()) {
 		return decodePackedSlice(r, v)
 	}
+
+	// Check depth limit for non-primitive element types
+	if !r.enterNested() {
+		return r.Err()
+	}
+	defer r.exitNested()
 
 	n := r.ReadArrayHeader()
 	if r.Err() != nil {
@@ -142,7 +148,8 @@ func decodeSlice(r *Reader, v reflect.Value) error {
 
 // decodePackedSlice decodes a slice of primitive types in packed format.
 func decodePackedSlice(r *Reader, v reflect.Value) error {
-	n := int(r.ReadUvarint())
+	// Use ReadArrayHeader for overflow protection and limit checking
+	n := r.ReadArrayHeader()
 	if r.Err() != nil {
 		return r.Err()
 	}
@@ -192,10 +199,16 @@ func decodePackedSlice(r *Reader, v reflect.Value) error {
 
 // decodeArray decodes an array value.
 func decodeArray(r *Reader, v reflect.Value) error {
-	// Use packed decoding for primitive types in V2
-	if r.Options().WireVersion == WireVersionV2 && isPackableType(v.Type().Elem()) {
+	// Use packed decoding for primitive types (no depth tracking needed for primitives)
+	if isPackableType(v.Type().Elem()) {
 		return decodePackedArray(r, v)
 	}
+
+	// Check depth limit for non-primitive element types
+	if !r.enterNested() {
+		return r.Err()
+	}
+	defer r.exitNested()
 
 	n := r.ReadArrayHeader()
 	if r.Err() != nil {
@@ -222,7 +235,8 @@ func decodeArray(r *Reader, v reflect.Value) error {
 
 // decodePackedArray decodes an array of primitive types in packed format.
 func decodePackedArray(r *Reader, v reflect.Value) error {
-	n := int(r.ReadUvarint())
+	// Use ReadArrayHeader for overflow protection and limit checking
+	n := r.ReadArrayHeader()
 	if r.Err() != nil {
 		return r.Err()
 	}
@@ -274,6 +288,12 @@ func decodePackedArray(r *Reader, v reflect.Value) error {
 
 // decodeMap decodes a map value.
 func decodeMap(r *Reader, v reflect.Value) error {
+	// Check depth limit
+	if !r.enterNested() {
+		return r.Err()
+	}
+	defer r.exitNested()
+
 	n := r.ReadMapHeader()
 	if r.Err() != nil {
 		return r.Err()
@@ -305,73 +325,14 @@ func decodeMap(r *Reader, v reflect.Value) error {
 }
 
 // decodeStruct decodes a struct value using field tags.
-// Dispatches to V1 or V2 decoding based on options.
+// Uses compact tags and reads until end marker.
 func decodeStruct(r *Reader, v reflect.Value) error {
-	if r.Options().WireVersion == WireVersionV2 {
-		return decodeStructV2(r, v)
-	}
-	return decodeStructV1(r, v)
-}
-
-// decodeStructV1 decodes a struct using V1 wire format (field count prefix).
-// Deprecated: Use V2 for new code.
-func decodeStructV1(r *Reader, v reflect.Value) error {
-	info := getStructInfo(v.Type())
-
-	// Create a map of field number to field info for quick lookup
-	fieldMap := make(map[int]*fieldInfo, len(info.fields))
-	for i := range info.fields {
-		fieldMap[info.fields[i].num] = &info.fields[i]
-	}
-
-	// Track which fields were set (for required field checking)
-	fieldsSeen := make(map[int]bool)
-
-	// Read field count
-	fieldCount := r.ReadUvarint()
-	if r.Err() != nil {
+	// Check depth limit
+	if !r.enterNested() {
 		return r.Err()
 	}
+	defer r.exitNested()
 
-	for i := uint64(0); i < fieldCount; i++ {
-		fieldNum, wireType := r.ReadTag()
-		if r.Err() != nil {
-			return r.Err()
-		}
-
-		fi, ok := fieldMap[fieldNum]
-		if !ok {
-			// Unknown field - skip it in non-strict mode
-			if r.Options().StrictMode {
-				return NewFieldDecodeError(v.Type().Name(), "", fieldNum, r.Pos(), "unknown field", ErrUnknownField)
-			}
-			r.SkipValue(wireType)
-			continue
-		}
-
-		fieldsSeen[fieldNum] = true
-		fv := v.Field(fi.index)
-
-		if err := decodeValue(r, fv); err != nil {
-			return err
-		}
-	}
-
-	// Check for missing required fields
-	for _, fi := range info.fields {
-		if fi.required && !fieldsSeen[fi.num] {
-			return NewFieldDecodeError(v.Type().Name(), fi.name, fi.num, -1, "required field missing", ErrRequiredFieldMissing)
-		}
-	}
-
-	return r.Err()
-}
-
-// decodeStructV2 decodes a struct using V2 wire format (compact tags + end marker).
-// Key differences from V1:
-//   - Reads until end marker (0x00) instead of using field count
-//   - Uses compact tags (single byte for fields 1-15)
-func decodeStructV2(r *Reader, v reflect.Value) error {
 	info := getStructInfo(v.Type())
 
 	// Create a map of field number to field info for quick lookup
@@ -564,45 +525,8 @@ func sizeMap(v reflect.Value, opts Options) int {
 	return size
 }
 
+// sizeStruct calculates the encoded size of a struct.
 func sizeStruct(v reflect.Value, opts Options) int {
-	if opts.WireVersion == WireVersionV2 {
-		return sizeStructV2(v, opts)
-	}
-	return sizeStructV1(v, opts)
-}
-
-// sizeStructV1 calculates the encoded size using V1 format.
-func sizeStructV1(v reflect.Value, opts Options) int {
-	info := getStructInfo(v.Type())
-
-	// Count fields being encoded
-	fieldCount := 0
-	for _, field := range info.fields {
-		fv := v.Field(field.index)
-		if opts.OmitEmpty && isZeroValue(fv) {
-			continue
-		}
-		fieldCount++
-	}
-
-	// Field count prefix
-	size := SizeOfUvarint(uint64(fieldCount))
-
-	for _, field := range info.fields {
-		fv := v.Field(field.index)
-		if opts.OmitEmpty && isZeroValue(fv) {
-			continue
-		}
-		// Tag size + value size
-		size += SizeOfTag(field.num)
-		size += sizeValue(fv, opts)
-	}
-
-	return size
-}
-
-// sizeStructV2 calculates the encoded size using V2 format.
-func sizeStructV2(v reflect.Value, opts Options) int {
 	info := getStructInfo(v.Type())
 
 	size := 0

@@ -50,9 +50,9 @@ type Drawing struct {
 
 func init() {
 	// Register all shape types for polymorphic serialization
-	cramberry.MustRegister[Circle]()
-	cramberry.MustRegister[Rectangle]()
-	cramberry.MustRegister[Triangle]()
+	cramberry.RegisterOrGet[Circle]()
+	cramberry.RegisterOrGet[Rectangle]()
+	cramberry.RegisterOrGet[Triangle]()
 }
 
 func main() {

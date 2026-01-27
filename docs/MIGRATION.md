@@ -270,8 +270,8 @@ type Dog struct { Name string `cramberry:"1"` }
 type Cat struct { Name string `cramberry:"1"` }
 
 func init() {
-    cramberry.MustRegister[Dog]()  // Auto TypeID: 128
-    cramberry.MustRegister[Cat]()  // Auto TypeID: 129
+    cramberry.RegisterOrGet[Dog]()  // Auto TypeID: 128
+    cramberry.RegisterOrGet[Cat]()  // Auto TypeID: 129
 }
 ```
 
@@ -296,8 +296,8 @@ const (
     TypeIDCat TypeID = 129
 )
 
-cramberry.MustRegisterWithID[Dog](TypeIDDog)
-cramberry.MustRegisterWithID[Cat](TypeIDCat)
+cramberry.RegisterOrGetWithID[Dog](TypeIDDog)
+cramberry.RegisterOrGetWithID[Cat](TypeIDCat)
 ```
 
 ## From MessagePack
@@ -334,50 +334,6 @@ data, err := cramberry.Marshal(user)
 | Schema evolution | Fragile | Field numbers are stable |
 | Determinism | Implementation-dependent | Guaranteed (maps sorted) |
 | Streaming | Supported | Supported |
-
-## Wire Format Migration (V1 to V2)
-
-If you have data encoded with V1 wire format, you can migrate to V2.
-
-### Reading V1 Data
-
-```go
-// Decode V1 data
-var msg Message
-err := cramberry.UnmarshalWithOptions(v1Data, &msg, cramberry.V1Options)
-
-// Re-encode as V2
-v2Data, err := cramberry.Marshal(msg)  // Default is V2
-```
-
-### Dual-Version Support
-
-During migration, you may need to support both:
-
-```go
-func decode(data []byte) (*Message, error) {
-    var msg Message
-
-    // Try V2 first (more common)
-    err := cramberry.Unmarshal(data, &msg)
-    if err == nil {
-        return &msg, nil
-    }
-
-    // Fall back to V1
-    err = cramberry.UnmarshalWithOptions(data, &msg, cramberry.V1Options)
-    return &msg, err
-}
-```
-
-### V1 vs V2 Wire Format
-
-| Feature | V1 | V2 |
-|---------|----|----|
-| Field tags | Full varint | Compact (1 byte for fields 1-15) |
-| Message end | Field count prefix | End marker (0x00) |
-| Packed arrays | No | Yes |
-| Size | Baseline | ~5% smaller |
 
 ## General Migration Tips
 
@@ -472,7 +428,7 @@ Register concrete types before encoding:
 
 ```go
 func init() {
-    cramberry.MustRegister[ConcreteType]()
+    cramberry.RegisterOrGet[ConcreteType]()
 }
 ```
 
@@ -511,18 +467,13 @@ registry.register(...)?;  // Now takes &self
 let registry = Arc::new(Registry::new());
 ```
 
-### Deprecations
+### Removed Functions
 
-#### Go: MustRegister Functions
+#### Go: MustRegister Functions (Removed)
 
-`MustRegister()` and `MustRegisterWithID()` are deprecated because they panic on duplicate registration, which can crash production services.
+`MustRegister()` and `MustRegisterWithID()` have been removed because they panic on duplicate registration, which can crash production services.
 
-**Before:**
-```go
-cramberry.MustRegister[MyType]()  // Panics if called twice
-```
-
-**After (recommended):**
+**Use instead:**
 ```go
 // Option 1: Idempotent registration (safe to call multiple times)
 cramberry.RegisterOrGet[MyType]()
@@ -681,9 +632,14 @@ zcs := r.ReadStringZeroCopy()
 // Validation
 if zcs.Valid() { ... }      // Check if reference is still valid
 
-// Access
+// Panicking access (use when you're certain the reader hasn't been reset)
 s := zcs.String()           // Get value (panics if invalid)
-s := zcs.UnsafeString()     // Get value (no validation)
+s := zcs.MustString()       // Same as String() - explicit panic in name
+s := zcs.UnsafeString()     // Get value (no validation - use with caution)
+
+// Non-panicking access (safe alternatives)
+s := zcs.StringOrEmpty()    // Returns "" if invalid (no panic)
+s, ok := zcs.TryString()    // Returns ("", false) if invalid
 
 // Utility
 length := zcs.Len()         // Length without validation
@@ -696,10 +652,17 @@ zcb := r.ReadBytesNoCopy()
 // Validation
 if zcb.Valid() { ... }      // Check if reference is still valid
 
-// Access
+// Panicking access (use when you're certain the reader hasn't been reset)
 b := zcb.Bytes()            // Get value (panics if invalid)
-b := zcb.UnsafeBytes()      // Get value (no validation)
+b := zcb.MustBytes()        // Same as Bytes() - explicit panic in name
+b := zcb.UnsafeBytes()      // Get value (no validation - use with caution)
 s := zcb.String()           // Get as string (panics if invalid)
+
+// Non-panicking access (safe alternatives)
+b := zcb.BytesOrNil()       // Returns nil if invalid (no panic)
+b, ok := zcb.TryBytes()     // Returns (nil, false) if invalid
+s := zcb.StringOrEmpty()    // Returns "" if invalid (no panic)
+s, ok := zcb.TryString()    // Returns ("", false) if invalid
 
 // Utility
 length := zcb.Len()         // Length without validation

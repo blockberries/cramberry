@@ -1283,6 +1283,305 @@ func TestMultipleZeroCopyReferencesInvalidatedTogether(t *testing.T) {
 	}
 }
 
+// Tests for ZeroCopy ergonomic API methods
+
+func TestZeroCopyStringMustString(t *testing.T) {
+	w := NewWriter()
+	w.WriteString("hello")
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcs := r.ReadStringZeroCopy()
+	if r.Err() != nil {
+		t.Fatalf("ReadStringZeroCopy error: %v", r.Err())
+	}
+
+	// MustString should work before Reset
+	if zcs.MustString() != "hello" {
+		t.Errorf("MustString() = %q, want %q", zcs.MustString(), "hello")
+	}
+}
+
+func TestZeroCopyStringMustStringPanicAfterReset(t *testing.T) {
+	w := NewWriter()
+	w.WriteString("hello")
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcs := r.ReadStringZeroCopy()
+	if r.Err() != nil {
+		t.Fatalf("ReadStringZeroCopy error: %v", r.Err())
+	}
+
+	r.Reset([]byte{})
+
+	defer func() {
+		if recover() == nil {
+			t.Error("MustString() should panic after Reset")
+		}
+	}()
+	_ = zcs.MustString()
+}
+
+func TestZeroCopyStringStringOrEmpty(t *testing.T) {
+	w := NewWriter()
+	w.WriteString("hello")
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcs := r.ReadStringZeroCopy()
+	if r.Err() != nil {
+		t.Fatalf("ReadStringZeroCopy error: %v", r.Err())
+	}
+
+	// StringOrEmpty should return value before Reset
+	if zcs.StringOrEmpty() != "hello" {
+		t.Errorf("StringOrEmpty() = %q, want %q", zcs.StringOrEmpty(), "hello")
+	}
+
+	// After Reset, should return empty string without panic
+	r.Reset([]byte{})
+	if zcs.StringOrEmpty() != "" {
+		t.Errorf("StringOrEmpty() after Reset = %q, want empty", zcs.StringOrEmpty())
+	}
+}
+
+func TestZeroCopyStringTryString(t *testing.T) {
+	w := NewWriter()
+	w.WriteString("hello")
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcs := r.ReadStringZeroCopy()
+	if r.Err() != nil {
+		t.Fatalf("ReadStringZeroCopy error: %v", r.Err())
+	}
+
+	// TryString should return (value, true) before Reset
+	val, ok := zcs.TryString()
+	if !ok {
+		t.Error("TryString() should return true before Reset")
+	}
+	if val != "hello" {
+		t.Errorf("TryString() value = %q, want %q", val, "hello")
+	}
+
+	// After Reset, should return ("", false) without panic
+	r.Reset([]byte{})
+	val, ok = zcs.TryString()
+	if ok {
+		t.Error("TryString() should return false after Reset")
+	}
+	if val != "" {
+		t.Errorf("TryString() value after Reset = %q, want empty", val)
+	}
+}
+
+func TestZeroCopyBytesMustBytes(t *testing.T) {
+	w := NewWriter()
+	w.WriteBytes([]byte{1, 2, 3})
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcb := r.ReadBytesNoCopy()
+	if r.Err() != nil {
+		t.Fatalf("ReadBytesNoCopy error: %v", r.Err())
+	}
+
+	// MustBytes should work before Reset
+	if !bytes.Equal(zcb.MustBytes(), []byte{1, 2, 3}) {
+		t.Error("MustBytes() mismatch")
+	}
+}
+
+func TestZeroCopyBytesMustBytesPanicAfterReset(t *testing.T) {
+	w := NewWriter()
+	w.WriteBytes([]byte{1, 2, 3})
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcb := r.ReadBytesNoCopy()
+	if r.Err() != nil {
+		t.Fatalf("ReadBytesNoCopy error: %v", r.Err())
+	}
+
+	r.Reset([]byte{})
+
+	defer func() {
+		if recover() == nil {
+			t.Error("MustBytes() should panic after Reset")
+		}
+	}()
+	_ = zcb.MustBytes()
+}
+
+func TestZeroCopyBytesBytesOrNil(t *testing.T) {
+	w := NewWriter()
+	w.WriteBytes([]byte{1, 2, 3})
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcb := r.ReadBytesNoCopy()
+	if r.Err() != nil {
+		t.Fatalf("ReadBytesNoCopy error: %v", r.Err())
+	}
+
+	// BytesOrNil should return value before Reset
+	if !bytes.Equal(zcb.BytesOrNil(), []byte{1, 2, 3}) {
+		t.Error("BytesOrNil() mismatch")
+	}
+
+	// After Reset, should return nil without panic
+	r.Reset([]byte{})
+	if zcb.BytesOrNil() != nil {
+		t.Error("BytesOrNil() after Reset should be nil")
+	}
+}
+
+func TestZeroCopyBytesTryBytes(t *testing.T) {
+	w := NewWriter()
+	w.WriteBytes([]byte{1, 2, 3})
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcb := r.ReadBytesNoCopy()
+	if r.Err() != nil {
+		t.Fatalf("ReadBytesNoCopy error: %v", r.Err())
+	}
+
+	// TryBytes should return (value, true) before Reset
+	val, ok := zcb.TryBytes()
+	if !ok {
+		t.Error("TryBytes() should return true before Reset")
+	}
+	if !bytes.Equal(val, []byte{1, 2, 3}) {
+		t.Error("TryBytes() value mismatch")
+	}
+
+	// After Reset, should return (nil, false) without panic
+	r.Reset([]byte{})
+	val, ok = zcb.TryBytes()
+	if ok {
+		t.Error("TryBytes() should return false after Reset")
+	}
+	if val != nil {
+		t.Error("TryBytes() value after Reset should be nil")
+	}
+}
+
+func TestZeroCopyBytesStringOrEmpty(t *testing.T) {
+	w := NewWriter()
+	w.WriteBytes([]byte("hello"))
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcb := r.ReadBytesNoCopy()
+	if r.Err() != nil {
+		t.Fatalf("ReadBytesNoCopy error: %v", r.Err())
+	}
+
+	// StringOrEmpty should return value before Reset
+	if zcb.StringOrEmpty() != "hello" {
+		t.Errorf("StringOrEmpty() = %q, want %q", zcb.StringOrEmpty(), "hello")
+	}
+
+	// After Reset, should return empty string without panic
+	r.Reset([]byte{})
+	if zcb.StringOrEmpty() != "" {
+		t.Errorf("StringOrEmpty() after Reset = %q, want empty", zcb.StringOrEmpty())
+	}
+}
+
+func TestZeroCopyBytesTryString(t *testing.T) {
+	w := NewWriter()
+	w.WriteBytes([]byte("hello"))
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcb := r.ReadBytesNoCopy()
+	if r.Err() != nil {
+		t.Fatalf("ReadBytesNoCopy error: %v", r.Err())
+	}
+
+	// TryString should return (value, true) before Reset
+	val, ok := zcb.TryString()
+	if !ok {
+		t.Error("TryString() should return true before Reset")
+	}
+	if val != "hello" {
+		t.Errorf("TryString() value = %q, want %q", val, "hello")
+	}
+
+	// After Reset, should return ("", false) without panic
+	r.Reset([]byte{})
+	val, ok = zcb.TryString()
+	if ok {
+		t.Error("TryString() should return false after Reset")
+	}
+	if val != "" {
+		t.Errorf("TryString() value after Reset = %q, want empty", val)
+	}
+}
+
+func TestZeroCopyEmptyStringErgonomicMethods(t *testing.T) {
+	w := NewWriter()
+	w.WriteString("")
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcs := r.ReadStringZeroCopy()
+	if r.Err() != nil {
+		t.Fatalf("ReadStringZeroCopy error: %v", r.Err())
+	}
+
+	// All methods should work with empty string
+	if zcs.MustString() != "" {
+		t.Error("MustString() for empty should return empty")
+	}
+	if zcs.StringOrEmpty() != "" {
+		t.Error("StringOrEmpty() for empty should return empty")
+	}
+	val, ok := zcs.TryString()
+	if !ok || val != "" {
+		t.Error("TryString() for empty should return ('', true)")
+	}
+}
+
+func TestZeroCopyEmptyBytesErgonomicMethods(t *testing.T) {
+	w := NewWriter()
+	w.WriteBytes([]byte{})
+	data := w.BytesCopy()
+
+	r := NewReader(data)
+	zcb := r.ReadBytesNoCopy()
+	if r.Err() != nil {
+		t.Fatalf("ReadBytesNoCopy error: %v", r.Err())
+	}
+
+	// All methods should work with empty bytes
+	if len(zcb.MustBytes()) != 0 {
+		t.Error("MustBytes() for empty should return empty")
+	}
+	if zcb.BytesOrNil() != nil && len(zcb.BytesOrNil()) != 0 {
+		// Note: empty slice may be nil or len 0, both are acceptable
+		t.Error("BytesOrNil() for empty should return nil or empty slice")
+	}
+	val, ok := zcb.TryBytes()
+	if !ok {
+		t.Error("TryBytes() for empty should return true")
+	}
+	if len(val) != 0 {
+		t.Error("TryBytes() for empty should return empty slice")
+	}
+	if zcb.StringOrEmpty() != "" {
+		t.Error("StringOrEmpty() for empty should return empty")
+	}
+	strVal, strOk := zcb.TryString()
+	if !strOk || strVal != "" {
+		t.Error("TryString() for empty should return ('', true)")
+	}
+}
+
 func BenchmarkReader(b *testing.B) {
 	// Prepare data
 	w := NewWriter()

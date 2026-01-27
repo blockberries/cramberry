@@ -181,9 +181,6 @@ data, _ := cramberry.MarshalWithOptions(v, cramberry.SecureOptions)
 
 // Strict: Reject unknown fields
 err := cramberry.UnmarshalWithOptions(data, &v, cramberry.StrictOptions)
-
-// V1: Legacy wire format for compatibility
-data, _ := cramberry.MarshalWithOptions(v, cramberry.V1Options)
 ```
 
 **Option presets:**
@@ -194,7 +191,6 @@ data, _ := cramberry.MarshalWithOptions(v, cramberry.V1Options)
 | `FastOptions` | Performance critical - skip validation |
 | `SecureOptions` | Untrusted input - conservative limits |
 | `StrictOptions` | Schema enforcement - reject unknown fields |
-| `V1Options` | Legacy compatibility |
 
 ## Schema Language
 
@@ -340,13 +336,9 @@ func Size(v any) int
 func RegisterOrGet[T any]() TypeID             // Auto-assign ID, safe to call multiple times
 func RegisterOrGetWithID[T any](id TypeID) TypeID // Explicit ID, safe to call multiple times
 
-// Error-returning registration
+// Error-returning registration (use when you need explicit error handling)
 func Register[T any]() (TypeID, error)         // Auto-assign ID
 func RegisterWithID[T any](id TypeID) error    // Explicit ID
-
-// Deprecated: can panic on duplicate registration
-func MustRegister[T any]() TypeID              // Panic on error
-func MustRegisterWithID[T any](id TypeID)      // Panic on error
 ```
 
 ### Writer/Reader (Low-Level)

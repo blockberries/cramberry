@@ -256,13 +256,13 @@ if len(values) > MaxPackedFloat32Length {
    cramberry.RegisterOrGet[PublicUserDTO]()  // Good
    ```
 
-4. **Avoid deprecated MustRegister functions**:
+4. **Use safe registration methods**:
    ```go
-   // Deprecated: can panic on duplicate registration
-   // cramberry.MustRegister[Type]()
-
-   // Recommended: idempotent registration
+   // Recommended: idempotent registration (never panics)
    cramberry.RegisterOrGet[Type]()
+
+   // Alternative: explicit error handling
+   id, err := cramberry.Register[Type]()
    ```
 
 ## Error Handling
@@ -323,7 +323,14 @@ Zero-copy wrapper types panic instead of returning corrupted data:
 | `ZeroCopyString accessed after Reader.Reset()` | String reference used after Reader reset |
 | `ZeroCopyBytes accessed after Reader.Reset()` | Bytes reference used after Reader reset |
 
-Use `.Valid()` to check validity before access, or `.UnsafeString()`/`.UnsafeBytes()` to bypass validation.
+**Alternatives to avoid panics:**
+
+| Method | Behavior on Invalid |
+|--------|---------------------|
+| `.Valid()` | Returns `false` - check before accessing |
+| `.StringOrEmpty()` / `.BytesOrNil()` | Returns default value (no panic) |
+| `.TryString()` / `.TryBytes()` | Returns `(value, false)` tuple |
+| `.UnsafeString()` / `.UnsafeBytes()` | Bypasses validation (use with caution) |
 
 ## Deterministic Encoding
 
@@ -382,7 +389,7 @@ Cramberry does NOT protect against:
 - [ ] Enable `StrictMode` if schema evolution isn't needed
 - [ ] Register only necessary types for polymorphic decoding
 - [ ] Use explicit type IDs for wire format stability
-- [ ] Use `RegisterOrGet` instead of deprecated `MustRegister`
+- [ ] Use `RegisterOrGet` for idempotent type registration
 - [ ] Log security-relevant errors for monitoring
 - [ ] Set request timeouts at the application level
 - [ ] Validate file sizes before processing

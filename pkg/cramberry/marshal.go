@@ -1,6 +1,7 @@
 package cramberry
 
 import (
+	"math"
 	"reflect"
 	"sort"
 	"strings"
@@ -161,10 +162,16 @@ func encodeSlice(w *Writer, v reflect.Value) error {
 		return w.Err()
 	}
 
-	// Use packed encoding for primitive types in V2
-	if w.Options().WireVersion == WireVersionV2 && isPackableType(v.Type().Elem()) {
+	// Use packed encoding for primitive types (no depth tracking needed for primitives)
+	if isPackableType(v.Type().Elem()) {
 		return encodePackedSlice(w, v)
 	}
+
+	// Check depth limit for non-primitive element types
+	if !w.enterNested() {
+		return w.Err()
+	}
+	defer w.exitNested()
 
 	n := v.Len()
 	w.WriteArrayHeader(n)
@@ -241,10 +248,16 @@ func encodePackedSlice(w *Writer, v reflect.Value) error {
 
 // encodeArray encodes an array value.
 func encodeArray(w *Writer, v reflect.Value) error {
-	// Use packed encoding for primitive types in V2
-	if w.Options().WireVersion == WireVersionV2 && isPackableType(v.Type().Elem()) {
+	// Use packed encoding for primitive types (no depth tracking needed for primitives)
+	if isPackableType(v.Type().Elem()) {
 		return encodePackedArray(w, v)
 	}
+
+	// Check depth limit for non-primitive element types
+	if !w.enterNested() {
+		return w.Err()
+	}
+	defer w.exitNested()
 
 	n := v.Len()
 	w.WriteArrayHeader(n)
@@ -311,6 +324,12 @@ func encodeMap(w *Writer, v reflect.Value) error {
 		return w.Err()
 	}
 
+	// Check depth limit
+	if !w.enterNested() {
+		return w.Err()
+	}
+	defer w.exitNested()
+
 	// Validate that the key type is supported for encoding
 	keyType := v.Type().Key()
 	if !isValidMapKeyType(keyType) {
@@ -341,62 +360,14 @@ func encodeMap(w *Writer, v reflect.Value) error {
 }
 
 // encodeStruct encodes a struct value using field tags.
-// Dispatches to V1 or V2 encoding based on options.
+// Uses compact tags and end marker format.
 func encodeStruct(w *Writer, v reflect.Value) error {
-	if w.Options().WireVersion == WireVersionV2 {
-		return encodeStructV2(w, v)
-	}
-	return encodeStructV1(w, v)
-}
-
-// encodeStructV1 encodes a struct using V1 wire format (field count prefix).
-// Deprecated: Use V2 for new code.
-func encodeStructV1(w *Writer, v reflect.Value) error {
-	info := getStructInfo(v.Type())
-
-	// Write number of fields being encoded (for efficient decoding)
-	fieldCount := 0
-	for _, field := range info.fields {
-		fv := v.Field(field.index)
-		if w.Options().OmitEmpty && isZeroValue(fv) {
-			continue
-		}
-		fieldCount++
-	}
-	w.WriteUvarint(uint64(fieldCount))
-	if w.Err() != nil {
+	// Check depth limit
+	if !w.enterNested() {
 		return w.Err()
 	}
+	defer w.exitNested()
 
-	for _, field := range info.fields {
-		fv := v.Field(field.index)
-
-		// Handle OmitEmpty
-		if w.Options().OmitEmpty && isZeroValue(fv) {
-			continue
-		}
-
-		// Write field tag
-		w.WriteTag(field.num, getWireType(fv.Type()))
-		if w.Err() != nil {
-			return w.Err()
-		}
-
-		// Encode value
-		if err := encodeValue(w, fv); err != nil {
-			return err
-		}
-	}
-
-	return w.Err()
-}
-
-// encodeStructV2 encodes a struct using V2 wire format (compact tags + end marker).
-// Key differences from V1:
-//   - Single byte tags for fields 1-15
-//   - End marker (0x00) instead of field count prefix
-//   - No two-pass encoding needed
-func encodeStructV2(w *Writer, v reflect.Value) error {
 	info := getStructInfo(v.Type())
 
 	for _, field := range info.fields {
@@ -549,33 +520,23 @@ func parseFieldTag(tag string, fi fieldInfo, defaultNum int) fieldInfo {
 	return fi
 }
 
-// getWireType returns the wire type for a reflect.Type.
-func getWireType(t reflect.Type) WireType {
-	switch t.Kind() {
-	case reflect.Bool, reflect.Int8, reflect.Int16, reflect.Int32,
-		reflect.Uint8, reflect.Uint16, reflect.Uint32:
-		return WireVarint
-	case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64, reflect.Uintptr:
-		return WireVarint
-	case reflect.Float32:
-		return WireFixed32
-	case reflect.Float64:
-		return WireFixed64
-	case reflect.Complex64:
-		return WireFixed64 // 2x float32
-	case reflect.Complex128:
-		return WireBytes // 2x float64 as bytes
-	case reflect.String, reflect.Slice, reflect.Array, reflect.Map, reflect.Struct:
-		return WireBytes
-	case reflect.Ptr, reflect.Interface:
-		return WireTypeRef
-	default:
-		return WireBytes
-	}
-}
+// maxZeroValueDepth is the maximum recursion depth for isZeroValue.
+// This prevents stack overflow on deeply nested structures.
+const maxZeroValueDepth = 100
 
 // isZeroValue returns true if the value is the zero value for its type.
 func isZeroValue(v reflect.Value) bool {
+	return isZeroValueWithDepth(v, 0)
+}
+
+// isZeroValueWithDepth returns true if the value is the zero value, with depth limiting.
+// If depth exceeds maxZeroValueDepth, returns false (assume not zero) which is conservative:
+// the field will be encoded rather than omitted.
+func isZeroValueWithDepth(v reflect.Value, depth int) bool {
+	if depth > maxZeroValueDepth {
+		return false // Conservative: assume not zero, encode the field
+	}
+
 	switch v.Kind() {
 	case reflect.Bool:
 		return !v.Bool()
@@ -596,9 +557,9 @@ func isZeroValue(v reflect.Value) bool {
 	case reflect.Ptr, reflect.Interface:
 		return v.IsNil()
 	case reflect.Struct:
-		// Check all fields
+		// Check all fields with increased depth
 		for i := 0; i < v.NumField(); i++ {
-			if !isZeroValue(v.Field(i)) {
+			if !isZeroValueWithDepth(v.Field(i), depth+1) {
 				return false
 			}
 		}
@@ -630,7 +591,7 @@ func sortMapKeys(keys []reflect.Value) []reflect.Value {
 		})
 	case reflect.Float32, reflect.Float64:
 		sort.Slice(keys, func(i, j int) bool {
-			return keys[i].Float() < keys[j].Float()
+			return compareFloatKeys(keys[i].Float(), keys[j].Float())
 		})
 	case reflect.Bool:
 		sort.Slice(keys, func(i, j int) bool {
@@ -643,6 +604,33 @@ func sortMapKeys(keys []reflect.Value) []reflect.Value {
 		})
 	}
 	return keys
+}
+
+// compareFloatKeys compares two float64 values with a total ordering that handles
+// NaN and -0.0 correctly for deterministic sorting:
+// - All NaN values sort to the end (after +Inf)
+// - -0.0 and +0.0 are considered equal (both treated as 0.0)
+// - Different NaN bit patterns are compared by their raw bits for full determinism
+func compareFloatKeys(a, b float64) bool {
+	aNaN := math.IsNaN(a)
+	bNaN := math.IsNaN(b)
+
+	// NaN values sort after everything else
+	if aNaN && bNaN {
+		// Both NaN: compare by raw bit pattern for full determinism
+		// This handles different NaN payloads deterministically
+		return math.Float64bits(a) < math.Float64bits(b)
+	}
+	if aNaN {
+		return false // NaN is not less than any non-NaN value
+	}
+	if bNaN {
+		return true // Any non-NaN value is less than NaN
+	}
+
+	// Handle negative zero: treat -0.0 as equal to +0.0
+	// by comparing the actual values (both compare as 0.0)
+	return a < b
 }
 
 // isValidMapKeyType checks if a type is valid as a map key for Cramberry encoding.

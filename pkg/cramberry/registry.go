@@ -343,31 +343,6 @@ func typeName(t reflect.Type) string {
 	return t.PkgPath() + "." + t.Name()
 }
 
-// MustRegister is like Register but panics on error.
-// Returns the assigned TypeID.
-//
-// Deprecated: MustRegister can crash production services if called with
-// a duplicate type. Consider using RegisterOrGet() for idempotent registration
-// or Register() with proper error handling.
-func MustRegister[T any]() TypeID {
-	id, err := Register[T]()
-	if err != nil {
-		panic(err)
-	}
-	return id
-}
-
-// MustRegisterWithID is like RegisterWithID but panics on error.
-//
-// Deprecated: MustRegisterWithID can crash production services if called with
-// a duplicate type or ID. Consider using RegisterOrGetWithID() for idempotent
-// registration or RegisterWithID() with proper error handling.
-func MustRegisterWithID[T any](id TypeID) {
-	if err := RegisterWithID[T](id); err != nil {
-		panic(err)
-	}
-}
-
 // RegisterOrGet registers a type and returns its ID, or returns the existing
 // ID if the type is already registered. This is safe for concurrent use
 // and will never return an error for already-registered types.

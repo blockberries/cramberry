@@ -56,21 +56,20 @@ Encoding behavior is controlled via `Options`:
 
 ```go
 type Options struct {
-    Limits        Limits       // Resource limits (size, depth, etc.)
-    WireVersion   WireVersion  // V1 or V2 wire format
-    StrictMode    bool         // Reject unknown fields
-    ValidateUTF8  bool         // Validate UTF-8 strings
-    OmitEmpty     bool         // Omit zero-value fields
-    Deterministic bool         // Sort map keys
+    Limits         Limits  // Resource limits (size, depth, etc.)
+    StrictMode     bool    // Reject unknown fields
+    ValidateUTF8   bool    // Validate UTF-8 strings
+    OmitEmpty      bool    // Omit zero-value fields
+    PresenceBitmap bool    // Track field presence
+    Deterministic  bool    // Sort map keys
 }
 ```
 
 Pre-configured option sets:
-- `DefaultOptions` - V2 format, deterministic, UTF-8 validation
+- `DefaultOptions` - Deterministic, UTF-8 validation
 - `SecureOptions` - Conservative limits for untrusted input
 - `FastOptions` - Skips validation, non-deterministic maps
 - `StrictOptions` - Rejects unknown fields
-- `V1Options` - Legacy wire format compatibility
 
 ### Resource Limits
 
@@ -145,9 +144,9 @@ Polymorphic type serialization:
 cramberry.RegisterOrGet[Dog]()          // Auto-assigns TypeID (128+)
 cramberry.RegisterOrGetWithID[Cat](129) // Explicit TypeID
 
-// Legacy registration (deprecated - can panic on duplicate)
-cramberry.MustRegister[Dog]()           // Deprecated: use RegisterOrGet
-cramberry.RegisterWithID[Cat](129)      // Deprecated: use RegisterOrGetWithID
+// Alternative: Returns error on duplicate (useful for explicit error handling)
+id, err := cramberry.Register[Dog]()
+err = cramberry.RegisterWithID[Cat](129)
 
 // TypeID ranges
 // 0      - Nil value
@@ -196,16 +195,6 @@ end_marker = 0x00
 ```
 packed_array = tag length *element
 ```
-
-### V1 Wire Format (Legacy)
-
-The V1 format uses field count prefix:
-```
-message = field_count *field
-field   = tag value
-```
-
-V1 is available via `V1Options` for compatibility with older encoded data.
 
 ### Type Mappings
 

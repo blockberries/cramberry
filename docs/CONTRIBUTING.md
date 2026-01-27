@@ -411,9 +411,6 @@ We use [Semantic Versioning](https://semver.org/):
 ### Fixed
 - Empty map decoded as nil instead of empty map (#78)
 
-### Deprecated
-- V1Options will be removed in v2.0
-
 ### Security
 - Updated dependency X to fix CVE-YYYY-XXXX
 ```

@@ -165,31 +165,10 @@ var SecureLimits = Limits{
 // Use with caution - only for trusted input.
 var NoLimits = Limits{}
 
-// WireVersion specifies the wire format version.
-type WireVersion int
-
-const (
-	// WireVersionV1 is the original wire format with field count prefix.
-	// Deprecated: Use WireVersionV2 for new code.
-	WireVersionV1 WireVersion = 1
-
-	// WireVersionV2 is the optimized wire format with compact tags and end markers.
-	// Features:
-	//   - Single-byte tags for fields 1-15
-	//   - End marker instead of field count prefix
-	//   - Packed repeated primitives
-	//   - Optional deterministic map ordering
-	WireVersionV2 WireVersion = 2
-)
-
 // Options configures encoding/decoding behavior.
 type Options struct {
 	// Limits specifies resource limits.
 	Limits Limits
-
-	// WireVersion specifies the wire format version.
-	// Default is WireVersionV2 for optimal performance.
-	WireVersion WireVersion
 
 	// StrictMode rejects unknown fields during decoding.
 	StrictMode bool
@@ -214,7 +193,6 @@ type Options struct {
 // DefaultOptions are the default encoding/decoding options.
 var DefaultOptions = Options{
 	Limits:        DefaultLimits,
-	WireVersion:   WireVersionV2,
 	StrictMode:    false,
 	ValidateUTF8:  true,
 	OmitEmpty:     true,
@@ -224,7 +202,6 @@ var DefaultOptions = Options{
 // SecureOptions are conservative options for untrusted input.
 var SecureOptions = Options{
 	Limits:        SecureLimits,
-	WireVersion:   WireVersionV2,
 	StrictMode:    false,
 	ValidateUTF8:  true,
 	OmitEmpty:     true,
@@ -234,7 +211,6 @@ var SecureOptions = Options{
 // StrictOptions reject unknown fields and validate strings.
 var StrictOptions = Options{
 	Limits:        DefaultLimits,
-	WireVersion:   WireVersionV2,
 	StrictMode:    true,
 	ValidateUTF8:  true,
 	OmitEmpty:     true,
@@ -245,22 +221,10 @@ var StrictOptions = Options{
 // Use when decoding output from the same encoder (map order doesn't matter).
 var FastOptions = Options{
 	Limits:        DefaultLimits,
-	WireVersion:   WireVersionV2,
 	StrictMode:    false,
 	ValidateUTF8:  false,
 	OmitEmpty:     true,
 	Deterministic: false,
-}
-
-// V1Options use the legacy V1 wire format for compatibility.
-// Deprecated: Only use for interop with old encoded data.
-var V1Options = Options{
-	Limits:        DefaultLimits,
-	WireVersion:   WireVersionV1,
-	StrictMode:    false,
-	ValidateUTF8:  true,
-	OmitEmpty:     true,
-	Deterministic: true,
 }
 
 // Version information, set by ldflags at build time.
