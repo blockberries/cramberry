@@ -52,25 +52,24 @@ func (p *Parser) Parse() (*Schema, []ParseError) {
 		}
 	}
 
-	// Parse imports
-	for p.check(TokenImport) {
-		imp, err := p.parseImport()
-		if err != nil {
-			p.errors = append(p.errors, *err)
-			p.synchronize()
-		} else {
-			schema.Imports = append(schema.Imports, imp)
-		}
-	}
-
-	// Parse top-level options
-	for p.check(TokenOption) {
-		opt, err := p.parseOption()
-		if err != nil {
-			p.errors = append(p.errors, *err)
-			p.synchronize()
-		} else {
-			schema.Options = append(schema.Options, opt)
+	// Parse imports and top-level options (can be intermixed in any order)
+	for p.check(TokenImport) || p.check(TokenOption) {
+		if p.check(TokenImport) {
+			imp, err := p.parseImport()
+			if err != nil {
+				p.errors = append(p.errors, *err)
+				p.synchronize()
+			} else {
+				schema.Imports = append(schema.Imports, imp)
+			}
+		} else if p.check(TokenOption) {
+			opt, err := p.parseOption()
+			if err != nil {
+				p.errors = append(p.errors, *err)
+				p.synchronize()
+			} else {
+				schema.Options = append(schema.Options, opt)
+			}
 		}
 	}
 

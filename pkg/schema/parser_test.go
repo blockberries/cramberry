@@ -93,6 +93,88 @@ option max_size = 1024;
 	}
 }
 
+func TestParseImportsAndOptionsIntermixed(t *testing.T) {
+	// Test that imports can come before, after, and intermixed with options
+	tests := []struct {
+		name        string
+		input       string
+		wantImports int
+		wantOptions int
+	}{
+		{
+			name: "imports before options",
+			input: `
+package test;
+import "a.cram";
+import "b.cram";
+option foo = "bar";
+option baz = 123;
+`,
+			wantImports: 2,
+			wantOptions: 2,
+		},
+		{
+			name: "imports after options",
+			input: `
+package test;
+option foo = "bar";
+option baz = 123;
+import "a.cram";
+import "b.cram";
+`,
+			wantImports: 2,
+			wantOptions: 2,
+		},
+		{
+			name: "imports intermixed with options",
+			input: `
+package test;
+import "a.cram";
+option foo = "bar";
+import "b.cram";
+option baz = 123;
+import "c.cram";
+`,
+			wantImports: 3,
+			wantOptions: 2,
+		},
+		{
+			name: "options only",
+			input: `
+package test;
+option foo = "bar";
+`,
+			wantImports: 0,
+			wantOptions: 1,
+		},
+		{
+			name: "imports only",
+			input: `
+package test;
+import "a.cram";
+`,
+			wantImports: 1,
+			wantOptions: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			schema, errors := ParseFile("test.cram", tt.input)
+			if len(errors) > 0 {
+				t.Fatalf("unexpected errors: %v", errors)
+			}
+
+			if len(schema.Imports) != tt.wantImports {
+				t.Errorf("expected %d imports, got %d", tt.wantImports, len(schema.Imports))
+			}
+			if len(schema.Options) != tt.wantOptions {
+				t.Errorf("expected %d options, got %d", tt.wantOptions, len(schema.Options))
+			}
+		})
+	}
+}
+
 func TestParseSimpleMessage(t *testing.T) {
 	input := `
 package test;
