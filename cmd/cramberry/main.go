@@ -110,6 +110,32 @@ func (s *stringSliceFlag) Set(value string) error {
 	return nil
 }
 
+// importPathFlag allows multiple -M flags for import path mappings
+type importPathFlag map[string]string
+
+func (m *importPathFlag) String() string {
+	if m == nil {
+		return ""
+	}
+	var parts []string
+	for k, v := range *m {
+		parts = append(parts, k+"="+v)
+	}
+	return strings.Join(parts, ",")
+}
+
+func (m *importPathFlag) Set(value string) error {
+	if *m == nil {
+		*m = make(map[string]string)
+	}
+	parts := strings.SplitN(value, "=", 2)
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid import mapping: %s (expected alias=path)", value)
+	}
+	(*m)[parts[0]] = parts[1]
+	return nil
+}
+
 func cmdGenerate(args []string) {
 	fs := flag.NewFlagSet("generate", flag.ExitOnError)
 
@@ -122,6 +148,8 @@ func cmdGenerate(args []string) {
 	jsonTags := fs.Bool("json", true, "Generate JSON tags/methods")
 	var searchPaths stringSliceFlag
 	fs.Var(&searchPaths, "I", "Add import search path (can be repeated)")
+	var importPaths importPathFlag
+	fs.Var(&importPaths, "M", "Map schema import alias to Go import path (alias=path, can be repeated)")
 
 	fs.Usage = func() {
 		fmt.Println(`Usage: cramberry generate [options] <schema-file>...
@@ -158,6 +186,7 @@ Options:`)
 	opts.TypeSuffix = *suffix
 	opts.GenerateMarshal = *marshal
 	opts.GenerateJSON = *jsonTags
+	opts.ImportPaths = importPaths
 
 	// Create output directory
 	if err := os.MkdirAll(*outDir, 0o755); err != nil {

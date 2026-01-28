@@ -61,6 +61,11 @@ type Options struct {
 
 	// TypeSuffix adds a suffix to all type names.
 	TypeSuffix string
+
+	// ImportPaths maps schema import aliases to Go import paths.
+	// For example: {"types": "example.com/myapp/types"}
+	// This is used to generate proper import statements for imported types.
+	ImportPaths map[string]string
 }
 
 // DefaultOptions returns the default code generation options.

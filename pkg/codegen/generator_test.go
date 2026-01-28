@@ -526,3 +526,93 @@ func TestGoGeneratorDocComments(t *testing.T) {
 		t.Error("expected field doc comment")
 	}
 }
+
+func TestGoGeneratorImportPaths(t *testing.T) {
+	s := &schema.Schema{
+		Package: &schema.Package{Name: "models"},
+		Imports: []*schema.Import{
+			{Path: "types.cram", Alias: "types"},
+		},
+		Messages: []*schema.Message{
+			{
+				Name: "User",
+				Fields: []*schema.Field{
+					{Name: "id", Number: 1, Type: &schema.ScalarType{Name: "int32"}},
+					{Name: "address", Number: 2, Type: &schema.NamedType{Package: "types", Name: "Address"}},
+				},
+			},
+		},
+	}
+
+	gen := NewGoGenerator()
+	var buf bytes.Buffer
+	opts := DefaultOptions()
+	opts.ImportPaths = map[string]string{
+		"types": "example.com/myapp/types",
+	}
+
+	err := gen.Generate(&buf, s, opts)
+	if err != nil {
+		t.Fatalf("generate error: %v", err)
+	}
+
+	output := buf.String()
+
+	// Check import statement is generated
+	if !strings.Contains(output, `types "example.com/myapp/types"`) {
+		t.Errorf("expected import statement, got: %s", output)
+	}
+
+	// Check field uses qualified type name
+	if !strings.Contains(output, "Address types.Address") {
+		t.Errorf("expected qualified type, got: %s", output)
+	}
+
+	// Check EncodeTo uses qualified method call
+	if !strings.Contains(output, "m.Address.EncodeTo(w)") {
+		t.Errorf("expected EncodeTo call, got: %s", output)
+	}
+
+	// Check DecodeFrom uses qualified method call
+	if !strings.Contains(output, "m.Address.DecodeFrom(r)") {
+		t.Errorf("expected DecodeFrom call, got: %s", output)
+	}
+}
+
+func TestGoGeneratorNoExternalImports(t *testing.T) {
+	// Test that no external imports are generated when no ImportPaths are specified
+	s := &schema.Schema{
+		Package: &schema.Package{Name: "test"},
+		Messages: []*schema.Message{
+			{
+				Name: "User",
+				Fields: []*schema.Field{
+					{Name: "id", Number: 1, Type: &schema.ScalarType{Name: "int32"}},
+					{Name: "address", Number: 2, Type: &schema.NamedType{Package: "types", Name: "Address"}},
+				},
+			},
+		},
+	}
+
+	gen := NewGoGenerator()
+	var buf bytes.Buffer
+	opts := DefaultOptions()
+	// No ImportPaths specified
+
+	err := gen.Generate(&buf, s, opts)
+	if err != nil {
+		t.Fatalf("generate error: %v", err)
+	}
+
+	output := buf.String()
+
+	// Should still have types.Address reference but no import
+	if !strings.Contains(output, "Address types.Address") {
+		t.Errorf("expected qualified type, got: %s", output)
+	}
+
+	// Should only have cramberry import
+	if strings.Contains(output, `types "`) {
+		t.Errorf("expected no external import, got: %s", output)
+	}
+}
