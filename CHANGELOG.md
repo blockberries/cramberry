@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-01-28
+
+### Added
+- **Same-package import support**: Types from imported schemas with the same package name can be referenced without qualification
+  - `Loader.GetImportedSchemas()` method to retrieve imported schemas by alias
+  - `ImportedSchemas` option in `codegen.Options` for same-package detection
+  - Validator now correctly allows unqualified type references for same-package imports
+  - Code generator omits package qualifier and import statements for same-package types
+
 ## [1.5.0] - 2026-01-28
 
 ### Added
@@ -14,9 +23,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New `-M` CLI flag: `cramberry generate -M alias=go/import/path`
   - `ImportPaths` option in `codegen.Options` for programmatic use
   - Generated code includes appropriate import statements for external packages
-- **Same-package import support**: Types from imported schemas with the same package name can be referenced without qualification
-  - `Loader.GetImportedSchemas()` method to retrieve imported schemas by alias
-  - `ImportedSchemas` option in `codegen.Options` for same-package detection
 
 ### Changed
 - **Exported EncodeTo/DecodeFrom methods**: Generated `EncodeTo()` and `DecodeFrom()` methods are now exported (uppercase) to enable cross-package access
@@ -25,8 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Schema parser now allows import statements to appear before, after, or intermixed with option statements
   - Previously, all imports had to come before all options
-- Validator now correctly allows unqualified type references for same-package imports
-  - Types from imported schemas with matching package names are discoverable without qualification
 
 ## [1.4.3] - 2026-01-27
 
