@@ -318,13 +318,19 @@ func (v *Validator) validateInterface(iface *Interface) {
 					impl.Type.Name, impl.Type.Package)
 			}
 		} else {
-			// Local type
+			// Local type - check it exists locally or in same-package imports
 			typeDef, ok := v.types[typeName]
-			if !ok {
-				v.addError(impl.Position, "undefined type %q", typeName)
-			} else if typeDef.Kind != TypeDefMessage {
-				v.addError(impl.Position, "interface implementation must reference a message, not %s %q",
-					typeDef.Kind, typeName)
+			if ok {
+				if typeDef.Kind != TypeDefMessage {
+					v.addError(impl.Position, "interface implementation must reference a message, not %s %q",
+						typeDef.Kind, typeName)
+				}
+			} else {
+				// Check if the type exists in any imported schema from the same package
+				found := v.findMessageInSamePackageImports(typeName)
+				if !found {
+					v.addError(impl.Position, "undefined type %q", typeName)
+				}
 			}
 		}
 	}
@@ -426,6 +432,33 @@ func (v *Validator) findTypeInSamePackageImports(typeName string) bool {
 		}
 		for _, iface := range importedSchema.Interfaces {
 			if iface.Name == typeName {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// findMessageInSamePackageImports checks if a message exists in any imported schema
+// that has the same package name as the current schema. This is used for interface
+// implementations which must reference messages.
+func (v *Validator) findMessageInSamePackageImports(typeName string) bool {
+	if v.schema.Package == nil {
+		return false
+	}
+	currentPkg := v.schema.Package.Name
+
+	for _, importedSchema := range v.imports {
+		if importedSchema == nil || importedSchema.Package == nil {
+			continue
+		}
+		// Only check imports from the same package
+		if importedSchema.Package.Name != currentPkg {
+			continue
+		}
+		// Check if the message exists in this imported schema
+		for _, msg := range importedSchema.Messages {
+			if msg.Name == typeName {
 				return true
 			}
 		}

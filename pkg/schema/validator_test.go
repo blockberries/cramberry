@@ -831,3 +831,148 @@ message Test {
 		t.Errorf("unexpected errors: %v", errors)
 	}
 }
+
+func TestValidateInterfaceWithMultipleSamePackageImports(t *testing.T) {
+	// This tests that an interface can reference types from multiple
+	// imported files that share the same package name.
+
+	// Main schema with interface
+	animalsInput := `
+package animals;
+
+import "dog.cram";
+import "cat.cram";
+
+interface Animal {
+  128 = Dog;
+  129 = Cat;
+}
+`
+
+	// First imported schema
+	dogInput := `
+package animals;
+
+message Dog {
+  string name = 1;
+}
+`
+
+	// Second imported schema
+	catInput := `
+package animals;
+
+message Cat {
+  string name = 1;
+}
+`
+
+	animalsSchema, parseErrors := ParseFile("animals.cram", animalsInput)
+	if len(parseErrors) > 0 {
+		t.Fatalf("parse errors for animals.cram: %v", parseErrors)
+	}
+
+	dogSchema, parseErrors := ParseFile("dog.cram", dogInput)
+	if len(parseErrors) > 0 {
+		t.Fatalf("parse errors for dog.cram: %v", parseErrors)
+	}
+
+	catSchema, parseErrors := ParseFile("cat.cram", catInput)
+	if len(parseErrors) > 0 {
+		t.Fatalf("parse errors for cat.cram: %v", parseErrors)
+	}
+
+	validator := NewValidator(animalsSchema)
+	validator.AddImport("dog.cram", "dog.cram", dogSchema)
+	validator.AddImport("cat.cram", "cat.cram", catSchema)
+	errors := validator.Validate()
+
+	if validator.HasErrors() {
+		t.Errorf("unexpected errors (interface should be able to reference types from multiple same-package imports): %v", errors)
+	}
+}
+
+func TestValidateInterfaceWithMixedLocalAndImportedTypes(t *testing.T) {
+	// Test that interface can mix local types with same-package imported types
+
+	mainInput := `
+package myproject;
+
+import "external.cram";
+
+message LocalType {
+  string name = 1;
+}
+
+interface Entity {
+  128 = LocalType;
+  129 = ImportedType;
+}
+`
+
+	externalInput := `
+package myproject;
+
+message ImportedType {
+  int32 id = 1;
+}
+`
+
+	mainSchema, parseErrors := ParseFile("main.cram", mainInput)
+	if len(parseErrors) > 0 {
+		t.Fatalf("parse errors for main.cram: %v", parseErrors)
+	}
+
+	externalSchema, parseErrors := ParseFile("external.cram", externalInput)
+	if len(parseErrors) > 0 {
+		t.Fatalf("parse errors for external.cram: %v", parseErrors)
+	}
+
+	validator := NewValidator(mainSchema)
+	validator.AddImport("external.cram", "external.cram", externalSchema)
+	errors := validator.Validate()
+
+	if validator.HasErrors() {
+		t.Errorf("unexpected errors (interface should work with mixed local and imported types): %v", errors)
+	}
+}
+
+func TestValidateInterfaceRejectsDifferentPackageUnqualified(t *testing.T) {
+	// Types from different packages MUST be qualified
+
+	mainInput := `
+package main;
+
+import "other.cram";
+
+interface Entity {
+  128 = OtherType;
+}
+`
+
+	otherInput := `
+package other;
+
+message OtherType {
+  string name = 1;
+}
+`
+
+	mainSchema, parseErrors := ParseFile("main.cram", mainInput)
+	if len(parseErrors) > 0 {
+		t.Fatalf("parse errors for main.cram: %v", parseErrors)
+	}
+
+	otherSchema, parseErrors := ParseFile("other.cram", otherInput)
+	if len(parseErrors) > 0 {
+		t.Fatalf("parse errors for other.cram: %v", parseErrors)
+	}
+
+	validator := NewValidator(mainSchema)
+	validator.AddImport("other.cram", "other.cram", otherSchema)
+	validator.Validate()
+
+	if !validator.HasErrors() {
+		t.Error("expected error: unqualified type from different package should be rejected")
+	}
+}
