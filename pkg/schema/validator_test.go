@@ -521,6 +521,47 @@ message Address {
 	}
 }
 
+func TestValidateSamePackageImport(t *testing.T) {
+	// Main schema imports another schema from the same package
+	// Types from same-package imports can be used without qualification
+	mainInput := `
+package myproject;
+
+import "types.cram";
+
+message User {
+  Address address = 1;
+}
+`
+
+	// Imported schema with same package name
+	typesInput := `
+package myproject;
+
+message Address {
+  string street = 1;
+}
+`
+
+	mainSchema, parseErrors := ParseFile("main.cram", mainInput)
+	if len(parseErrors) > 0 {
+		t.Fatalf("parse errors: %v", parseErrors)
+	}
+
+	typesSchema, parseErrors := ParseFile("types.cram", typesInput)
+	if len(parseErrors) > 0 {
+		t.Fatalf("parse errors: %v", parseErrors)
+	}
+
+	validator := NewValidator(mainSchema)
+	validator.AddImport("types.cram", "types.cram", typesSchema)
+	errors := validator.Validate()
+
+	if validator.HasErrors() {
+		t.Errorf("unexpected errors (same-package types should be accessible): %v", errors)
+	}
+}
+
 func TestValidateUnknownPackage(t *testing.T) {
 	input := `
 package test;

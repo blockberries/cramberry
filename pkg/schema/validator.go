@@ -344,10 +344,14 @@ func (v *Validator) validateTypeRef(typeRef TypeRef, msgName, fieldName string) 
 					t.Package, msgName, fieldName)
 			}
 		} else {
-			// Local type - check it exists
+			// Local type - check it exists locally or in same-package imports
 			if _, ok := v.types[t.Name]; !ok {
-				v.addError(t.Position, "undefined type %q in field %s.%s",
-					t.Name, msgName, fieldName)
+				// Check if the type exists in any imported schema from the same package
+				found := v.findTypeInSamePackageImports(t.Name)
+				if !found {
+					v.addError(t.Position, "undefined type %q in field %s.%s",
+						t.Name, msgName, fieldName)
+				}
 			}
 		}
 
@@ -390,6 +394,43 @@ func (v *Validator) validateMapKeyType(keyType TypeRef, msgName, fieldName strin
 		v.addError(keyType.Pos(), "map key type must be scalar or enum in field %s.%s",
 			msgName, fieldName)
 	}
+}
+
+// findTypeInSamePackageImports checks if a type exists in any imported schema
+// that has the same package name as the current schema. This allows unqualified
+// references to types from same-package imports.
+func (v *Validator) findTypeInSamePackageImports(typeName string) bool {
+	if v.schema.Package == nil {
+		return false
+	}
+	currentPkg := v.schema.Package.Name
+
+	for _, importedSchema := range v.imports {
+		if importedSchema == nil || importedSchema.Package == nil {
+			continue
+		}
+		// Only check imports from the same package
+		if importedSchema.Package.Name != currentPkg {
+			continue
+		}
+		// Check if the type exists in this imported schema
+		for _, msg := range importedSchema.Messages {
+			if msg.Name == typeName {
+				return true
+			}
+		}
+		for _, enum := range importedSchema.Enums {
+			if enum.Name == typeName {
+				return true
+			}
+		}
+		for _, iface := range importedSchema.Interfaces {
+			if iface.Name == typeName {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (v *Validator) addError(pos Position, format string, args ...any) {

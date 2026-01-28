@@ -208,6 +208,9 @@ Options:`)
 			continue
 		}
 
+		// Get imported schemas for same-package detection
+		opts.ImportedSchemas = loader.GetImportedSchemas(inputFile)
+
 		// Generate output filename
 		baseName := filepath.Base(inputFile)
 		baseName = strings.TrimSuffix(baseName, filepath.Ext(baseName))

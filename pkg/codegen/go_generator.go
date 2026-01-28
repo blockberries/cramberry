@@ -500,6 +500,20 @@ func (c *goContext) goPackage() string {
 	return "generated"
 }
 
+// isSamePackage checks if an import alias refers to a schema in the same package.
+// This is used to determine whether to qualify type names.
+func (c *goContext) isSamePackage(importAlias string) bool {
+	if c.Options.ImportedSchemas == nil {
+		return false
+	}
+	importedSchema, ok := c.Options.ImportedSchemas[importAlias]
+	if !ok || importedSchema == nil || importedSchema.Package == nil {
+		return false
+	}
+	currentPkg := c.goPackage()
+	return importedSchema.Package.Name == currentPkg
+}
+
 func (c *goContext) goType(t schema.TypeRef) string {
 	return c.goTypeInternal(t, false)
 }
@@ -534,7 +548,7 @@ func (c *goContext) goTypeInternal(t schema.TypeRef, _ bool) string {
 		return c.goScalarType(typ.Name)
 	case *schema.NamedType:
 		name := c.Options.TypePrefix + ToPascalCase(typ.Name) + c.Options.TypeSuffix
-		if typ.Package != "" {
+		if typ.Package != "" && !c.isSamePackage(typ.Package) {
 			return typ.Package + "." + name
 		}
 		return name
@@ -730,7 +744,7 @@ func (c *goContext) externalImports() []externalImport {
 		return nil
 	}
 
-	// Collect all package references used in the schema
+	// Collect all package references used in the schema (excluding same-package imports)
 	usedPackages := make(map[string]bool)
 
 	// Helper to collect package references from a type
@@ -738,7 +752,8 @@ func (c *goContext) externalImports() []externalImport {
 	collectFromType = func(t schema.TypeRef) {
 		switch typ := t.(type) {
 		case *schema.NamedType:
-			if typ.Package != "" {
+			// Only include if it's a different package
+			if typ.Package != "" && !c.isSamePackage(typ.Package) {
 				usedPackages[typ.Package] = true
 			}
 		case *schema.ArrayType:
@@ -761,7 +776,8 @@ func (c *goContext) externalImports() []externalImport {
 	// Scan all interfaces
 	for _, iface := range c.Schema.Interfaces {
 		for _, impl := range iface.Implementations {
-			if impl.Type.Package != "" {
+			// Only include if it's a different package
+			if impl.Type.Package != "" && !c.isSamePackage(impl.Type.Package) {
 				usedPackages[impl.Type.Package] = true
 			}
 		}

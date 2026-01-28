@@ -616,3 +616,62 @@ func TestGoGeneratorNoExternalImports(t *testing.T) {
 		t.Errorf("expected no external import, got: %s", output)
 	}
 }
+
+func TestGoGeneratorSamePackageImport(t *testing.T) {
+	// When imported schema has the same package name, types should not be qualified
+	mainSchema := &schema.Schema{
+		Package: &schema.Package{Name: "myproject"},
+		Messages: []*schema.Message{
+			{
+				Name: "User",
+				Fields: []*schema.Field{
+					{Name: "id", Number: 1, Type: &schema.ScalarType{Name: "int32"}},
+					// This references a type from an import alias, but same package
+					{Name: "address", Number: 2, Type: &schema.NamedType{Package: "types", Name: "Address"}},
+				},
+			},
+		},
+	}
+
+	// Imported schema with same package name
+	importedSchema := &schema.Schema{
+		Package: &schema.Package{Name: "myproject"},
+		Messages: []*schema.Message{
+			{
+				Name: "Address",
+				Fields: []*schema.Field{
+					{Name: "street", Number: 1, Type: &schema.ScalarType{Name: "string"}},
+				},
+			},
+		},
+	}
+
+	gen := NewGoGenerator()
+	var buf bytes.Buffer
+	opts := DefaultOptions()
+	opts.ImportedSchemas = map[string]*schema.Schema{
+		"types": importedSchema,
+	}
+
+	err := gen.Generate(&buf, mainSchema, opts)
+	if err != nil {
+		t.Fatalf("generate error: %v", err)
+	}
+
+	output := buf.String()
+
+	// Should NOT have types.Address - should be just Address since same package
+	if strings.Contains(output, "types.Address") {
+		t.Errorf("expected unqualified type for same-package import, got: %s", output)
+	}
+
+	// Should have just Address
+	if !strings.Contains(output, "Address Address") {
+		t.Errorf("expected unqualified Address type, got: %s", output)
+	}
+
+	// Should NOT have an import statement for types
+	if strings.Contains(output, `types "`) {
+		t.Errorf("expected no import for same-package, got: %s", output)
+	}
+}

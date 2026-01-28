@@ -66,6 +66,11 @@ type Options struct {
 	// For example: {"types": "example.com/myapp/types"}
 	// This is used to generate proper import statements for imported types.
 	ImportPaths map[string]string
+
+	// ImportedSchemas maps import aliases to their parsed schemas.
+	// This is used to determine if imported types are from the same package
+	// (and thus don't need qualification in generated code).
+	ImportedSchemas map[string]*schema.Schema
 }
 
 // DefaultOptions returns the default code generation options.

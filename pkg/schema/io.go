@@ -149,6 +149,42 @@ func (l *Loader) AllSchemas() map[string]*Schema {
 	return result
 }
 
+// GetImportedSchemas returns the imported schemas for a given schema file,
+// mapped by their import aliases. This is useful for code generators that
+// need to know whether imported types are from the same package.
+func (l *Loader) GetImportedSchemas(path string) map[string]*Schema {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return nil
+	}
+
+	s := l.loaded[absPath]
+	if s == nil {
+		return nil
+	}
+
+	result := make(map[string]*Schema)
+	baseDir := filepath.Dir(absPath)
+
+	for _, imp := range s.Imports {
+		importPath := l.resolveImportPath(imp.Path, baseDir)
+		if importPath == "" {
+			continue
+		}
+
+		importedSchema := l.loaded[importPath]
+		if importedSchema != nil {
+			key := imp.Alias
+			if key == "" {
+				key = imp.Path
+			}
+			result[key] = importedSchema
+		}
+	}
+
+	return result
+}
+
 // Writer writes schemas to various formats.
 type Writer struct {
 	indent string
