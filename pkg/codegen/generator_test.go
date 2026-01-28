@@ -675,3 +675,115 @@ func TestGoGeneratorSamePackageImport(t *testing.T) {
 		t.Errorf("expected no import for same-package, got: %s", output)
 	}
 }
+
+func TestGoGeneratorRequiredStructFieldNoNilCheck(t *testing.T) {
+	// Required struct (NamedType) fields should NOT have nil checks in Validate()
+	// because they are value types, not pointers
+	s := &schema.Schema{
+		Package: &schema.Package{Name: "test"},
+		Messages: []*schema.Message{
+			{
+				Name: "Address",
+				Fields: []*schema.Field{
+					{Name: "street", Number: 1, Type: &schema.ScalarType{Name: "string"}},
+				},
+			},
+			{
+				Name: "User",
+				Fields: []*schema.Field{
+					// Required scalar - should have nil check (becomes *int32)
+					{Name: "id", Number: 1, Type: &schema.ScalarType{Name: "int32"}, Required: true},
+					// Required struct - should NOT have nil check (stays Address, not *Address)
+					{Name: "address", Number: 2, Type: &schema.NamedType{Name: "Address"}, Required: true},
+				},
+			},
+		},
+	}
+
+	gen := NewGoGenerator()
+	var buf bytes.Buffer
+	opts := DefaultOptions()
+
+	err := gen.Generate(&buf, s, opts)
+	if err != nil {
+		t.Fatalf("generate error: %v", err)
+	}
+
+	output := buf.String()
+
+	// Required scalar should be pointer and have nil check
+	if !strings.Contains(output, "Id *int32") {
+		t.Errorf("expected required scalar to be pointer, got: %s", output)
+	}
+	if !strings.Contains(output, "if m.Id == nil") {
+		t.Errorf("expected nil check for required scalar, got: %s", output)
+	}
+
+	// Required struct should NOT be pointer (it's a value type)
+	if strings.Contains(output, "Address *Address") {
+		t.Errorf("required struct should not be pointer, got: %s", output)
+	}
+	// Should NOT have nil check for the struct field (can't compare struct to nil)
+	if strings.Contains(output, "if m.Address == nil") {
+		t.Errorf("should NOT have nil check for struct field, got: %s", output)
+	}
+}
+
+func TestGoGeneratorSchemaPointerField(t *testing.T) {
+	// Schema pointer type fields (*Hash) should decode correctly without double indirection
+	s := &schema.Schema{
+		Package: &schema.Package{Name: "test"},
+		Messages: []*schema.Message{
+			{
+				Name: "Hash",
+				Fields: []*schema.Field{
+					{Name: "data", Number: 1, Type: &schema.ScalarType{Name: "bytes"}},
+				},
+			},
+			{
+				Name: "Block",
+				Fields: []*schema.Field{
+					{Name: "height", Number: 1, Type: &schema.ScalarType{Name: "int64"}},
+					// Schema pointer type - should stay as *Hash, not become **Hash
+					{Name: "previousHash", Number: 2, Type: &schema.PointerType{
+						Element: &schema.NamedType{Name: "Hash"},
+					}},
+				},
+			},
+		},
+	}
+
+	gen := NewGoGenerator()
+	var buf bytes.Buffer
+	opts := DefaultOptions()
+
+	err := gen.Generate(&buf, s, opts)
+	if err != nil {
+		t.Fatalf("generate error: %v", err)
+	}
+
+	output := buf.String()
+
+	// Field should be *Hash (single pointer)
+	if !strings.Contains(output, "PreviousHash *Hash") {
+		t.Errorf("expected *Hash field type, got: %s", output)
+	}
+
+	// Decode should create var v Hash, then assign &v (not var tmp *Hash, then &tmp)
+	if strings.Contains(output, "var tmp *Hash") {
+		t.Errorf("should not have var tmp *Hash (would cause **Hash), got: %s", output)
+	}
+
+	// Should have the correct decode pattern: var v Hash; ... m.PreviousHash = &v
+	if !strings.Contains(output, "var v Hash") {
+		t.Errorf("expected var v Hash for decoding, got: %s", output)
+	}
+	if !strings.Contains(output, "m.PreviousHash = &v") {
+		t.Errorf("expected m.PreviousHash = &v assignment, got: %s", output)
+	}
+
+	// Encode should have nil check
+	if !strings.Contains(output, "if m.PreviousHash != nil") {
+		t.Errorf("expected nil check for pointer field encoding, got: %s", output)
+	}
+}

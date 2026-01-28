@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.3] - 2026-01-28
+
+### Fixed
+- **Code generator: Validate() no longer compares struct values to nil**: Required struct fields (NamedType) are value types and cannot be nil. The Validate() method now only generates nil checks for fields that are actually pointers (required scalars, optional fields, schema pointer types).
+- **Code generator: Schema pointer fields decode correctly**: Fields with schema pointer types (e.g., `*Hash`) now decode correctly. Previously, the generated code would create double indirection (`var tmp *Hash; m.Field = &tmp` resulting in `**Hash`). Now correctly generates `var v Hash; m.Field = &v`.
+
 ## [1.5.2] - 2026-01-28
 
 ### Fixed

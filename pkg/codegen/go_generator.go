@@ -62,6 +62,7 @@ func (c *goContext) funcMap() template.FuncMap {
 		"hasRequired":          c.hasRequired,
 		"needsPointer":         c.needsPointer,
 		"isPointerField":       c.isPointerField,
+		"isNilCheckable":       c.isNilCheckable,
 		"needsCramberryImport": c.needsCramberryImport,
 		"externalImports":      c.externalImports,
 		"comment":              GoComment,
@@ -461,6 +462,9 @@ func (c *goContext) zeroCheck(f *schema.Field) string {
 		default:
 			return ""
 		}
+	case *schema.PointerType:
+		// Schema pointer types need nil check
+		return fmt.Sprintf("%s != nil", fieldName)
 	case *schema.NamedType, *schema.ArrayType, *schema.MapType:
 		return "" // Always encode nested types
 	default:
@@ -690,9 +694,16 @@ func (c *goContext) isScalarType(t schema.TypeRef) bool {
 	}
 }
 
-// isPointerField returns true if the field will be generated as a pointer.
+// isPointerField returns true if the field needs pointer handling in encode/decode.
+// Note: Schema PointerType fields are handled directly in decodeValueV2/encodeValueV2,
+// not through the pointer field path.
 func (c *goContext) isPointerField(f *schema.Field) bool {
 	if f.Repeated {
+		return false
+	}
+	// Schema pointer types (e.g., *Hash) are handled in decodeValueV2/encodeValueV2
+	// They don't need the extra indirection that decodePointerFieldV2 adds
+	if _, isPtr := f.Type.(*schema.PointerType); isPtr {
 		return false
 	}
 	if c.needsPointer(f.Type) {
@@ -704,6 +715,31 @@ func (c *goContext) isPointerField(f *schema.Field) bool {
 	if f.Required && c.isScalarType(f.Type) {
 		return true
 	}
+	return false
+}
+
+// isNilCheckable returns true if the generated field can be compared to nil.
+// Used by Validate() to generate nil checks for required pointer fields.
+func (c *goContext) isNilCheckable(f *schema.Field) bool {
+	if f.Repeated {
+		return false
+	}
+
+	// Schema pointer types are always nil-checkable
+	if _, isPtr := f.Type.(*schema.PointerType); isPtr {
+		return true
+	}
+
+	// Optional non-pointer types become pointers in generated code
+	if f.Optional && !c.needsPointer(f.Type) {
+		return true
+	}
+
+	// Required scalars become pointers to distinguish nil from zero value
+	if f.Required && c.isScalarType(f.Type) {
+		return true
+	}
+
 	return false
 }
 
@@ -927,7 +963,7 @@ func (m *{{goMessageType $msg}}) DecodeFrom(r *cramberry.Reader) {
 {{- if hasRequired $msg}}
 // Validate validates that all required fields are set.
 func (m *{{goMessageType $msg}}) Validate() error {
-{{- range $msg.Fields}}{{if .Required}}
+{{- range $msg.Fields}}{{if and .Required (isNilCheckable .)}}
 	// Field {{.Name}} is required
 	if m.{{goFieldName .}} == nil {
 		return cramberry.NewValidationError("{{goMessageType $msg}}", "{{.Name}}", "required field is missing")
