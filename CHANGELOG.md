@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-01-28
+
+### Added
+- **Import path mapping for code generation**: Cross-package type references now generate proper Go import statements
+  - New `-M` CLI flag: `cramberry generate -M alias=go/import/path`
+  - `ImportPaths` option in `codegen.Options` for programmatic use
+  - Generated code includes appropriate import statements for external packages
+
+### Changed
+- **Exported EncodeTo/DecodeFrom methods**: Generated `EncodeTo()` and `DecodeFrom()` methods are now exported (uppercase) to enable cross-package access
+  - This is a breaking change for generated code that references these methods
+
+### Fixed
+- Schema parser now allows import statements to appear before, after, or intermixed with option statements
+  - Previously, all imports had to come before all options
+
 ## [1.4.3] - 2026-01-27
 
 ### Security
