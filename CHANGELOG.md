@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-01-28
+
+### Fixed
+- **Interface validation for same-package imports**: Interfaces can now reference message types from multiple imported schema files that share the same package name
+  - Added `findMessageInSamePackageImports()` for interface-specific type lookup
+  - Completes same-package import support added in v1.5.1 (which only worked for field type references)
+
 ## [1.5.1] - 2026-01-28
 
 ### Added
