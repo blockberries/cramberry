@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.5] - 2026-01-29
+
+### Fixed
+- **Writer integer overflow on 32-bit systems**: WritePackedFloat32/64 and WritePackedFixed32/64 now include `math.MaxInt` overflow checks before multiplication, matching their reader counterparts. Previously, large slice lengths could overflow on 32-bit systems causing buffer underallocation.
+- **Go generator enum wire type detection**: The Go code generator now correctly detects local enums and uses `WireTypeV2SVarint` instead of incorrectly using `WireTypeV2Bytes`. This matches the TypeScript and Rust generators and prevents wire format corruption.
+- **Deterministic interface implementation ordering**: Schema extraction now sorts interface implementations by name before processing, ensuring deterministic output critical for consensus systems.
+
 ## [1.5.4] - 2026-01-29
 
 ### Fixed
