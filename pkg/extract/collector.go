@@ -134,11 +134,17 @@ func (c *TypeCollector) collectType(typeName *types.TypeName, pkgPath string, do
 	underlying := typeName.Type().Underlying()
 	qualifiedName := pkgPath + "." + typeName.Name()
 
+	// Get package name safely (can be nil for builtins)
+	pkgName := ""
+	if typeName.Pkg() != nil {
+		pkgName = typeName.Pkg().Name()
+	}
+
 	switch t := underlying.(type) {
 	case *types.Struct:
 		info := &TypeInfo{
 			Name:       typeName.Name(),
-			Package:    typeName.Pkg().Name(),
+			Package:    pkgName,
 			PkgPath:    pkgPath,
 			Doc:        doc,
 			GoType:     typeName.Type(),
@@ -184,7 +190,7 @@ func (c *TypeCollector) collectType(typeName *types.TypeName, pkgPath string, do
 		if t.NumMethods() > 0 || c.config.IncludeEmptyInterfaces {
 			info := &InterfaceInfo{
 				Name:    typeName.Name(),
-				Package: typeName.Pkg().Name(),
+				Package: pkgName,
 				PkgPath: pkgPath,
 				Doc:     doc,
 			}
@@ -201,7 +207,7 @@ func (c *TypeCollector) collectType(typeName *types.TypeName, pkgPath string, do
 		if t.Info()&types.IsInteger != 0 {
 			info := &EnumInfo{
 				Name:    typeName.Name(),
-				Package: typeName.Pkg().Name(),
+				Package: pkgName,
 				PkgPath: pkgPath,
 				Doc:     doc,
 				GoType:  typeName.Type(),
@@ -403,6 +409,9 @@ func parseTypeIDFromDoc(doc string) (uint32, bool) {
 
 func (c *TypeCollector) typeToString(t types.Type) string {
 	return types.TypeString(t, func(pkg *types.Package) string {
+		if pkg == nil {
+			return ""
+		}
 		return pkg.Name()
 	})
 }

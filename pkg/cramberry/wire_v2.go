@@ -113,8 +113,8 @@ func DecodeCompactTag(data []byte) (fieldNum int, wireType byte, n int) {
 	for i := 1; i < len(data) && i <= wire.MaxVarintLen64; i++ {
 		b := data[i]
 
-		// At the 10th byte (index 10 in data, 9th varint byte), check for overflow
-		// We've consumed 63 bits; only 1 more bit allowed
+		// At the 10th varint byte (index 10 in data), check for overflow
+		// We've consumed 63 bits (9 bytes * 7 bits); only 1 more bit allowed
 		if i == 10 {
 			if b >= 0x80 {
 				return 0, 0, 0 // Varint too long

@@ -65,6 +65,32 @@ A comprehensive code review was conducted across all Go source files in the Cram
 
 ---
 
+### Issue 5: Missing Nil Pointer Checks in collectType
+
+**File:** `pkg/extract/collector.go`
+**Lines:** 141, 187, 204, 405
+**Severity:** MEDIUM
+**Status:** FIXED
+
+**Description:** The `collectType` function called `typeName.Pkg().Name()` without checking if `Pkg()` returns nil. This followed the same pattern as Issue 3. Additionally, the `typeToString` function's qualifier callback could receive a nil package.
+
+**Fix Applied:** Added nil check at the start of `collectType` that extracts the package name safely, then reused this value. Added nil check to the qualifier function in `typeToString`.
+
+---
+
+### Issue 6: Misleading Comment in Varint Overflow Check
+
+**File:** `pkg/cramberry/wire_v2.go`
+**Line:** 116
+**Severity:** LOW (Documentation)
+**Status:** FIXED
+
+**Description:** The comment incorrectly stated "9th varint byte" when the check was actually for the 10th varint byte (index 10 in data, after the tag byte at index 0).
+
+**Fix Applied:** Updated comment to accurately describe the byte position.
+
+---
+
 ## Low Priority Issues (Documented, Not Fixing)
 
 ### Regex Compilation in Loop
@@ -98,11 +124,11 @@ The `PutUvarint` and `PutTag` functions assume sufficient buffer space. This is 
 
 ## Review Statistics
 
-- **Files Reviewed:** 33 Go source files
+- **Files Reviewed:** 64 Go source files
 - **Critical Issues:** 0
 - **High Severity Issues:** 2 (fixed)
-- **Medium Severity Issues:** 2 (fixed)
-- **Low Severity Issues:** 5 (documented, not fixing)
+- **Medium Severity Issues:** 3 (fixed)
+- **Low Severity Issues:** 4 (documented, not fixing)
 
 ---
 
@@ -114,3 +140,5 @@ The `PutUvarint` and `PutTag` functions assume sufficient buffer space. This is 
 | 2026-01-29 | Issue 2: DecodeTag consistency | FIXED | Consistent error return value |
 | 2026-01-29 | Issue 3: Nil pointer check | FIXED | Added nil guard |
 | 2026-01-29 | Issue 4: Enum wire type detection | FIXED | Package qualification check |
+| 2026-01-29 | Issue 5: Nil pointer checks in collectType | FIXED | Defensive nil checks for package names |
+| 2026-01-29 | Issue 6: Varint comment correction | FIXED | Documentation fix |
