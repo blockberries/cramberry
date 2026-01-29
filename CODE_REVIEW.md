@@ -104,6 +104,51 @@ A comprehensive code review was conducted across all Go source files in the Cram
 
 ---
 
+### Issue 8: Writer Integer Overflow on 32-bit Systems
+
+**File:** `pkg/cramberry/writer.go`
+**Lines:** 707, 734, 764, 788
+**Severity:** HIGH
+**Status:** FIXED
+
+**Description:** The `WritePackedFloat32`, `WritePackedFloat64`, `WritePackedFixed32`, and `WritePackedFixed64` functions only checked against the `MaxPackedFloat*Length` constants before multiplication. On 32-bit systems where `int` is 32 bits, large slice lengths could overflow in the multiplication `len(values) * elementSize`, producing negative values. This could cause buffer underallocation and memory corruption.
+
+The reader code already had the proper dual check: `if count > MaxPackedFloat32Length || count > math.MaxInt/4`.
+
+**Fix Applied:** Added the same overflow protection check to all four writer functions: `|| len(values) > math.MaxInt/elementSize` to match the reader's defensive programming.
+
+---
+
+### Issue 9: Go Generator Missing Enum Wire Type Detection
+
+**File:** `pkg/codegen/go_generator.go`
+**Line:** 114
+**Severity:** HIGH
+**Status:** FIXED
+
+**Description:** The Go code generator's `wireTypeV2ForType` function treated all `NamedType` references as `WireTypeV2Bytes`, including enums. Enums should use `WireTypeV2SVarint`. The TypeScript and Rust generators correctly detected local enums and returned the appropriate wire type.
+
+This inconsistency could cause wire format corruption when enum fields are encoded with Go-generated code - the tag would indicate "bytes" but the actual data would be "svarint" encoded.
+
+**Fix Applied:** Added enum detection logic to the Go generator matching TypeScript and Rust: check if the NamedType (with no package qualifier) matches a local enum name, and if so, return `WireTypeV2SVarint`.
+
+---
+
+### Issue 10: Non-deterministic Interface Implementation Ordering
+
+**File:** `pkg/extract/builder.go`
+**Lines:** 214, 228
+**Severity:** HIGH
+**Status:** FIXED
+
+**Description:** The `buildInterfaces` function iterated over `iface.Implementations` in whatever order they were collected. Since implementations are populated by iterating over a Go map (`c.types`) in `detectImplementations()`, the order is non-deterministic. This violated the determinism requirement critical for consensus systems.
+
+Other parts of the schema builder (enums, messages) correctly sort their data by name for deterministic output.
+
+**Fix Applied:** Added sorting of interface implementations by name before processing, matching the pattern used for enums and messages.
+
+---
+
 ## Low Priority Issues (Documented, Not Fixing)
 
 ### Regex Compilation in Loop
@@ -149,7 +194,7 @@ The type reference parser recursively descends for pointer (`*`) and array (`[]`
 
 - **Files Reviewed:** 64 Go source files
 - **Critical Issues:** 0
-- **High Severity Issues:** 3 (fixed)
+- **High Severity Issues:** 6 (fixed)
 - **Medium Severity Issues:** 3 (fixed)
 - **Low Severity Issues:** 5 (documented, not fixing)
 
@@ -166,3 +211,6 @@ The type reference parser recursively descends for pointer (`*`) and array (`[]`
 | 2026-01-29 | Issue 5: Nil pointer checks in collectType | FIXED | Defensive nil checks for package names |
 | 2026-01-29 | Issue 6: Varint comment correction | FIXED | Documentation fix |
 | 2026-01-29 | Issue 7: Integer overflow in codegen | FIXED | Use overflow-safe ReadArrayHeader/ReadMapHeader |
+| 2026-01-29 | Issue 8: Writer overflow on 32-bit | FIXED | Added math.MaxInt overflow check |
+| 2026-01-29 | Issue 9: Go generator enum detection | FIXED | Added enum wire type detection |
+| 2026-01-29 | Issue 10: Interface ordering | FIXED | Sort implementations by name |

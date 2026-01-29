@@ -111,7 +111,20 @@ func (c *goContext) wireTypeV2ForType(t schema.TypeRef, repeated bool) string {
 		default:
 			return "cramberry.WireTypeV2Bytes"
 		}
-	case *schema.ArrayType, *schema.MapType, *schema.NamedType:
+	case *schema.NamedType:
+		// Named types (enums, messages) - enums are svarint, messages are bytes.
+		// Only check local enums when the type has no package qualifier.
+		// Cross-package types are assumed to be messages; cross-package enum
+		// detection requires access to imported schemas which is not yet supported.
+		if typ.Package == "" {
+			for _, e := range c.Schema.Enums {
+				if e.Name == typ.Name {
+					return "cramberry.WireTypeV2SVarint"
+				}
+			}
+		}
+		return "cramberry.WireTypeV2Bytes"
+	case *schema.ArrayType, *schema.MapType:
 		return "cramberry.WireTypeV2Bytes"
 	default:
 		return "cramberry.WireTypeV2Bytes"

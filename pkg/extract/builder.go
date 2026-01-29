@@ -210,8 +210,15 @@ func (b *SchemaBuilder) buildInterfaces() {
 			}
 		}
 
+		// Sort implementations by name for deterministic output
+		impls := make([]*TypeInfo, len(iface.Implementations))
+		copy(impls, iface.Implementations)
+		sort.Slice(impls, func(i, j int) bool {
+			return impls[i].Name < impls[j].Name
+		})
+
 		// First pass: collect explicitly assigned type IDs
-		for _, impl := range iface.Implementations {
+		for _, impl := range impls {
 			if impl.TypeID > 0 {
 				if existingType, exists := usedTypeIDs[int(impl.TypeID)]; exists {
 					b.addWarning(fmt.Sprintf(
@@ -225,7 +232,7 @@ func (b *SchemaBuilder) buildInterfaces() {
 
 		// Second pass: assign type IDs to implementations
 		nextAutoID := 128 // Start auto-assigned IDs at 128
-		for _, impl := range iface.Implementations {
+		for _, impl := range impls {
 			var typeID int
 
 			if impl.TypeID > 0 {

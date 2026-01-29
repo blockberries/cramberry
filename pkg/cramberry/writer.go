@@ -1,6 +1,7 @@
 package cramberry
 
 import (
+	"math"
 	"sync"
 
 	"github.com/blockberries/cramberry/internal/wire"
@@ -704,7 +705,8 @@ func (w *Writer) WritePackedFloat32(values []float32) {
 		return
 	}
 	// Overflow protection: check length before multiplication
-	if len(values) > MaxPackedFloat32Length {
+	// Use math.MaxInt to handle both 32-bit and 64-bit systems safely
+	if len(values) > MaxPackedFloat32Length || len(values) > math.MaxInt/4 {
 		w.setError(ErrMaxArrayLength)
 		return
 	}
@@ -731,7 +733,8 @@ func (w *Writer) WritePackedFloat64(values []float64) {
 		return
 	}
 	// Overflow protection: check length before multiplication
-	if len(values) > MaxPackedFloat64Length {
+	// Use math.MaxInt to handle both 32-bit and 64-bit systems safely
+	if len(values) > MaxPackedFloat64Length || len(values) > math.MaxInt/8 {
 		w.setError(ErrMaxArrayLength)
 		return
 	}
@@ -761,7 +764,8 @@ func (w *Writer) WritePackedFixed32(values []uint32) {
 		return
 	}
 	// Overflow protection: check length before multiplication
-	if len(values) > MaxPackedFixed32Length {
+	// Use math.MaxInt to handle both 32-bit and 64-bit systems safely
+	if len(values) > MaxPackedFixed32Length || len(values) > math.MaxInt/4 {
 		w.setError(ErrMaxArrayLength)
 		return
 	}
@@ -785,7 +789,8 @@ func (w *Writer) WritePackedFixed64(values []uint64) {
 		return
 	}
 	// Overflow protection: check length before multiplication
-	if len(values) > MaxPackedFixed64Length {
+	// Use math.MaxInt to handle both 32-bit and 64-bit systems safely
+	if len(values) > MaxPackedFixed64Length || len(values) > math.MaxInt/8 {
 		w.setError(ErrMaxArrayLength)
 		return
 	}
