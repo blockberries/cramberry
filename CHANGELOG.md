@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.4] - 2026-01-29
+
+### Fixed
+- **Defensive error handling in DecodeComplex64/DecodeComplex128**: Previously ignored errors from float decoding functions are now properly propagated
+- **Consistent error returns in DecodeTag**: Returns 0 bytes consumed on ErrInvalidWireType to match other error cases
+- **Nil pointer safety in schema extraction**: Added nil check for package in collectEnumValues to prevent crashes on builtin types
+- **Cross-package enum wire type detection**: Fixed false positive where cross-package messages were incorrectly identified as local enums when they shared a name
+
 ## [1.5.3] - 2026-01-28
 
 ### Fixed
