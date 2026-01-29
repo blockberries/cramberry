@@ -125,7 +125,7 @@ func DecodeTag(data []byte) (fieldNum int, wireType Type, n int, err error) {
 
 	// Validate wire type
 	if !wireType.IsValid() {
-		return 0, 0, n, ErrInvalidWireType
+		return 0, 0, 0, ErrInvalidWireType
 	}
 
 	return fieldNum, wireType, n, nil

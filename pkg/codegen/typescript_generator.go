@@ -200,10 +200,15 @@ func (c *tsContext) tsWireTypeForType(t schema.TypeRef) string {
 			return "WireTypeV2.Bytes"
 		}
 	case *schema.NamedType:
-		// Named types (enums, messages) - enums are svarint, messages are bytes
-		for _, e := range c.Schema.Enums {
-			if e.Name == typ.Name {
-				return "WireTypeV2.SVarint"
+		// Named types (enums, messages) - enums are svarint, messages are bytes.
+		// Only check local enums when the type has no package qualifier.
+		// Cross-package types are assumed to be messages; cross-package enum
+		// detection requires access to imported schemas which is not yet supported.
+		if typ.Package == "" {
+			for _, e := range c.Schema.Enums {
+				if e.Name == typ.Name {
+					return "WireTypeV2.SVarint"
+				}
 			}
 		}
 		return "WireTypeV2.Bytes"
@@ -249,13 +254,15 @@ func (c *tsContext) tsWriteValueWithWriter(t schema.TypeRef, value string, write
 			return fmt.Sprintf("%s.writeString(%s)", writerName, value)
 		}
 	case *schema.NamedType:
-		// Check if it's an enum
-		for _, e := range c.Schema.Enums {
-			if e.Name == typ.Name {
-				return fmt.Sprintf("%s.writeSVarint(%s)", writerName, value)
+		// Check if it's a local enum (no package qualifier)
+		if typ.Package == "" {
+			for _, e := range c.Schema.Enums {
+				if e.Name == typ.Name {
+					return fmt.Sprintf("%s.writeSVarint(%s)", writerName, value)
+				}
 			}
 		}
-		// It's a message - encode it
+		// It's a message (or cross-package enum, treated as message for now)
 		return fmt.Sprintf("encode%s(%s, %s)", ToPascalCase(typ.Name), writerName, value)
 	default:
 		return fmt.Sprintf("%s.writeString(JSON.stringify(%s))", writerName, value)
@@ -297,13 +304,15 @@ func (c *tsContext) tsWriteValue(t schema.TypeRef, value string, repeated bool) 
 			return fmt.Sprintf("writer.writeString(%s)", value)
 		}
 	case *schema.NamedType:
-		// Check if it's an enum
-		for _, e := range c.Schema.Enums {
-			if e.Name == typ.Name {
-				return fmt.Sprintf("writer.writeSVarint(%s)", value)
+		// Check if it's a local enum (no package qualifier)
+		if typ.Package == "" {
+			for _, e := range c.Schema.Enums {
+				if e.Name == typ.Name {
+					return fmt.Sprintf("writer.writeSVarint(%s)", value)
+				}
 			}
 		}
-		// It's a message - encode it
+		// It's a message (or cross-package enum, treated as message for now)
 		return fmt.Sprintf("encode%s(writer, %s)", ToPascalCase(typ.Name), value)
 	case *schema.ArrayType:
 		return c.tsWriteValue(typ.Element, value, true)
@@ -357,13 +366,15 @@ func (c *tsContext) tsReadValue(t schema.TypeRef, repeated bool) string {
 			return "reader.readString()"
 		}
 	case *schema.NamedType:
-		// Check if it's an enum
-		for _, e := range c.Schema.Enums {
-			if e.Name == typ.Name {
-				return "reader.readSVarint()"
+		// Check if it's a local enum (no package qualifier)
+		if typ.Package == "" {
+			for _, e := range c.Schema.Enums {
+				if e.Name == typ.Name {
+					return "reader.readSVarint()"
+				}
 			}
 		}
-		// It's a message
+		// It's a message (or cross-package enum, treated as message for now)
 		return fmt.Sprintf("decode%s(reader)", ToPascalCase(typ.Name))
 	case *schema.ArrayType:
 		return c.tsReadValue(typ.Element, true)

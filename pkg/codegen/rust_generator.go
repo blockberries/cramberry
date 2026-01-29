@@ -224,10 +224,15 @@ func (c *rustContext) rustWireTypeForType(t schema.TypeRef) string {
 			return "WireTypeV2::Bytes"
 		}
 	case *schema.NamedType:
-		// Named types (enums, messages) - enums are svarint, messages are bytes
-		for _, e := range c.Schema.Enums {
-			if e.Name == typ.Name {
-				return "WireTypeV2::SVarint"
+		// Named types (enums, messages) - enums are svarint, messages are bytes.
+		// Only check local enums when the type has no package qualifier.
+		// Cross-package types are assumed to be messages; cross-package enum
+		// detection requires access to imported schemas which is not yet supported.
+		if typ.Package == "" {
+			for _, e := range c.Schema.Enums {
+				if e.Name == typ.Name {
+					return "WireTypeV2::SVarint"
+				}
 			}
 		}
 		return "WireTypeV2::Bytes"
@@ -273,13 +278,15 @@ func (c *rustContext) rustWriteValueForSubWriter(t schema.TypeRef, value string)
 			return fmt.Sprintf("sub_writer.write_string(%s)", value)
 		}
 	case *schema.NamedType:
-		// Check if it's an enum
-		for _, e := range c.Schema.Enums {
-			if e.Name == typ.Name {
-				return fmt.Sprintf("sub_writer.write_svarint(*%s as i32)", value)
+		// Check if it's a local enum (no package qualifier)
+		if typ.Package == "" {
+			for _, e := range c.Schema.Enums {
+				if e.Name == typ.Name {
+					return fmt.Sprintf("sub_writer.write_svarint(*%s as i32)", value)
+				}
 			}
 		}
-		// It's a message
+		// It's a message (or cross-package enum, treated as message for now)
 		return fmt.Sprintf("encode_%s(&mut sub_writer, %s)", ToSnakeCase(typ.Name), value)
 	default:
 		return fmt.Sprintf("sub_writer.write_string(&format!(\"{:?}\", %s))", value)
@@ -328,13 +335,15 @@ func (c *rustContext) rustWriteValue(t schema.TypeRef, value string, repeated bo
 			return fmt.Sprintf("writer.write_string(&%s)", value)
 		}
 	case *schema.NamedType:
-		// Check if it's an enum
-		for _, e := range c.Schema.Enums {
-			if e.Name == typ.Name {
-				return fmt.Sprintf("writer.write_svarint(%s as i32)", value)
+		// Check if it's a local enum (no package qualifier)
+		if typ.Package == "" {
+			for _, e := range c.Schema.Enums {
+				if e.Name == typ.Name {
+					return fmt.Sprintf("writer.write_svarint(%s as i32)", value)
+				}
 			}
 		}
-		// It's a message
+		// It's a message (or cross-package enum, treated as message for now)
 		return fmt.Sprintf("encode_%s(writer, &%s)", ToSnakeCase(typ.Name), value)
 	case *schema.ArrayType:
 		return c.rustWriteValue(typ.Element, value, true)
@@ -411,14 +420,16 @@ func (c *rustContext) rustReadValue(t schema.TypeRef, repeated bool) string {
 			return "reader.read_string()?.to_string()"
 		}
 	case *schema.NamedType:
-		// Check if it's an enum
-		for _, e := range c.Schema.Enums {
-			if e.Name == typ.Name {
-				enumType := c.rustEnumType(e)
-				return fmt.Sprintf("%s::from_i32(reader.read_svarint()?).unwrap_or(%s::%s)", enumType, enumType, ToPascalCase(e.Values[0].Name))
+		// Check if it's a local enum (no package qualifier)
+		if typ.Package == "" {
+			for _, e := range c.Schema.Enums {
+				if e.Name == typ.Name {
+					enumType := c.rustEnumType(e)
+					return fmt.Sprintf("%s::from_i32(reader.read_svarint()?).unwrap_or(%s::%s)", enumType, enumType, ToPascalCase(e.Values[0].Name))
+				}
 			}
 		}
-		// It's a message
+		// It's a message (or cross-package enum, treated as message for now)
 		return fmt.Sprintf("decode_%s(reader)?", ToSnakeCase(typ.Name))
 	case *schema.ArrayType:
 		return c.rustReadValue(typ.Element, true)

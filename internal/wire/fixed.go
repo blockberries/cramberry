@@ -186,8 +186,14 @@ func DecodeComplex64(data []byte) (complex64, error) {
 	if len(data) < 8 {
 		return 0, ErrVarintTruncated
 	}
-	r, _ := DecodeFloat32(data[0:4])
-	i, _ := DecodeFloat32(data[4:8])
+	r, err := DecodeFloat32(data[0:4])
+	if err != nil {
+		return 0, err
+	}
+	i, err := DecodeFloat32(data[4:8])
+	if err != nil {
+		return 0, err
+	}
 	return complex(r, i), nil
 }
 
@@ -203,8 +209,14 @@ func DecodeComplex128(data []byte) (complex128, error) {
 	if len(data) < 16 {
 		return 0, ErrVarintTruncated
 	}
-	r, _ := DecodeFloat64(data[0:8])
-	i, _ := DecodeFloat64(data[8:16])
+	r, err := DecodeFloat64(data[0:8])
+	if err != nil {
+		return 0, err
+	}
+	i, err := DecodeFloat64(data[8:16])
+	if err != nil {
+		return 0, err
+	}
 	return complex(r, i), nil
 }
 

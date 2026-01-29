@@ -222,6 +222,10 @@ func (c *TypeCollector) collectEnumValues(pkg *packages.Package) {
 		if cnst, ok := obj.(*types.Const); ok {
 			// Get the type of this constant
 			if named, ok := cnst.Type().(*types.Named); ok {
+				// Skip types without a package (builtins)
+				if named.Obj().Pkg() == nil {
+					continue
+				}
 				qualifiedName := named.Obj().Pkg().Path() + "." + named.Obj().Name()
 				if enumInfo, exists := c.enums[qualifiedName]; exists {
 					// Get the constant value
