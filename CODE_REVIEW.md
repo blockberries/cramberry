@@ -91,6 +91,19 @@ A comprehensive code review was conducted across all Go source files in the Cram
 
 ---
 
+### Issue 7: Integer Overflow in Generated Decode Code
+
+**File:** `pkg/codegen/go_generator.go`
+**Lines:** 318, 334, 342, 371-377, 381-389
+**Severity:** HIGH
+**Status:** FIXED
+
+**Description:** The Go code generator produced decode functions that converted `ReadUvarint()` results directly to `int` without overflow checking: `n := int(r.ReadUvarint())`. On 32-bit systems, values exceeding `math.MaxInt32` would overflow, potentially causing panics from `make()` with negative capacity or resource exhaustion from large allocations.
+
+**Fix Applied:** Changed generated code to use the overflow-safe `ReadArrayHeader()` and `ReadMapHeader()` methods from the runtime, which include proper overflow detection and limit checking.
+
+---
+
 ## Low Priority Issues (Documented, Not Fixing)
 
 ### Regex Compilation in Loop
@@ -122,13 +135,23 @@ The `PutUvarint` and `PutTag` functions assume sufficient buffer space. This is 
 
 ---
 
+### Unbounded Recursion in Schema Parser
+
+**File:** `pkg/schema/parser.go`
+**Function:** `parseTypeRef()`
+**Severity:** LOW
+
+The type reference parser recursively descends for pointer (`*`) and array (`[]`) types without depth limiting. Deeply nested types like `*****[][]...int` could cause stack overflow. This is acceptable because schema files are trusted developer input, not untrusted data. If processing untrusted schemas becomes necessary, a depth limit should be added.
+
+---
+
 ## Review Statistics
 
 - **Files Reviewed:** 64 Go source files
 - **Critical Issues:** 0
-- **High Severity Issues:** 2 (fixed)
+- **High Severity Issues:** 3 (fixed)
 - **Medium Severity Issues:** 3 (fixed)
-- **Low Severity Issues:** 4 (documented, not fixing)
+- **Low Severity Issues:** 5 (documented, not fixing)
 
 ---
 
@@ -142,3 +165,4 @@ The `PutUvarint` and `PutTag` functions assume sufficient buffer space. This is 
 | 2026-01-29 | Issue 4: Enum wire type detection | FIXED | Package qualification check |
 | 2026-01-29 | Issue 5: Nil pointer checks in collectType | FIXED | Defensive nil checks for package names |
 | 2026-01-29 | Issue 6: Varint comment correction | FIXED | Documentation fix |
+| 2026-01-29 | Issue 7: Integer overflow in codegen | FIXED | Use overflow-safe ReadArrayHeader/ReadMapHeader |

@@ -315,7 +315,11 @@ func (c *goContext) decodeMapFieldV2(f *schema.Field, fieldName string) string {
 	keyType := c.goTypeInternal(mapType.Key, false)
 	valType := c.goTypeInternal(mapType.Value, false)
 
-	return fmt.Sprintf(`n := int(r.ReadUvarint())
+	// Use ReadMapHeader() for overflow-safe size reading
+	return fmt.Sprintf(`n := r.ReadMapHeader()
+		if r.Err() != nil {
+			return
+		}
 		%s = make(map[%s]%s, n)
 		for i := 0; i < n; i++ {
 			var k %s
@@ -330,8 +334,12 @@ func (c *goContext) decodeRepeatedFieldV2(f *schema.Field, fieldName string) str
 	goType := c.goTypeInternal(f.Type, false)
 
 	// Check if it's a packable type
+	// Use ReadArrayHeader() for overflow-safe size reading
 	if c.isPackableType(f.Type) {
-		return fmt.Sprintf(`n := int(r.ReadUvarint())
+		return fmt.Sprintf(`n := r.ReadArrayHeader()
+		if r.Err() != nil {
+			return
+		}
 		%s = make([]%s, n)
 		for i := 0; i < n; i++ {
 			%s
@@ -339,7 +347,10 @@ func (c *goContext) decodeRepeatedFieldV2(f *schema.Field, fieldName string) str
 	}
 
 	// Non-packable types
-	return fmt.Sprintf(`n := int(r.ReadUvarint())
+	return fmt.Sprintf(`n := r.ReadArrayHeader()
+		if r.Err() != nil {
+			return
+		}
 		%s = make([]%s, n)
 		for i := 0; i < n; i++ {
 			%s
@@ -359,22 +370,34 @@ func (c *goContext) decodeValueV2(t schema.TypeRef, varName string) string {
 		return fmt.Sprintf(`%s.DecodeFrom(r)`, varName)
 	case *schema.ArrayType:
 		goType := c.goTypeInternal(typ.Element, true)
-		return fmt.Sprintf(`n := int(r.ReadUvarint())
-		%s = make([]%s, n)
-		for i := 0; i < n; i++ {
-			%s
+		// Use ReadArrayHeader() for overflow-safe size reading
+		return fmt.Sprintf(`{
+			n := r.ReadArrayHeader()
+			if r.Err() != nil {
+				return
+			}
+			%s = make([]%s, n)
+			for i := 0; i < n; i++ {
+				%s
+			}
 		}`, varName, goType, c.decodeValueV2(typ.Element, varName+"[i]"))
 	case *schema.MapType:
 		keyType := c.goTypeInternal(typ.Key, false)
 		valType := c.goTypeInternal(typ.Value, false)
-		return fmt.Sprintf(`n := int(r.ReadUvarint())
-		%s = make(map[%s]%s, n)
-		for i := 0; i < n; i++ {
-			var k %s
-			%s
-			var v %s
-			%s
-			%s[k] = v
+		// Use ReadMapHeader() for overflow-safe size reading
+		return fmt.Sprintf(`{
+			n := r.ReadMapHeader()
+			if r.Err() != nil {
+				return
+			}
+			%s = make(map[%s]%s, n)
+			for i := 0; i < n; i++ {
+				var k %s
+				%s
+				var v %s
+				%s
+				%s[k] = v
+			}
 		}`, varName, keyType, valType, keyType, c.decodeValueV2(typ.Key, "k"), valType, c.decodeValueV2(typ.Value, "v"), varName)
 	case *schema.PointerType:
 		// For pointer types, allocate and decode the underlying element
