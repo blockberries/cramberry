@@ -526,3 +526,17 @@ cramberry version
 | `pkg/extract/`          | Go schema extraction              |
 | `typescript/src/`       | TypeScript runtime                |
 | `rust/src/`             | Rust runtime                      |
+
+---
+
+## Ecosystem References
+
+Cramberry is the foundational serialization layer for the Blockberries ecosystem. All other components use Cramberry for binary encoding. For complete integration documentation:
+
+- **[../ECOSYSTEM.md](../ECOSYSTEM.md)** - Complete ecosystem architecture and integration guide
+- **[../raspberry/ARCHITECTURE.md](../raspberry/ARCHITECTURE.md)** - Blockchain node using Cramberry
+- **[../blockberry/ARCHITECTURE.md](../blockberry/ARCHITECTURE.md)** - Node framework using Cramberry for messages
+- **[../looseberry/ARCHITECTURE.md](../looseberry/ARCHITECTURE.md)** - DAG mempool using Cramberry for batches
+- **[../leaderberry/ARCHITECTURE.md](../leaderberry/ARCHITECTURE.md)** - BFT consensus using Cramberry for votes/blocks
+- **[../glueberry/ARCHITECTURE.md](../glueberry/ARCHITECTURE.md)** - P2P networking using Cramberry for framing
+- **[../punnet-sdk/ARCHITECTURE.md](../punnet-sdk/ARCHITECTURE.md)** - Application module framework using Cramberry for state
