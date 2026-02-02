@@ -91,3 +91,89 @@ Successfully implemented deterministic JSON serialization for Go with ToJSON()/F
 - **Documentation**: Update CLAUDE.md and README with JSON examples
 - **Golden files**: Generate cross-language JSON test files
 
+
+## Phase: Deterministic JSON Serialization - TypeScript Implementation (Phase 2)
+
+**Status**: ✅ IMPLEMENTED (pending full integration testing)
+
+**Date**: 2026-02-02
+
+### Summary
+Implemented deterministic JSON serialization for TypeScript with toJSON/fromJSON functions. Mirrors Go implementation with language-specific adaptations for TypeScript/JavaScript ecosystem.
+
+### Files Created
+- `typescript/src/json.ts` - Runtime JSON helpers (formatters, validators, base64, sorting)
+- `typescript/src/json.test.ts` - Comprehensive unit tests (36 tests, all pass)
+- `typescript/test/json_test.ts` - Generated code from test schema
+- `typescript/test/json-integration.test.ts` - Integration tests for generated code
+
+### Files Modified
+- `pkg/codegen/typescript_generator.go` - Added 300+ lines of JSON template functions
+  - `jsonEncodeField()`, `jsonDecodeField()` - Field-level encoding/decoding
+  - `jsonEncodeValue()`, `jsonDecodeValue()` - Type-specific encoding/decoding
+  - `jsonEncodeScalar()`, `jsonDecodeScalar()` - Primitive type handling
+  - `jsonEncodeEnum()`, `jsonDecodeEnum()` - Enum as string names
+  - `jsonEncodeMap()`, `jsonDecodeMap()` - Lexicographic key sorting
+  - `jsonEncodeArray()`, `jsonDecodeArray()` - Array preservation
+  - Template generates `toJSON_MessageName()` and `fromJSON_MessageName()` functions
+- `typescript/src/index.ts` - Added JSON helper exports
+
+### Key Functionality Implemented
+
+#### JSON Encoding Features
+- **BigInt handling**: int64/uint64 as strings for precision
+- **Number formatting**: int8-32, uint8-32 as strings
+- **Base64 byte arrays**: Browser and Node.js compatible
+- **Enum string names**: Human-readable enum values
+- **Lexicographic map keys**: Sorted for determinism
+- **Compact format**: No whitespace
+- **Float precision**: toPrecision(9/17) for float32/float64
+- **Nested messages**: JSON.stringify for now (TODO: call specific toJSON functions)
+
+#### JSON Decoding Features
+- **Flexible input**: Accepts string or numeric integers
+- **Strict unknown fields**: Rejects unrecognized fields
+- **Type coercion**: Proper type conversion for all scalars
+- **Enum validation**: String name to enum value mapping
+- **Base64 decoding**: Both browser and Node.js
+
+#### Runtime Helpers
+- `formatBigIntToString()`: Convert bigint to string
+- `formatNumberToString()`: Convert number to string
+- `formatFloat32/64()`: Fixed precision formatting with NaN/Infinity validation
+- `encodeBase64/decodeBase64()`: Cross-platform base64
+- `parseBigIntFromJSON()`: Parse bigint from string or number
+- `parseNumberFromJSON()`: Parse number from string or number
+- `sortMapKeysLexicographic()`: Lexicographic sorting
+- `escapeJSONString()`: JSON-safe string escaping
+- `JSONWriter/JSONReader`: Helper classes for building/parsing JSON
+
+### Test Coverage
+- ✅ Unit tests: 36 tests for all JSON helper functions (all pass)
+- ✅ Format functions: BigInt, Number, Float32, Float64
+- ✅ Base64: Encoding/decoding with browser/Node compatibility
+- ✅ Parsing: BigInt and Number from JSON
+- ✅ Map sorting: Lexicographic order verified
+- ✅ String escaping: Special characters, unicode
+- ✅ JSONWriter/JSONReader: Building and parsing
+
+### Design Decisions
+1. **Function-based API**: `toJSON_MessageName()` rather than methods (TypeScript interfaces)
+2. **Browser + Node.js**: Cross-platform base64 encoding
+3. **BigInt for int64/uint64**: Native TypeScript bigint type
+4. **Number for int32/uint32**: Standard number type (safe range)
+5. **toPrecision for floats**: Deterministic float formatting
+6. **Nested messages**: Currently uses JSON.stringify (simpler, works for now)
+7. **Partial<T>**: Allows flexible field initialization in fromJSON
+
+### Known Limitations
+- Nested message encoding uses JSON.stringify rather than calling specific toJSON functions
+- Would benefit from more integration testing with actual message types
+- No validation for required fields yet (would need schema metadata)
+
+### Next Steps
+- Complete integration testing with complex message types
+- Consider adding toJSON function calls for nested messages
+- Run full test suite to ensure no regressions
+- **Phase 3**: Rust implementation (runtime + codegen)
+

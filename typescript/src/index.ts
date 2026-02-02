@@ -92,6 +92,23 @@ export {
   register,
 } from "./registry";
 
+// JSON helpers
+export {
+  formatBigIntToString,
+  formatNumberToString,
+  formatFloat32,
+  formatFloat64,
+  validateFloat,
+  encodeBase64,
+  decodeBase64,
+  parseBigIntFromJSON,
+  parseNumberFromJSON,
+  sortMapKeysLexicographic,
+  escapeJSONString,
+  JSONWriter,
+  JSONReader,
+} from "./json";
+
 /**
  * Library version.
  */

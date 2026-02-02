@@ -66,6 +66,9 @@ func (c *tsContext) funcMap() template.FuncMap {
 		"toSnake":          ToSnakeCase,
 		"generateComments": func() bool { return c.Options.GenerateComments },
 		"generateMarshal":  func() bool { return c.Options.GenerateMarshal },
+		"jsonFieldName":    c.jsonFieldName,
+		"jsonEncodeField":  c.jsonEncodeField,
+		"jsonDecodeField":  c.jsonDecodeField,
 	}
 }
 
@@ -389,6 +392,320 @@ func (c *tsContext) tsReadValue(t schema.TypeRef, repeated bool) string {
 	}
 }
 
+// JSON helper functions
+
+// jsonFieldName returns the snake_case JSON field name.
+func (c *tsContext) jsonFieldName(f *schema.Field) string {
+	return ToSnakeCase(f.Name)
+}
+
+// jsonEncodeField generates JSON encoding code for a field.
+func (c *tsContext) jsonEncodeField(f *schema.Field) string {
+	fieldName := ToCamelCase(f.Name)
+	jsonName := ToSnakeCase(f.Name)
+	isFirst := f.Number == 1
+
+	var code strings.Builder
+
+	// Add comma if not first field
+	if !isFirst {
+		code.WriteString("  result += ',';\n")
+	}
+
+	// Write field name
+	code.WriteString(fmt.Sprintf("  result += '\"%s\":';\n", jsonName))
+
+	// Generate value encoding
+	valueCode := c.jsonEncodeValue(f.Type, "msg."+fieldName, f.Repeated)
+	code.WriteString(valueCode)
+
+	return code.String()
+}
+
+// jsonEncodeValue generates code to encode a value to JSON.
+func (c *tsContext) jsonEncodeValue(t schema.TypeRef, varName string, repeated bool) string {
+	if repeated {
+		return c.jsonEncodeArray(t, varName)
+	}
+
+	switch typ := t.(type) {
+	case *schema.ScalarType:
+		return c.jsonEncodeScalar(typ, varName)
+	case *schema.NamedType:
+		// Check if it's an enum
+		for _, e := range c.Schema.Enums {
+			if e.Name == typ.Name {
+				return c.jsonEncodeEnum(varName)
+			}
+		}
+		// It's a message
+		return c.jsonEncodeMessage(varName)
+	case *schema.MapType:
+		return c.jsonEncodeMap(typ, varName)
+	case *schema.PointerType:
+		// Handle optional pointer
+		inner := c.jsonEncodeValue(typ.Element, varName, false)
+		return fmt.Sprintf("  if (%s != null) {\n  %s  } else {\n    result += 'null';\n  }\n", varName, strings.ReplaceAll(inner, "  ", "    "))
+	default:
+		return "  result += 'null';\n"
+	}
+}
+
+// jsonEncodeScalar generates code to encode a scalar value.
+func (c *tsContext) jsonEncodeScalar(t *schema.ScalarType, varName string) string {
+	switch t.Name {
+	case "bool":
+		return fmt.Sprintf("  result += %s ? 'true' : 'false';\n", varName)
+	case "int8", "int16", "int32", "uint8", "uint16", "uint32":
+		return fmt.Sprintf("  result += '\"' + formatNumberToString(%s) + '\"';\n", varName)
+	case "int64", "uint64":
+		return fmt.Sprintf("  result += '\"' + formatBigIntToString(%s) + '\"';\n", varName)
+	case "float32":
+		return fmt.Sprintf("  result += formatFloat32(%s);\n", varName)
+	case "float64":
+		return fmt.Sprintf("  result += formatFloat64(%s);\n", varName)
+	case "string":
+		return fmt.Sprintf("  result += escapeJSONString(%s);\n", varName)
+	case "bytes":
+		return fmt.Sprintf("  result += '\"' + encodeBase64(%s) + '\"';\n", varName)
+	default:
+		return "  result += 'null';\n"
+	}
+}
+
+// jsonEncodeEnum generates code to encode an enum as string name.
+func (c *tsContext) jsonEncodeEnum(varName string) string {
+	return fmt.Sprintf("  result += '\"' + %s.toString() + '\"';\n", varName)
+}
+
+// jsonEncodeMessage generates code to encode a nested message.
+func (c *tsContext) jsonEncodeMessage(varName string) string {
+	// For now, use JSON.stringify as a simple solution
+	// TODO: Call specific toJSON function when we have type info
+	return fmt.Sprintf("  result += JSON.stringify(%s);\n", varName)
+}
+
+// jsonEncodeArray generates code to encode an array.
+func (c *tsContext) jsonEncodeArray(elemType schema.TypeRef, varName string) string {
+	var code strings.Builder
+	code.WriteString("  result += '[';\n")
+	code.WriteString(fmt.Sprintf("  for (let i = 0; i < %s.length; i++) {\n", varName))
+	code.WriteString("    if (i > 0) result += ',';\n")
+	code.WriteString(fmt.Sprintf("    const elem = %s[i];\n", varName))
+
+	// Generate element encoding
+	elemCode := c.jsonEncodeValue(elemType, "elem", false)
+	code.WriteString(strings.ReplaceAll(elemCode, "  ", "    "))
+
+	code.WriteString("  }\n")
+	code.WriteString("  result += ']';\n")
+	return code.String()
+}
+
+// jsonEncodeMap generates code to encode a map.
+func (c *tsContext) jsonEncodeMap(t *schema.MapType, varName string) string {
+	var code strings.Builder
+	code.WriteString("  {\n")
+	code.WriteString("    result += '{';\n")
+	code.WriteString(fmt.Sprintf("    const keys = Array.from(%s.keys());\n", varName))
+
+	// Convert keys to strings for sorting
+	keyType := t.Key.(*schema.ScalarType)
+	switch keyType.Name {
+	case "string":
+		code.WriteString("    const sortedKeys = sortMapKeysLexicographic(keys);\n")
+	case "int8", "int16", "int32", "uint8", "uint16", "uint32":
+		code.WriteString("    const sortedKeys = sortMapKeysLexicographic(keys.map(k => formatNumberToString(k)));\n")
+	case "int64", "uint64":
+		code.WriteString("    const sortedKeys = sortMapKeysLexicographic(keys.map(k => formatBigIntToString(k)));\n")
+	default:
+		code.WriteString("    const sortedKeys = sortMapKeysLexicographic(keys.map(k => String(k)));\n")
+	}
+
+	code.WriteString("    for (let i = 0; i < sortedKeys.length; i++) {\n")
+	code.WriteString("      if (i > 0) result += ',';\n")
+	code.WriteString("      result += escapeJSONString(sortedKeys[i]) + ':';\n")
+
+	// Get the actual key and value
+	switch keyType.Name {
+	case "string":
+		code.WriteString("      const k = sortedKeys[i];\n")
+	case "int8", "int16", "int32", "uint8", "uint16", "uint32":
+		code.WriteString("      const k = parseNumberFromJSON(sortedKeys[i]);\n")
+	case "int64", "uint64":
+		code.WriteString("      const k = parseBigIntFromJSON(sortedKeys[i]);\n")
+	default:
+		code.WriteString("      const k = sortedKeys[i];\n")
+	}
+
+	code.WriteString(fmt.Sprintf("      const v = %s.get(k)!;\n", varName))
+
+	// Encode value
+	valueCode := c.jsonEncodeValue(t.Value, "v", false)
+	code.WriteString(strings.ReplaceAll(valueCode, "  ", "      "))
+
+	code.WriteString("    }\n")
+	code.WriteString("    result += '}';\n")
+	code.WriteString("  }\n")
+	return code.String()
+}
+
+// jsonDecodeField generates JSON decoding code for a field.
+func (c *tsContext) jsonDecodeField(f *schema.Field) string {
+	fieldName := ToCamelCase(f.Name)
+	jsonName := ToSnakeCase(f.Name)
+
+	var code strings.Builder
+	code.WriteString(fmt.Sprintf("  if ('%s' in obj) {\n", jsonName))
+	code.WriteString(fmt.Sprintf("    const value = obj['%s'];\n", jsonName))
+
+	// Generate decoding based on type
+	decodeCode := c.jsonDecodeValue(f.Type, "msg."+fieldName, "value", f.Repeated)
+	code.WriteString(decodeCode)
+
+	code.WriteString("  }\n")
+	return code.String()
+}
+
+// jsonDecodeValue generates code to decode a JSON value.
+func (c *tsContext) jsonDecodeValue(t schema.TypeRef, targetVar string, sourceVar string, repeated bool) string {
+	if repeated {
+		return c.jsonDecodeArray(t, targetVar, sourceVar)
+	}
+
+	switch typ := t.(type) {
+	case *schema.ScalarType:
+		return c.jsonDecodeScalar(typ, targetVar, sourceVar)
+	case *schema.NamedType:
+		// Check if it's an enum
+		for _, e := range c.Schema.Enums {
+			if e.Name == typ.Name {
+				return c.jsonDecodeEnum(e, targetVar, sourceVar)
+			}
+		}
+		// It's a message
+		return c.jsonDecodeMessage(typ, targetVar, sourceVar)
+	case *schema.MapType:
+		return c.jsonDecodeMap(typ, targetVar, sourceVar)
+	case *schema.PointerType:
+		return c.jsonDecodePointer(typ, targetVar, sourceVar)
+	default:
+		return "    // Unsupported type\n"
+	}
+}
+
+// jsonDecodeScalar generates code to decode a scalar JSON value.
+func (c *tsContext) jsonDecodeScalar(t *schema.ScalarType, targetVar string, sourceVar string) string {
+	switch t.Name {
+	case "bool":
+		return fmt.Sprintf("    %s = Boolean(%s);\n", targetVar, sourceVar)
+	case "int8", "int16", "int32", "uint8", "uint16", "uint32":
+		return fmt.Sprintf("    %s = parseNumberFromJSON(%s);\n", targetVar, sourceVar)
+	case "int64", "uint64":
+		return fmt.Sprintf("    %s = parseBigIntFromJSON(%s);\n", targetVar, sourceVar)
+	case "float32", "float64":
+		return fmt.Sprintf("    %s = Number(%s);\n", targetVar, sourceVar)
+	case "string":
+		return fmt.Sprintf("    %s = String(%s);\n", targetVar, sourceVar)
+	case "bytes":
+		return fmt.Sprintf("    %s = decodeBase64(String(%s));\n", targetVar, sourceVar)
+	default:
+		return "    // Unsupported scalar type\n"
+	}
+}
+
+// jsonDecodeEnum generates code to decode an enum from string name.
+func (c *tsContext) jsonDecodeEnum(e *schema.Enum, targetVar string, sourceVar string) string {
+	var code strings.Builder
+	enumType := ToPascalCase(e.Name)
+
+	code.WriteString(fmt.Sprintf("    const strVal = String(%s);\n", sourceVar))
+	code.WriteString("    switch (strVal) {\n")
+	for _, v := range e.Values {
+		code.WriteString(fmt.Sprintf("      case '%s':\n", v.Name))
+		code.WriteString(fmt.Sprintf("        %s = %s.%s;\n", targetVar, enumType, ToPascalCase(v.Name)))
+		code.WriteString("        break;\n")
+	}
+	code.WriteString("      default:\n")
+	code.WriteString(fmt.Sprintf("        throw new Error(`unknown enum value: ${strVal}`);\n"))
+	code.WriteString("    }\n")
+
+	return code.String()
+}
+
+// jsonDecodeMessage generates code to decode a nested message.
+func (c *tsContext) jsonDecodeMessage(t *schema.NamedType, targetVar string, sourceVar string) string {
+	msgType := ToPascalCase(t.Name)
+	return fmt.Sprintf("    %s = fromJSON_%s(JSON.stringify(%s));\n", targetVar, msgType, sourceVar)
+}
+
+// jsonDecodePointer generates code to decode an optional pointer.
+func (c *tsContext) jsonDecodePointer(t *schema.PointerType, targetVar string, sourceVar string) string {
+	var code strings.Builder
+	code.WriteString(fmt.Sprintf("    if (%s != null) {\n", sourceVar))
+
+	innerCode := c.jsonDecodeValue(t.Element, targetVar, sourceVar, false)
+	code.WriteString(strings.ReplaceAll(innerCode, "    ", "      "))
+
+	code.WriteString("    } else {\n")
+	code.WriteString(fmt.Sprintf("      %s = null;\n", targetVar))
+	code.WriteString("    }\n")
+
+	return code.String()
+}
+
+// jsonDecodeArray generates code to decode an array.
+func (c *tsContext) jsonDecodeArray(elemType schema.TypeRef, targetVar string, sourceVar string) string {
+	var code strings.Builder
+
+	code.WriteString(fmt.Sprintf("    if (!Array.isArray(%s)) throw new Error('expected array');\n", sourceVar))
+	code.WriteString(fmt.Sprintf("    %s = [];\n", targetVar))
+	code.WriteString(fmt.Sprintf("    for (const elem of %s) {\n", sourceVar))
+	code.WriteString(fmt.Sprintf("      let decoded: %s;\n", c.tsType(elemType)))
+
+	// Decode element
+	elemCode := c.jsonDecodeValue(elemType, "decoded", "elem", false)
+	code.WriteString(strings.ReplaceAll(elemCode, "    ", "      "))
+
+	code.WriteString(fmt.Sprintf("      %s.push(decoded);\n", targetVar))
+	code.WriteString("    }\n")
+
+	return code.String()
+}
+
+// jsonDecodeMap generates code to decode a map.
+func (c *tsContext) jsonDecodeMap(t *schema.MapType, targetVar string, sourceVar string) string {
+	var code strings.Builder
+
+	code.WriteString(fmt.Sprintf("    if (typeof %s !== 'object' || %s === null) throw new Error('expected object');\n", sourceVar, sourceVar))
+	code.WriteString(fmt.Sprintf("    %s = new Map();\n", targetVar))
+	code.WriteString(fmt.Sprintf("    for (const [keyStr, val] of Object.entries(%s)) {\n", sourceVar))
+
+	// Convert string key to actual key type
+	keyType := t.Key.(*schema.ScalarType)
+	switch keyType.Name {
+	case "string":
+		code.WriteString("      const k = keyStr;\n")
+	case "int8", "int16", "int32", "uint8", "uint16", "uint32":
+		code.WriteString("      const k = parseNumberFromJSON(keyStr);\n")
+	case "int64", "uint64":
+		code.WriteString("      const k = parseBigIntFromJSON(keyStr);\n")
+	default:
+		code.WriteString("      const k = keyStr;\n")
+	}
+
+	code.WriteString(fmt.Sprintf("      let v: %s;\n", c.tsType(t.Value)))
+
+	// Decode value
+	valueCode := c.jsonDecodeValue(t.Value, "v", "val", false)
+	code.WriteString(strings.ReplaceAll(valueCode, "    ", "      "))
+
+	code.WriteString(fmt.Sprintf("      %s.set(k, v);\n", targetVar))
+	code.WriteString("    }\n")
+
+	return code.String()
+}
+
 func init() {
 	Register(NewTypeScriptGenerator())
 }
@@ -397,6 +714,18 @@ const tsTemplate = `// Code generated by cramberry. DO NOT EDIT.
 // Source: {{.Schema.Position.Filename}}
 {{if generateMarshal}}
 import { Writer, Reader, WireTypeV2 } from 'cramberry';
+import {
+  formatBigIntToString,
+  formatNumberToString,
+  formatFloat32,
+  formatFloat64,
+  encodeBase64,
+  decodeBase64,
+  parseBigIntFromJSON,
+  parseNumberFromJSON,
+  sortMapKeysLexicographic,
+  escapeJSONString,
+} from 'cramberry/json';
 
 // Helper functions for encoding/decoding
 function writeArray<T>(writer: Writer, arr: T[], writeElem: (w: Writer, v: T) => void): void {
@@ -513,6 +842,45 @@ export function marshal{{tsMessageType $msg}}(msg: {{tsMessageType $msg}}): Uint
 export function unmarshal{{tsMessageType $msg}}(data: Uint8Array): {{tsMessageType $msg}} {
   const reader = new Reader(data);
   return decode{{tsMessageType $msg}}(reader);
+}
+
+/** Encodes a {{tsMessageType $msg}} to deterministic JSON format. */
+export function toJSON_{{tsMessageType $msg}}(msg: {{tsMessageType $msg}}): string {
+  let result = '{';
+{{range $msg.Fields}}
+{{jsonEncodeField .}}
+{{- end}}
+  result += '}';
+  return result;
+}
+
+/** Decodes a {{tsMessageType $msg}} from JSON format. */
+export function fromJSON_{{tsMessageType $msg}}(json: string): {{tsMessageType $msg}} {
+  const obj = JSON.parse(json);
+  if (typeof obj !== 'object' || obj === null) {
+    throw new Error('expected JSON object');
+  }
+
+  // Check for unknown fields (strict mode)
+  const allowedFields = new Set([
+{{- range $msg.Fields}}
+    '{{jsonFieldName .}}',
+{{- end}}
+  ]);
+  for (const key of Object.keys(obj)) {
+    if (!allowedFields.has(key)) {
+      throw new Error('unknown field: ' + key);
+    }
+  }
+
+  const msg: Partial<{{tsMessageType $msg}}> = {};
+
+  // Decode fields
+{{range $msg.Fields}}
+{{jsonDecodeField .}}
+{{- end}}
+
+  return msg as {{tsMessageType $msg}};
 }
 {{end}}
 {{end}}

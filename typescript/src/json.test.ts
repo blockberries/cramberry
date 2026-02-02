@@ -1,0 +1,242 @@
+import { describe, it, expect } from 'vitest';
+import {
+  formatBigIntToString,
+  formatNumberToString,
+  formatFloat32,
+  formatFloat64,
+  validateFloat,
+  encodeBase64,
+  decodeBase64,
+  parseBigIntFromJSON,
+  parseNumberFromJSON,
+  sortMapKeysLexicographic,
+  escapeJSONString,
+  JSONWriter,
+  JSONReader,
+} from './json';
+
+describe('formatBigIntToString', () => {
+  it('formats bigint to string', () => {
+    expect(formatBigIntToString(0n)).toBe('0');
+    expect(formatBigIntToString(123n)).toBe('123');
+    expect(formatBigIntToString(-456n)).toBe('-456');
+    expect(formatBigIntToString(9223372036854775807n)).toBe('9223372036854775807');
+    expect(formatBigIntToString(18446744073709551615n)).toBe('18446744073709551615');
+  });
+});
+
+describe('formatNumberToString', () => {
+  it('formats number to string', () => {
+    expect(formatNumberToString(0)).toBe('0');
+    expect(formatNumberToString(123)).toBe('123');
+    expect(formatNumberToString(-456)).toBe('-456');
+    expect(formatNumberToString(123.7)).toBe('123'); // Floors decimals
+  });
+});
+
+describe('formatFloat32', () => {
+  it('formats float32 with 9 significant digits', () => {
+    expect(formatFloat32(0)).toBe('0');
+    expect(formatFloat32(3.14159)).toBe('3.14159');
+    expect(formatFloat32(-2.71828)).toBe('-2.71828');
+  });
+
+  it('rejects NaN', () => {
+    expect(() => formatFloat32(NaN)).toThrow('cannot encode NaN');
+  });
+
+  it('rejects Infinity', () => {
+    expect(() => formatFloat32(Infinity)).toThrow('cannot encode Infinity');
+    expect(() => formatFloat32(-Infinity)).toThrow('cannot encode Infinity');
+  });
+
+  it('normalizes -0 to 0', () => {
+    expect(formatFloat32(-0)).toBe('0');
+  });
+});
+
+describe('formatFloat64', () => {
+  it('formats float64 with 17 significant digits', () => {
+    expect(formatFloat64(0)).toBe('0');
+    expect(formatFloat64(2.718281828459045)).toBe('2.718281828459045');
+  });
+
+  it('rejects NaN', () => {
+    expect(() => formatFloat64(NaN)).toThrow('cannot encode NaN');
+  });
+
+  it('rejects Infinity', () => {
+    expect(() => formatFloat64(Infinity)).toThrow('cannot encode Infinity');
+    expect(() => formatFloat64(-Infinity)).toThrow('cannot encode Infinity');
+  });
+
+  it('normalizes -0 to 0', () => {
+    expect(formatFloat64(-0)).toBe('0');
+  });
+});
+
+describe('validateFloat', () => {
+  it('accepts valid floats', () => {
+    expect(() => validateFloat(0)).not.toThrow();
+    expect(() => validateFloat(3.14)).not.toThrow();
+    expect(() => validateFloat(-2.71)).not.toThrow();
+  });
+
+  it('rejects NaN', () => {
+    expect(() => validateFloat(NaN)).toThrow();
+  });
+
+  it('rejects Infinity', () => {
+    expect(() => validateFloat(Infinity)).toThrow();
+    expect(() => validateFloat(-Infinity)).toThrow();
+  });
+});
+
+describe('encodeBase64 and decodeBase64', () => {
+  it('encodes and decodes bytes', () => {
+    const data = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
+    const encoded = encodeBase64(data);
+    expect(encoded).toBe('3q2+7w==');
+
+    const decoded = decodeBase64(encoded);
+    expect(decoded).toEqual(data);
+  });
+
+  it('handles empty data', () => {
+    const data = new Uint8Array([]);
+    const encoded = encodeBase64(data);
+    expect(encoded).toBe('');
+
+    const decoded = decodeBase64(encoded);
+    expect(decoded).toEqual(data);
+  });
+
+  it('handles string data', () => {
+    const text = 'hello, world!';
+    const data = new TextEncoder().encode(text);
+    const encoded = encodeBase64(data);
+    const decoded = decodeBase64(encoded);
+    const result = new TextDecoder().decode(decoded);
+    expect(result).toBe(text);
+  });
+});
+
+describe('parseBigIntFromJSON', () => {
+  it('parses string to bigint', () => {
+    expect(parseBigIntFromJSON('123')).toBe(123n);
+    expect(parseBigIntFromJSON('-456')).toBe(-456n);
+    expect(parseBigIntFromJSON('9223372036854775807')).toBe(9223372036854775807n);
+  });
+
+  it('accepts numeric values', () => {
+    expect(parseBigIntFromJSON(123)).toBe(123n);
+    expect(parseBigIntFromJSON(-456)).toBe(-456n);
+  });
+
+  it('floors numeric values', () => {
+    expect(parseBigIntFromJSON(123.7)).toBe(123n);
+  });
+});
+
+describe('parseNumberFromJSON', () => {
+  it('parses string to number', () => {
+    expect(parseNumberFromJSON('123')).toBe(123);
+    expect(parseNumberFromJSON('-456')).toBe(-456);
+  });
+
+  it('accepts numeric values', () => {
+    expect(parseNumberFromJSON(123)).toBe(123);
+    expect(parseNumberFromJSON(-456)).toBe(-456);
+  });
+
+  it('floors numeric values', () => {
+    expect(parseNumberFromJSON(123.7)).toBe(123);
+  });
+});
+
+describe('sortMapKeysLexicographic', () => {
+  it('sorts keys alphabetically', () => {
+    const keys = ['zebra', 'apple', 'banana'];
+    const sorted = sortMapKeysLexicographic(keys);
+    expect(sorted).toEqual(['apple', 'banana', 'zebra']);
+  });
+
+  it('sorts numeric strings lexicographically', () => {
+    const keys = ['10', '2', '1'];
+    const sorted = sortMapKeysLexicographic(keys);
+    expect(sorted).toEqual(['1', '10', '2']); // Lexicographic, not numeric
+  });
+
+  it('handles empty array', () => {
+    const keys: string[] = [];
+    const sorted = sortMapKeysLexicographic(keys);
+    expect(sorted).toEqual([]);
+  });
+
+  it('handles unicode', () => {
+    const keys = ['世界', 'hello', 'мир'];
+    const sorted = sortMapKeysLexicographic(keys);
+    expect(sorted).toEqual(['hello', 'мир', '世界']);
+  });
+});
+
+describe('escapeJSONString', () => {
+  it('escapes simple strings', () => {
+    expect(escapeJSONString('hello')).toBe('"hello"');
+  });
+
+  it('escapes quotes', () => {
+    expect(escapeJSONString('say "hello"')).toBe('"say \\"hello\\""');
+  });
+
+  it('escapes special characters', () => {
+    expect(escapeJSONString('line1\nline2')).toBe('"line1\\nline2"');
+    expect(escapeJSONString('col1\tcol2')).toBe('"col1\\tcol2"');
+  });
+
+  it('handles empty string', () => {
+    expect(escapeJSONString('')).toBe('""');
+  });
+
+  it('handles unicode', () => {
+    expect(escapeJSONString('hello, 世界')).toBe('"hello, 世界"');
+  });
+});
+
+describe('JSONWriter', () => {
+  it('builds JSON strings', () => {
+    const writer = new JSONWriter();
+    writer.writeString('{');
+    writer.writeString('"key"');
+    writer.writeString(':');
+    writer.writeString('"value"');
+    writer.writeString('}');
+    expect(writer.toString()).toBe('{"key":"value"}');
+  });
+
+  it('can be reset', () => {
+    const writer = new JSONWriter();
+    writer.writeString('test');
+    expect(writer.toString()).toBe('test');
+    writer.reset();
+    expect(writer.toString()).toBe('');
+  });
+});
+
+describe('JSONReader', () => {
+  it('parses JSON object', () => {
+    const reader = new JSONReader('{"key":"value"}');
+    const obj = reader.readObject();
+    expect(obj).toEqual({ key: 'value' });
+  });
+
+  it('rejects non-object JSON', () => {
+    expect(() => new JSONReader('[]').readObject()).toThrow('expected JSON object');
+    expect(() => new JSONReader('null').readObject()).toThrow('expected JSON object');
+    expect(() => new JSONReader('"string"').readObject()).toThrow('expected JSON object');
+  });
+
+  it('throws on invalid JSON', () => {
+    expect(() => new JSONReader('{invalid')).toThrow();
+  });
+});
