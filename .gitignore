@@ -40,10 +40,10 @@ tmp/
 
 # Rust
 rust/target/
-tests/integration/rust/target/
+test/integration/rust/target/
 
 # TypeScript/Node
 typescript/node_modules/
 typescript/dist/
 typescript/*.tsbuildinfo
-tests/integration/ts/node_modules/
+test/integration/ts/node_modules/

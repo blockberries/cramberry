@@ -51,7 +51,7 @@ func TestFormatFloat32(t *testing.T) {
 		wantValue string
 	}{
 		{"zero", 0.0, false, "0"},
-		{"positive", 3.14159, false, "3.14159012"},  // float32 precision
+		{"positive", 3.14159, false, "3.14159012"},   // float32 precision
 		{"negative", -2.71828, false, "-2.71828008"}, // float32 precision
 		{"scientific", 1.23e10, false, "1.23000003e+10"},
 		{"small", 0.0000001, false, "1.00000001e-07"},
@@ -99,7 +99,7 @@ func TestFormatFloat64(t *testing.T) {
 		wantValue string
 	}{
 		{"zero", 0.0, false, "0"},
-		{"positive", 2.718281828459045, false, "2.7182818284590451"},  // float64 precision
+		{"positive", 2.718281828459045, false, "2.7182818284590451"},   // float64 precision
 		{"negative", -3.141592653589793, false, "-3.1415926535897931"}, // float64 precision
 		{"scientific", 1.23e100, false, "1.2300000000000001e+100"},
 		{"small", 1e-100, false, "1e-100"},

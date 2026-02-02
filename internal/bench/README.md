@@ -6,7 +6,7 @@ against Protocol Buffers and JSON.
 ## Structure
 
 ```
-benchmark/
+internal/bench/
 ├── schemas/
 │   ├── messages.cram    # Cramberry schema definitions
 │   └── messages.proto        # Equivalent Protobuf definitions
@@ -22,35 +22,35 @@ benchmark/
 ### Full Benchmark Suite
 
 ```bash
-go test ./benchmark/... -bench=. -benchmem
+go test ./internal/bench/... -bench=. -benchmem
 ```
 
 ### Specific Message Type
 
 ```bash
 # Small message (baseline)
-go test ./benchmark/... -bench=SmallMessage -benchmem
+go test ./internal/bench/... -bench=SmallMessage -benchmem
 
 # Scalar-heavy message
-go test ./benchmark/... -bench=Metrics -benchmem
+go test ./internal/bench/... -bench=Metrics -benchmem
 
 # Nested messages
-go test ./benchmark/... -bench=Person -benchmem
+go test ./internal/bench/... -bench=Person -benchmem
 
 # Complex with arrays/maps
-go test ./benchmark/... -bench=Document -benchmem
+go test ./internal/bench/... -bench=Document -benchmem
 
 # Event messages
-go test ./benchmark/... -bench=Event -benchmem
+go test ./internal/bench/... -bench=Event -benchmem
 
 # Batch operations
-go test ./benchmark/... -bench=Batch -benchmem
+go test ./internal/bench/... -bench=Batch -benchmem
 ```
 
 ### Size Comparison
 
 ```bash
-go test ./benchmark/... -run TestEncodedSizes -v
+go test ./internal/bench/... -run TestEncodedSizes -v
 ```
 
 ## Regenerating Code
@@ -59,11 +59,11 @@ If you modify the schemas, regenerate the code:
 
 ```bash
 # Cramberry
-go run ./cmd/cramberry generate -out benchmark/gen/cramberry -package cramgen benchmark/schemas/messages.cram
+go run ./cmd/cramberry generate -out internal/bench/gen/cramberry -package cramgen internal/bench/schemas/messages.cram
 
 # Protobuf
-protoc --go_out=. --go_opt=paths=source_relative benchmark/schemas/messages.proto
-mv benchmark/schemas/messages.pb.go benchmark/gen/protobuf/
+protoc --go_out=. --go_opt=paths=source_relative internal/bench/schemas/messages.proto
+mv internal/bench/schemas/messages.pb.go internal/bench/gen/protobuf/
 ```
 
 ## Test Scenarios
@@ -85,7 +85,7 @@ against the reflection-based API (cramberry.Marshal/Unmarshal):
 
 ```bash
 # Run reflection benchmarks only
-go test ./benchmark/... -bench=Reflection -benchmem
+go test ./internal/bench/... -bench=Reflection -benchmem
 ```
 
 Typical results show generated code is 1.7-2.4x faster for encoding and 2.9-11.6x

@@ -1,6 +1,6 @@
-// Package benchmark provides comprehensive performance comparisons between
+// Package bench provides comprehensive performance comparisons between
 // Cramberry, Protocol Buffers, and JSON serialization formats.
-package benchmark
+package bench
 
 import (
 	"encoding/json"
@@ -8,8 +8,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	cramgen "github.com/blockberries/cramberry/benchmark/gen/cramberry"
-	pb "github.com/blockberries/cramberry/benchmark/gen/protobuf"
+	cramgen "github.com/blockberries/cramberry/internal/bench/gen/cramberry"
+	pb "github.com/blockberries/cramberry/internal/bench/gen/protobuf"
 	"github.com/blockberries/cramberry/pkg/cramberry"
 )
 
