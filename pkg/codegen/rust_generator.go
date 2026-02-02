@@ -744,7 +744,7 @@ func (c *rustContext) jsonDecodeArray(elemType schema.TypeRef, targetVar string,
 
 	// Decode element
 	elemCode := c.jsonDecodeValue(elemType, "decoded", "elem", false, false)
-	code.WriteString(strings.ReplaceAll(elemCode, "        ", "        "))
+	code.WriteString(elemCode)
 
 	code.WriteString(fmt.Sprintf("        %s.push(decoded);\n", targetVar))
 	code.WriteString("    }\n")
@@ -779,7 +779,7 @@ func (c *rustContext) jsonDecodeMap(t *schema.MapType, targetVar string, sourceV
 
 	// Decode value
 	valueCode := c.jsonDecodeValue(t.Value, "v", "val", false, false)
-	code.WriteString(strings.ReplaceAll(valueCode, "        ", "        "))
+	code.WriteString(valueCode)
 
 	code.WriteString("        " + targetVar + ".insert(k, v);\n")
 	code.WriteString("    }\n")

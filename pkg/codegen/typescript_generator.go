@@ -627,7 +627,7 @@ func (c *tsContext) jsonDecodeEnum(e *schema.Enum, targetVar string, sourceVar s
 		code.WriteString("        break;\n")
 	}
 	code.WriteString("      default:\n")
-	code.WriteString(fmt.Sprintf("        throw new Error(`unknown enum value: ${strVal}`);\n"))
+	code.WriteString("        throw new Error(`unknown enum value: ${strVal}`);\n")
 	code.WriteString("    }\n")
 
 	return code.String()

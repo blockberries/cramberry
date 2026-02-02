@@ -1,6 +1,7 @@
 package cramberry
 
 import (
+	"bytes"
 	"math"
 	"testing"
 )
@@ -217,7 +218,7 @@ func TestEncodeDecodeBase64(t *testing.T) {
 			if err != nil {
 				t.Errorf("DecodeBase64(%s) unexpected error: %v", encoded, err)
 			}
-			if string(decoded) != string(tt.input) {
+			if !bytes.Equal(decoded, tt.input) {
 				t.Errorf("DecodeBase64(EncodeBase64(%v)) = %v, want %v", tt.input, decoded, tt.input)
 			}
 		})

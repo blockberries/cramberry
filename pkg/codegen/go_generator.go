@@ -880,7 +880,7 @@ func (c *goContext) jsonFieldName(f *schema.Field) string {
 }
 
 // jsonEncodeField generates JSON encoding code for a field.
-func (c *goContext) jsonEncodeField(f *schema.Field, msgType string) string {
+func (c *goContext) jsonEncodeField(f *schema.Field, _ string) string {
 	fieldName := "m." + ToPascalCase(f.Name)
 	jsonName := ToSnakeCase(f.Name)
 	isFirst := f.Number == 1 // Check if this is the first field
@@ -913,7 +913,7 @@ func (c *goContext) jsonEncodeField(f *schema.Field, msgType string) string {
 }
 
 // jsonEncodeValue generates code to encode a value to JSON.
-func (c *goContext) jsonEncodeValue(t schema.TypeRef, varName string, repeated bool, required bool) string {
+func (c *goContext) jsonEncodeValue(t schema.TypeRef, varName string, repeated bool, _ bool) string {
 	if repeated {
 		return c.jsonEncodeArray(t, varName)
 	}
@@ -1047,7 +1047,7 @@ func (c *goContext) jsonEncodeMap(t *schema.MapType, varName string) string {
 }
 
 // jsonDecodeField generates JSON decoding code for a field.
-func (c *goContext) jsonDecodeField(f *schema.Field, msgType string) string {
+func (c *goContext) jsonDecodeField(f *schema.Field, _ string) string {
 	fieldName := ToPascalCase(f.Name)
 	jsonName := ToSnakeCase(f.Name)
 
