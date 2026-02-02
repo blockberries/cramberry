@@ -79,6 +79,9 @@ func (c *goContext) funcMap() template.FuncMap {
 		"decodeFieldV2":        c.decodeFieldV2,
 		"zeroCheck":            c.zeroCheck,
 		"isPackableSlice":      c.isPackableSlice,
+		"jsonFieldName":        c.jsonFieldName,
+		"jsonEncodeField":      c.jsonEncodeField,
+		"jsonDecodeField":      c.jsonDecodeField,
 	}
 }
 
@@ -869,6 +872,417 @@ func (c *goContext) externalImports() []externalImport {
 	return imports
 }
 
+// JSON helper functions
+
+// jsonFieldName returns the snake_case JSON field name.
+func (c *goContext) jsonFieldName(f *schema.Field) string {
+	return ToSnakeCase(f.Name)
+}
+
+// jsonEncodeField generates JSON encoding code for a field.
+func (c *goContext) jsonEncodeField(f *schema.Field, msgType string) string {
+	fieldName := "m." + ToPascalCase(f.Name)
+	jsonName := ToSnakeCase(f.Name)
+	isFirst := f.Number == 1 // Check if this is the first field
+
+	// Build the field encoding
+	var code strings.Builder
+
+	// Add comma if not first field
+	if !isFirst {
+		code.WriteString("\tbuf.WriteString(\",\")\n")
+	}
+
+	// Write field name
+	code.WriteString(fmt.Sprintf("\tbuf.WriteString(`\"%s\":`)\n", jsonName))
+
+	// Check if this field is a pointer in the generated code
+	// Required scalar fields become pointers to distinguish nil from zero
+	isPtr := c.isPointerField(f)
+	actualFieldName := fieldName
+	if isPtr && c.isScalarType(f.Type) {
+		// Dereference pointer for scalar encoding
+		actualFieldName = "*" + fieldName
+	}
+
+	// Generate value encoding based on type
+	valueCode := c.jsonEncodeValue(f.Type, actualFieldName, f.Repeated, f.Required)
+	code.WriteString(valueCode)
+
+	return code.String()
+}
+
+// jsonEncodeValue generates code to encode a value to JSON.
+func (c *goContext) jsonEncodeValue(t schema.TypeRef, varName string, repeated bool, required bool) string {
+	if repeated {
+		return c.jsonEncodeArray(t, varName)
+	}
+
+	switch typ := t.(type) {
+	case *schema.ScalarType:
+		return c.jsonEncodeScalar(typ, varName)
+	case *schema.NamedType:
+		// Check if it's an enum
+		for _, e := range c.Schema.Enums {
+			if e.Name == typ.Name && typ.Package == "" {
+				return c.jsonEncodeEnum(varName)
+			}
+		}
+		// It's a message
+		return c.jsonEncodeMessage(varName)
+	case *schema.MapType:
+		return c.jsonEncodeMap(typ, varName)
+	case *schema.PointerType:
+		// Handle optional pointer
+		inner := c.jsonEncodeValue(typ.Element, "*"+varName, false, false)
+		return fmt.Sprintf("\tif %s != nil {\n\t%s\t} else {\n\t\tbuf.WriteString(\"null\")\n\t}\n", varName, strings.ReplaceAll(inner, "\t", "\t\t"))
+	default:
+		return "\tbuf.WriteString(`null`)\n"
+	}
+}
+
+// jsonEncodeScalar generates code to encode a scalar value.
+func (c *goContext) jsonEncodeScalar(t *schema.ScalarType, varName string) string {
+	switch t.Name {
+	case "bool":
+		return fmt.Sprintf("\tif %s {\n\t\tbuf.WriteString(\"true\")\n\t} else {\n\t\tbuf.WriteString(\"false\")\n\t}\n", varName)
+	case "int8", "int16", "int32", "int64", "int":
+		return fmt.Sprintf("\tbuf.WriteString(`\"`)\n\tbuf.WriteString(cramberry.FormatInt64ToString(int64(%s)))\n\tbuf.WriteString(`\"`)\n", varName)
+	case "uint8", "uint16", "uint32", "uint64", "uint", "byte":
+		return fmt.Sprintf("\tbuf.WriteString(`\"`)\n\tbuf.WriteString(cramberry.FormatUint64ToString(uint64(%s)))\n\tbuf.WriteString(`\"`)\n", varName)
+	case "float32":
+		return fmt.Sprintf("\tif s, err := cramberry.FormatFloat32(%s); err != nil {\n\t\treturn \"\", fmt.Errorf(\"field %s: %%w\", err)\n\t} else {\n\t\tbuf.WriteString(s)\n\t}\n", varName, varName)
+	case "float64":
+		return fmt.Sprintf("\tif s, err := cramberry.FormatFloat64(%s); err != nil {\n\t\treturn \"\", fmt.Errorf(\"field %s: %%w\", err)\n\t} else {\n\t\tbuf.WriteString(s)\n\t}\n", varName, varName)
+	case "string":
+		return fmt.Sprintf("\tbuf.WriteString(cramberry.EscapeJSONString(%s))\n", varName)
+	case "bytes":
+		return fmt.Sprintf("\tbuf.WriteString(`\"`)\n\tbuf.WriteString(cramberry.EncodeBase64(%s))\n\tbuf.WriteString(`\"`)\n", varName)
+	case "complex64", "complex128":
+		return "\treturn \"\", fmt.Errorf(\"complex numbers are not supported in JSON encoding\")\n"
+	default:
+		return "\tbuf.WriteString(`null`)\n"
+	}
+}
+
+// jsonEncodeEnum generates code to encode an enum value as string name.
+func (c *goContext) jsonEncodeEnum(varName string) string {
+	return fmt.Sprintf("\tbuf.WriteString(`\"`)\n\tbuf.WriteString(%s.String())\n\tbuf.WriteString(`\"`)\n", varName)
+}
+
+// jsonEncodeMessage generates code to encode a nested message.
+func (c *goContext) jsonEncodeMessage(varName string) string {
+	return fmt.Sprintf("\tif msgJSON, err := %s.ToJSON(); err != nil {\n\t\treturn \"\", err\n\t} else {\n\t\tbuf.WriteString(msgJSON)\n\t}\n", varName)
+}
+
+// jsonEncodeArray generates code to encode an array/slice.
+func (c *goContext) jsonEncodeArray(elemType schema.TypeRef, varName string) string {
+	var code strings.Builder
+	code.WriteString("\tbuf.WriteString(\"[\")\n")
+	code.WriteString(fmt.Sprintf("\tfor i, v := range %s {\n", varName))
+	code.WriteString("\t\tif i > 0 {\n\t\t\tbuf.WriteString(\",\")\n\t\t}\n")
+
+	// Generate element encoding
+	elemCode := c.jsonEncodeValue(elemType, "v", false, false)
+	code.WriteString(strings.ReplaceAll(elemCode, "\t", "\t\t"))
+
+	code.WriteString("\t}\n")
+	code.WriteString("\tbuf.WriteString(\"]\")\n")
+	return code.String()
+}
+
+// jsonEncodeMap generates code to encode a map.
+func (c *goContext) jsonEncodeMap(t *schema.MapType, varName string) string {
+	var code strings.Builder
+	code.WriteString("\t{\n") // Start scoped block
+	code.WriteString("\t\tbuf.WriteString(\"{\")\n")
+	code.WriteString(fmt.Sprintf("\t\tkeys := make([]string, 0, len(%s))\n", varName))
+	code.WriteString(fmt.Sprintf("\t\tfor k := range %s {\n", varName))
+
+	// Convert key to string for sorting
+	keyType := t.Key.(*schema.ScalarType)
+	switch keyType.Name {
+	case "string":
+		code.WriteString("\t\t\tkeys = append(keys, k)\n")
+	case "int8", "int16", "int32", "int64", "int":
+		code.WriteString("\t\t\tkeys = append(keys, cramberry.FormatInt64ToString(int64(k)))\n")
+	case "uint8", "uint16", "uint32", "uint64", "uint", "byte":
+		code.WriteString("\t\t\tkeys = append(keys, cramberry.FormatUint64ToString(uint64(k)))\n")
+	default:
+		code.WriteString("\t\t\tkeys = append(keys, fmt.Sprint(k))\n")
+	}
+
+	code.WriteString("\t\t}\n")
+	code.WriteString("\t\tkeys = cramberry.SortMapKeysLexicographic(keys)\n")
+	code.WriteString("\t\tfor i, keyStr := range keys {\n")
+	code.WriteString("\t\t\tif i > 0 {\n\t\t\t\tbuf.WriteString(\",\")\n\t\t\t}\n")
+	code.WriteString("\t\t\tbuf.WriteString(cramberry.EscapeJSONString(keyStr))\n")
+	code.WriteString("\t\t\tbuf.WriteString(\":\")\n")
+
+	// Get the actual key value
+	switch keyType.Name {
+	case "string":
+		code.WriteString("\t\t\tk := keyStr\n")
+	case "int8", "int16", "int32", "int64", "int":
+		code.WriteString(fmt.Sprintf("\t\t\tk, _ := strconv.ParseInt(keyStr, 10, 64)\n\t\t\tactualKey := %s(k)\n", c.goType(t.Key)))
+		code.WriteString(fmt.Sprintf("\t\t\tv := %s[actualKey]\n", varName))
+	case "uint8", "uint16", "uint32", "uint64", "uint", "byte":
+		code.WriteString(fmt.Sprintf("\t\t\tk, _ := strconv.ParseUint(keyStr, 10, 64)\n\t\t\tactualKey := %s(k)\n", c.goType(t.Key)))
+		code.WriteString(fmt.Sprintf("\t\t\tv := %s[actualKey]\n", varName))
+	default:
+		code.WriteString(fmt.Sprintf("\t\t\tv := %s[keyStr]\n", varName))
+	}
+
+	// Encode value
+	if keyType.Name == "string" {
+		code.WriteString(fmt.Sprintf("\t\t\tv := %s[k]\n", varName))
+	}
+	valueCode := c.jsonEncodeValue(t.Value, "v", false, false)
+	code.WriteString(strings.ReplaceAll(valueCode, "\t", "\t\t\t"))
+
+	code.WriteString("\t\t}\n")
+	code.WriteString("\t\tbuf.WriteString(\"}\")\n")
+	code.WriteString("\t}\n") // Close scoped block
+	return code.String()
+}
+
+// jsonDecodeField generates JSON decoding code for a field.
+func (c *goContext) jsonDecodeField(f *schema.Field, msgType string) string {
+	fieldName := ToPascalCase(f.Name)
+	jsonName := ToSnakeCase(f.Name)
+
+	var code strings.Builder
+	code.WriteString(fmt.Sprintf("\tif rawValue, ok := raw[\"%s\"]; ok {\n", jsonName))
+
+	// Check if this field is a pointer in the generated code
+	isPtr := c.isPointerField(f)
+	targetVar := "m." + fieldName
+
+	if isPtr && c.isScalarType(f.Type) {
+		// For pointer scalar fields, decode to temp var then assign pointer
+		code.WriteString("\t\tvar tempVal " + c.goType(f.Type) + "\n")
+		decodeCode := c.jsonDecodeValue(f.Type, "tempVal", f.Repeated)
+		code.WriteString(decodeCode)
+		code.WriteString(fmt.Sprintf("\t\t%s = &tempVal\n", targetVar))
+	} else {
+		// Generate decoding based on type
+		decodeCode := c.jsonDecodeValue(f.Type, targetVar, f.Repeated)
+		code.WriteString(decodeCode)
+	}
+
+	code.WriteString("\t}\n")
+	return code.String()
+}
+
+// jsonDecodeValue generates code to decode a JSON value.
+func (c *goContext) jsonDecodeValue(t schema.TypeRef, targetVar string, repeated bool) string {
+	if repeated {
+		return c.jsonDecodeArray(t, targetVar)
+	}
+
+	switch typ := t.(type) {
+	case *schema.ScalarType:
+		return c.jsonDecodeScalar(typ, targetVar)
+	case *schema.NamedType:
+		// Check if it's an enum
+		for _, e := range c.Schema.Enums {
+			if e.Name == typ.Name && typ.Package == "" {
+				return c.jsonDecodeEnum(e, targetVar)
+			}
+		}
+		// It's a message
+		return c.jsonDecodeMessage(typ, targetVar)
+	case *schema.MapType:
+		return c.jsonDecodeMap(typ, targetVar)
+	case *schema.PointerType:
+		// Handle optional pointer
+		return c.jsonDecodePointer(typ, targetVar)
+	default:
+		return "\t\t// Unsupported type\n"
+	}
+}
+
+// jsonDecodeScalar generates code to decode a scalar JSON value.
+func (c *goContext) jsonDecodeScalar(t *schema.ScalarType, targetVar string) string {
+	var code strings.Builder
+
+	switch t.Name {
+	case "bool":
+		code.WriteString("\t\tvar boolVal bool\n")
+		code.WriteString("\t\tif err := json.Unmarshal(rawValue, &boolVal); err != nil {\n")
+		code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar))
+		code.WriteString("\t\t}\n")
+		code.WriteString(fmt.Sprintf("\t\t%s = boolVal\n", targetVar))
+
+	case "int8", "int16", "int32", "int64", "int":
+		code.WriteString("\t\tvar strVal string\n")
+		code.WriteString("\t\tvar numVal float64\n")
+		code.WriteString("\t\tif err := json.Unmarshal(rawValue, &strVal); err == nil {\n")
+		code.WriteString(fmt.Sprintf("\t\t\tif v, err := cramberry.ParseInt64FromString(strVal); err != nil {\n\t\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n\t\t\t} else {\n\t\t\t\t%s = %s(v)\n\t\t\t}\n", targetVar, targetVar, t.Name))
+		code.WriteString("\t\t} else if err := json.Unmarshal(rawValue, &numVal); err == nil {\n")
+		code.WriteString(fmt.Sprintf("\t\t\t%s = %s(numVal)\n", targetVar, t.Name))
+		code.WriteString("\t\t} else {\n")
+		code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: expected string or number\", \"%s\")\n", targetVar))
+		code.WriteString("\t\t}\n")
+
+	case "uint8", "uint16", "uint32", "uint64", "uint", "byte":
+		code.WriteString("\t\tvar strVal string\n")
+		code.WriteString("\t\tvar numVal float64\n")
+		code.WriteString("\t\tif err := json.Unmarshal(rawValue, &strVal); err == nil {\n")
+		code.WriteString(fmt.Sprintf("\t\t\tif v, err := cramberry.ParseUint64FromString(strVal); err != nil {\n\t\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n\t\t\t} else {\n\t\t\t\t%s = %s(v)\n\t\t\t}\n", targetVar, targetVar, t.Name))
+		code.WriteString("\t\t} else if err := json.Unmarshal(rawValue, &numVal); err == nil {\n")
+		code.WriteString(fmt.Sprintf("\t\t\t%s = %s(numVal)\n", targetVar, t.Name))
+		code.WriteString("\t\t} else {\n")
+		code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: expected string or number\", \"%s\")\n", targetVar))
+		code.WriteString("\t\t}\n")
+
+	case "float32":
+		code.WriteString("\t\tvar floatVal float64\n")
+		code.WriteString("\t\tif err := json.Unmarshal(rawValue, &floatVal); err != nil {\n")
+		code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar))
+		code.WriteString("\t\t}\n")
+		code.WriteString(fmt.Sprintf("\t\t%s = float32(floatVal)\n", targetVar))
+
+	case "float64":
+		code.WriteString("\t\tvar floatVal float64\n")
+		code.WriteString("\t\tif err := json.Unmarshal(rawValue, &floatVal); err != nil {\n")
+		code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar))
+		code.WriteString("\t\t}\n")
+		code.WriteString(fmt.Sprintf("\t\t%s = floatVal\n", targetVar))
+
+	case "string":
+		code.WriteString("\t\tvar strVal string\n")
+		code.WriteString("\t\tif err := json.Unmarshal(rawValue, &strVal); err != nil {\n")
+		code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar))
+		code.WriteString("\t\t}\n")
+		code.WriteString(fmt.Sprintf("\t\t%s = strVal\n", targetVar))
+
+	case "bytes":
+		code.WriteString("\t\tvar strVal string\n")
+		code.WriteString("\t\tif err := json.Unmarshal(rawValue, &strVal); err != nil {\n")
+		code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar))
+		code.WriteString("\t\t}\n")
+		code.WriteString(fmt.Sprintf("\t\tif decoded, err := cramberry.DecodeBase64(strVal); err != nil {\n\t\t\treturn fmt.Errorf(\"field %%s: invalid base64: %%w\", \"%s\", err)\n\t\t} else {\n\t\t\t%s = decoded\n\t\t}\n", targetVar, targetVar))
+
+	default:
+		code.WriteString("\t\t// Unsupported scalar type\n")
+	}
+
+	return code.String()
+}
+
+// jsonDecodeEnum generates code to decode an enum from string name.
+func (c *goContext) jsonDecodeEnum(e *schema.Enum, targetVar string) string {
+	var code strings.Builder
+	enumType := ToPascalCase(e.Name)
+
+	code.WriteString("\t\tvar strVal string\n")
+	code.WriteString("\t\tif err := json.Unmarshal(rawValue, &strVal); err != nil {\n")
+	code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar))
+	code.WriteString("\t\t}\n")
+	code.WriteString("\t\tswitch strVal {\n")
+	for _, v := range e.Values {
+		code.WriteString(fmt.Sprintf("\t\tcase \"%s\":\n", v.Name))
+		code.WriteString(fmt.Sprintf("\t\t\t%s = %s%s\n", targetVar, enumType, ToPascalCase(v.Name)))
+	}
+	code.WriteString("\t\tdefault:\n")
+	code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: unknown enum value: %%s\", \"%s\", strVal)\n", targetVar))
+	code.WriteString("\t\t}\n")
+
+	return code.String()
+}
+
+// jsonDecodeMessage generates code to decode a nested message.
+func (c *goContext) jsonDecodeMessage(t *schema.NamedType, targetVar string) string {
+	var code strings.Builder
+
+	msgType := t.Name
+	if t.Package != "" && !c.isSamePackage(t.Package) {
+		msgType = t.Package + "." + t.Name
+	}
+
+	// rawValue is already json.RawMessage, use it directly
+	code.WriteString(fmt.Sprintf("\t\tvar msg %s\n", msgType))
+	code.WriteString(fmt.Sprintf("\t\tif err := msg.FromJSON(string(rawValue)); err != nil {\n\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n\t\t}\n", targetVar))
+	code.WriteString(fmt.Sprintf("\t\t%s = msg\n", targetVar))
+
+	return code.String()
+}
+
+// jsonDecodePointer generates code to decode an optional pointer field.
+func (c *goContext) jsonDecodePointer(t *schema.PointerType, targetVar string) string {
+	var code strings.Builder
+
+	code.WriteString("\t\tvar isNull bool\n")
+	code.WriteString("\t\tif err := json.Unmarshal(rawValue, &isNull); err == nil && isNull {\n")
+	code.WriteString(fmt.Sprintf("\t\t\t%s = nil\n", targetVar))
+	code.WriteString("\t\t} else {\n")
+
+	// Decode the value
+	innerCode := c.jsonDecodeValue(t.Element, "*"+targetVar, false)
+	code.WriteString(strings.ReplaceAll(innerCode, "\t", "\t\t"))
+
+	code.WriteString("\t\t}\n")
+
+	return code.String()
+}
+
+// jsonDecodeArray generates code to decode an array.
+func (c *goContext) jsonDecodeArray(elemType schema.TypeRef, targetVar string) string {
+	var code strings.Builder
+
+	code.WriteString("\t\tvar arrRaw []json.RawMessage\n")
+	code.WriteString("\t\tif err := json.Unmarshal(rawValue, &arrRaw); err != nil {\n")
+	code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar))
+	code.WriteString("\t\t}\n")
+	code.WriteString(fmt.Sprintf("\t\t%s = make([]%s, len(arrRaw))\n", targetVar, c.goType(elemType)))
+	code.WriteString("\t\tfor i, elemRaw := range arrRaw {\n")
+	code.WriteString("\t\t\trawValue = elemRaw\n")
+
+	// Decode element
+	elemCode := c.jsonDecodeValue(elemType, targetVar+"[i]", false)
+	code.WriteString(strings.ReplaceAll(elemCode, "\t", "\t\t"))
+
+	code.WriteString("\t\t}\n")
+
+	return code.String()
+}
+
+// jsonDecodeMap generates code to decode a map.
+func (c *goContext) jsonDecodeMap(t *schema.MapType, targetVar string) string {
+	var code strings.Builder
+
+	code.WriteString("\t\tvar mapRaw map[string]json.RawMessage\n")
+	code.WriteString("\t\tif err := json.Unmarshal(rawValue, &mapRaw); err != nil {\n")
+	code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar))
+	code.WriteString("\t\t}\n")
+	code.WriteString(fmt.Sprintf("\t\t%s = make(map[%s]%s, len(mapRaw))\n", targetVar, c.goType(t.Key), c.goType(t.Value)))
+	code.WriteString("\t\tfor keyStr, valRaw := range mapRaw {\n")
+
+	// Convert string key to actual key type
+	keyType := t.Key.(*schema.ScalarType)
+	switch keyType.Name {
+	case "string":
+		code.WriteString("\t\t\tk := keyStr\n")
+	case "int8", "int16", "int32", "int64", "int":
+		code.WriteString(fmt.Sprintf("\t\t\tkInt, _ := cramberry.ParseInt64FromString(keyStr)\n\t\t\tk := %s(kInt)\n", c.goType(t.Key)))
+	case "uint8", "uint16", "uint32", "uint64", "uint", "byte":
+		code.WriteString(fmt.Sprintf("\t\t\tkUint, _ := cramberry.ParseUint64FromString(keyStr)\n\t\t\tk := %s(kUint)\n", c.goType(t.Key)))
+	default:
+		code.WriteString("\t\t\tk := keyStr\n")
+	}
+
+	code.WriteString("\t\t\trawValue = valRaw\n")
+
+	// Decode value
+	valueCode := c.jsonDecodeValue(t.Value, targetVar+"[k]", false)
+	code.WriteString(strings.ReplaceAll(valueCode, "\t", "\t\t"))
+
+	code.WriteString("\t\t}\n")
+
+	return code.String()
+}
+
 func init() {
 	Register(NewGoGenerator())
 }
@@ -880,6 +1294,10 @@ package {{goPackage}}
 {{$extImports := externalImports}}{{if or needsCramberryImport $extImports}}
 import (
 {{- if needsCramberryImport}}
+	"encoding/json"
+	"fmt"
+	"strings"
+
 	"github.com/blockberries/cramberry/pkg/cramberry"
 {{- end}}
 {{- range $extImports}}
@@ -1008,6 +1426,61 @@ func (m *{{goMessageType $msg}}) Validate() error {
 	return nil
 }
 {{end}}
+// ToJSON encodes the message to deterministic JSON format.
+// All integers are encoded as strings to prevent precision loss in JavaScript.
+// Output is compact (no whitespace) with lexicographically sorted map keys.
+func (m *{{goMessageType $msg}}) ToJSON() (string, error) {
+{{- if hasRequired $msg}}
+	// Validate required fields before encoding
+	if err := m.Validate(); err != nil {
+		return "", fmt.Errorf("ToJSON validation failed: %w", err)
+	}
+{{- end}}
+
+	var buf strings.Builder
+	buf.WriteString("{")
+{{- range $msg.Fields}}
+{{jsonEncodeField . (goMessageType $msg)}}
+{{- end}}
+	buf.WriteString("}")
+	return buf.String(), nil
+}
+
+// FromJSON decodes the message from JSON format.
+// Accepts both string-encoded and numeric integers for flexibility.
+// Unknown fields cause an error (strict mode).
+func (m *{{goMessageType $msg}}) FromJSON(s string) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(s), &raw); err != nil {
+		return fmt.Errorf("FromJSON: %w", err)
+	}
+
+	// Check for unknown fields (strict mode)
+	allowedFields := map[string]bool{
+{{- range $msg.Fields}}
+		"{{jsonFieldName .}}": true,
+{{- end}}
+	}
+	for key := range raw {
+		if !allowedFields[key] {
+			return fmt.Errorf("FromJSON: unknown field %q", key)
+		}
+	}
+
+	// Decode fields
+{{- range $msg.Fields}}
+{{jsonDecodeField . (goMessageType $msg)}}
+{{- end}}
+
+{{- if hasRequired $msg}}
+	// Validate required fields after decoding
+	if err := m.Validate(); err != nil {
+		return fmt.Errorf("FromJSON validation failed: %w", err)
+	}
+{{- end}}
+
+	return nil
+}
 {{end}}
 {{range $iface := .Schema.Interfaces}}
 {{if generateComments}}{{range $iface.Comments}}{{if .IsDoc}}{{comment .Text}}
