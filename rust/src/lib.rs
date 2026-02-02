@@ -37,6 +37,7 @@
 //! ```
 
 mod error;
+pub mod json;
 mod reader;
 mod registry;
 pub mod stream;
