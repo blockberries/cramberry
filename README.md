@@ -192,6 +192,109 @@ err := cramberry.UnmarshalWithOptions(data, &v, cramberry.StrictOptions)
 | `SecureOptions` | Untrusted input - conservative limits |
 | `StrictOptions` | Schema enforcement - reject unknown fields |
 
+### Deterministic JSON Serialization
+
+Cramberry generates JSON serialization methods alongside binary encoding. Perfect for blockchain SignDoc generation where users must see and verify transaction details before signing.
+
+**Key Features:**
+- 🔒 **Deterministic**: Byte-identical output across all runs and languages
+- 🌐 **Cross-language**: Same JSON from Go, TypeScript, and Rust
+- 💰 **Blockchain-ready**: Designed for transaction signing (prevents blind signing)
+- 🎯 **JavaScript-safe**: All integers as strings (no precision loss >2^53)
+- 📖 **Human-readable**: Enum names, sorted keys, compact format
+- ✅ **Strict validation**: Required fields enforced, unknown fields rejected
+
+**Basic Example:**
+```go
+// Generate code with JSON support
+./bin/cramberry generate -lang go -out ./gen -marshal ./schema.cram
+
+// Encode message to JSON
+user := &User{ID: 123, Name: "alice"}
+jsonStr, err := user.ToJSON()
+// Output: {"id":"123","name":"alice"}
+
+// Decode from JSON
+var decoded User
+err = decoded.FromJSON(jsonStr)
+
+// Perfect round-trip
+jsonStr2, _ := decoded.ToJSON()
+// jsonStr == jsonStr2 (byte-identical)
+```
+
+**Blockchain SignDoc Example:**
+```go
+// Transaction struct
+type Transfer struct {
+    From   string `cramberry:"1,required"`
+    To     string `cramberry:"2,required"`
+    Amount int64  `cramberry:"3,required"`
+    Memo   string `cramberry:"4"`
+}
+
+// Create transaction
+tx := &Transfer{
+    From:   "alice",
+    To:     "bob",
+    Amount: 1000,
+    Memo:   "payment for services",
+}
+
+// Generate SignDoc (deterministic JSON)
+signDoc, _ := tx.ToJSON()
+// signDoc = {"from":"alice","to":"bob","amount":"1000","memo":"payment for services"}
+
+// User reviews and signs
+fmt.Println("Sign this transaction? " + signDoc)
+signature := ed25519.Sign(privateKey, []byte(signDoc))
+
+// Verify signature
+valid := ed25519.Verify(publicKey, []byte(signDoc), signature)
+```
+
+**Cross-Language Compatibility:**
+
+All three languages produce identical JSON output:
+
+```go
+// Go
+msg := &User{ID: 123, Name: "alice"}
+json, _ := msg.ToJSON()
+```
+
+```typescript
+// TypeScript
+const msg = { id: 123n, name: "alice" };
+const json = toJSON_User(msg);
+```
+
+```rust
+// Rust
+let msg = User { id: 123, name: "alice".to_string() };
+let json = to_json_user(&msg)?;
+```
+
+All produce: `{"id":"123","name":"alice"}`
+
+**JSON Encoding Spec:**
+- **Integers**: Always quoted strings (`"123"`, `"-456"`)
+- **Floats**: Numbers with fixed precision (`3.14159012`)
+- **Booleans**: JSON booleans (`true`, `false`)
+- **Strings**: Escaped JSON strings (`"hello"`)
+- **Bytes**: Base64 encoded (`"3q2+7w=="`)
+- **Enums**: String names (`"ACTIVE"` not `1`)
+- **Maps**: Sorted keys lexicographically
+- **Arrays**: Order preserved
+- **Nil/null**: JSON `null`
+- **Format**: Compact (no whitespace)
+
+**Validation:**
+- Required fields checked on encode and decode
+- NaN/Infinity rejected (not valid JSON)
+- Unknown fields rejected (strict mode)
+- Complex numbers not supported (use separate float fields)
+
 ## Schema Language
 
 Define types in `.cram` schema files for code generation:
