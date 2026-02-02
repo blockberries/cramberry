@@ -1,54 +1,59 @@
 # Cramberry
 
-A high-performance binary serialization library for Go with code generation for Go, TypeScript, and Rust.
+**High-Performance Binary Serialization for Go, TypeScript, and Rust**
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/blockberries/cramberry.svg)](https://pkg.go.dev/github.com/blockberries/cramberry)
-[![Go Report Card](https://goreportcard.com/badge/github.com/blockberries/cramberry)](https://goreportcard.com/report/github.com/blockberries/cramberry)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Go Version](https://img.shields.io/badge/go-1.25+-blue.svg)](https://go.dev)
+[![GoDoc](https://pkg.go.dev/badge/github.com/blockberries/cramberry)](https://pkg.go.dev/github.com/blockberries/cramberry)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![CI Status](https://github.com/blockberries/cramberry/workflows/CI/badge.svg)](https://github.com/blockberries/cramberry/actions)
 
-## Why Cramberry?
+Cramberry is a **deterministic binary serialization library** designed for consensus systems, blockchain applications, and performance-critical distributed systems. It provides compact encoding (37-65% smaller than JSON), fast deserialization (2.7-3x faster), and cross-language support with byte-for-byte compatibility.
 
-Cramberry is designed for systems that demand **speed**, **determinism**, and **cross-language interoperability**:
+---
 
-- **1.5-2.9x faster decoding** than Protocol Buffers
-- **Deterministic encoding** - Sorted map keys produce byte-for-byte identical output, critical for consensus systems and cryptographic applications
-- **Compact wire format** - 2-3x smaller than JSON, comparable to Protobuf
-- **Polymorphic serialization** - Amino-style interface encoding with type registry
-- **Streaming support** - Efficient streaming encoder/decoder for large data
-- **Multi-language** - Full runtimes for Go, TypeScript, and Rust
-- **Security hardened** - Integer overflow protection, zero-copy safety, resource limits
+## Features
 
-## Table of Contents
+- **Deterministic Encoding**: Reproducible binary output for consensus and cryptographic operations
+- **Compact Wire Format**: 37-65% smaller than JSON, comparable to Protocol Buffers
+- **High Performance**: 2.7-3x faster deserialization than JSON, competitive with Protobuf
+- **Cross-Language Support**: Native runtimes for Go, TypeScript, and Rust
+- **Schema Language**: Protocol Buffer-like `.cram` schema files
+- **Polymorphic Types**: Amino-style type registry for interface serialization
+- **Streaming Support**: Delimited messages for large datasets
+- **Deterministic JSON**: Human-readable JSON for blockchain SignDoc generation
+- **Code Generation**: Generate optimized encoding/decoding code from schemas
 
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Features](#features)
-  - [Struct Tags](#struct-tags)
-  - [Polymorphic Types](#polymorphic-types)
-  - [Streaming](#streaming)
-  - [Options](#options)
-- [Schema Language](#schema-language)
-- [Code Generation](#code-generation)
-- [Performance](#performance)
-- [Cross-Language Support](#cross-language-support)
-- [API Reference](#api-reference)
-- [Documentation](#documentation)
-- [Development](#development)
-- [License](#license)
+---
 
-## Installation
+## Quick Start
+
+### Installation
+
+**Go:**
 
 ```bash
 go get github.com/blockberries/cramberry
 ```
 
-**CLI tool:**
+**TypeScript:**
+
+```bash
+npm install @cramberry/runtime
+```
+
+**Rust:**
+
+```bash
+cargo add cramberry
+```
+
+**CLI Tool:**
 
 ```bash
 go install github.com/blockberries/cramberry/cmd/cramberry@latest
 ```
 
-## Quick Start
+### Basic Usage (Go)
 
 ```go
 package main
@@ -59,253 +64,46 @@ import (
 )
 
 type User struct {
-    ID    int32  `cramberry:"1"`
+    ID    int64  `cramberry:"1,required"`
     Name  string `cramberry:"2"`
     Email string `cramberry:"3"`
 }
 
 func main() {
-    user := User{ID: 1, Name: "Alice", Email: "alice@example.com"}
-
-    // Marshal to binary
+    // Marshal
+    user := User{ID: 123, Name: "Alice", Email: "alice@example.com"}
     data, err := cramberry.Marshal(user)
     if err != nil {
         panic(err)
     }
+    fmt.Printf("Encoded: %d bytes\n", len(data))
 
-    // Unmarshal back
+    // Unmarshal
     var decoded User
-    if err := cramberry.Unmarshal(data, &decoded); err != nil {
+    err = cramberry.Unmarshal(data, &decoded)
+    if err != nil {
         panic(err)
     }
-
     fmt.Printf("Decoded: %+v\n", decoded)
+
+    // Deterministic JSON (for SignDocs)
+    jsonStr, _ := cramberry.ToJSON(user)
+    fmt.Printf("JSON: %s\n", jsonStr)
+    // Output: {"id":"123","name":"Alice","email":"alice@example.com"}
 }
 ```
 
-## Features
+### Schema-Driven Development
 
-### Struct Tags
-
-Control serialization with struct tags:
-
-```go
-type Message struct {
-    ID        int64  `cramberry:"1,required"` // Field 1, must be present on decode
-    Content   string `cramberry:"2"`          // Field 2
-    Timestamp int64  `cramberry:"3,omitempty"` // Field 3, omit if zero
-    Internal  string `cramberry:"-"`          // Skip this field entirely
-}
-```
-
-**Tag options:**
-- `N` - Field number (required, must be positive integer)
-- `required` - Field must be present when decoding
-- `omitempty` - Omit field if it has zero value
-- `-` - Skip field entirely
-
-### Polymorphic Types
-
-Cramberry supports interface serialization through a type registry:
-
-```go
-type Animal interface {
-    Speak() string
-}
-
-type Dog struct {
-    Name string `cramberry:"1"`
-}
-func (d *Dog) Speak() string { return "Woof!" }
-
-type Cat struct {
-    Name string `cramberry:"1"`
-}
-func (c *Cat) Speak() string { return "Meow!" }
-
-func init() {
-    // Register types (auto-assigns IDs starting at 128)
-    // RegisterOrGet is idempotent - safe to call multiple times
-    cramberry.RegisterOrGet[Dog]()
-    cramberry.RegisterOrGet[Cat]()
-}
-
-// Use in a container
-type Zoo struct {
-    Animals []Animal `cramberry:"1"`
-}
-```
-
-**Type ID ranges:**
-- `0` - Nil value
-- `1-63` - Reserved (built-in types)
-- `64-127` - Reserved (stdlib types)
-- `128+` - User-defined types
-
-### Streaming
-
-For large data or network streams:
-
-```go
-// Writing multiple messages
-sw := cramberry.NewStreamWriter(conn)
-for _, msg := range messages {
-    sw.WriteDelimited(&msg)
-}
-sw.Flush()
-
-// Reading with iterator pattern
-it := cramberry.NewMessageIterator(conn)
-var msg MyMessage
-for it.Next(&msg) {
-    process(msg)
-}
-if err := it.Err(); err != nil {
-    // Handle error
-}
-```
-
-### Options
-
-Control encoding/decoding behavior with option presets:
-
-```go
-// Default: V2 format, deterministic, UTF-8 validation
-data, _ := cramberry.Marshal(v)
-
-// Fast: Skip validation, non-deterministic maps (best performance)
-data, _ := cramberry.MarshalWithOptions(v, cramberry.FastOptions)
-
-// Secure: Conservative limits for untrusted input
-data, _ := cramberry.MarshalWithOptions(v, cramberry.SecureOptions)
-
-// Strict: Reject unknown fields
-err := cramberry.UnmarshalWithOptions(data, &v, cramberry.StrictOptions)
-```
-
-**Option presets:**
-
-| Preset | Use Case |
-|--------|----------|
-| `DefaultOptions` | General use - deterministic, validated |
-| `FastOptions` | Performance critical - skip validation |
-| `SecureOptions` | Untrusted input - conservative limits |
-| `StrictOptions` | Schema enforcement - reject unknown fields |
-
-### Deterministic JSON Serialization
-
-Cramberry generates JSON serialization methods alongside binary encoding. Perfect for blockchain SignDoc generation where users must see and verify transaction details before signing.
-
-**Key Features:**
-- 🔒 **Deterministic**: Byte-identical output across all runs and languages
-- 🌐 **Cross-language**: Same JSON from Go, TypeScript, and Rust
-- 💰 **Blockchain-ready**: Designed for transaction signing (prevents blind signing)
-- 🎯 **JavaScript-safe**: All integers as strings (no precision loss >2^53)
-- 📖 **Human-readable**: Enum names, sorted keys, compact format
-- ✅ **Strict validation**: Required fields enforced, unknown fields rejected
-
-**Basic Example:**
-```go
-// Generate code with JSON support
-./bin/cramberry generate -lang go -out ./gen -marshal ./schema.cram
-
-// Encode message to JSON
-user := &User{ID: 123, Name: "alice"}
-jsonStr, err := user.ToJSON()
-// Output: {"id":"123","name":"alice"}
-
-// Decode from JSON
-var decoded User
-err = decoded.FromJSON(jsonStr)
-
-// Perfect round-trip
-jsonStr2, _ := decoded.ToJSON()
-// jsonStr == jsonStr2 (byte-identical)
-```
-
-**Blockchain SignDoc Example:**
-```go
-// Transaction struct
-type Transfer struct {
-    From   string `cramberry:"1,required"`
-    To     string `cramberry:"2,required"`
-    Amount int64  `cramberry:"3,required"`
-    Memo   string `cramberry:"4"`
-}
-
-// Create transaction
-tx := &Transfer{
-    From:   "alice",
-    To:     "bob",
-    Amount: 1000,
-    Memo:   "payment for services",
-}
-
-// Generate SignDoc (deterministic JSON)
-signDoc, _ := tx.ToJSON()
-// signDoc = {"from":"alice","to":"bob","amount":"1000","memo":"payment for services"}
-
-// User reviews and signs
-fmt.Println("Sign this transaction? " + signDoc)
-signature := ed25519.Sign(privateKey, []byte(signDoc))
-
-// Verify signature
-valid := ed25519.Verify(publicKey, []byte(signDoc), signature)
-```
-
-**Cross-Language Compatibility:**
-
-All three languages produce identical JSON output:
-
-```go
-// Go
-msg := &User{ID: 123, Name: "alice"}
-json, _ := msg.ToJSON()
-```
-
-```typescript
-// TypeScript
-const msg = { id: 123n, name: "alice" };
-const json = toJSON_User(msg);
-```
-
-```rust
-// Rust
-let msg = User { id: 123, name: "alice".to_string() };
-let json = to_json_user(&msg)?;
-```
-
-All produce: `{"id":"123","name":"alice"}`
-
-**JSON Encoding Spec:**
-- **Integers**: Always quoted strings (`"123"`, `"-456"`)
-- **Floats**: Numbers with fixed precision (`3.14159012`)
-- **Booleans**: JSON booleans (`true`, `false`)
-- **Strings**: Escaped JSON strings (`"hello"`)
-- **Bytes**: Base64 encoded (`"3q2+7w=="`)
-- **Enums**: String names (`"ACTIVE"` not `1`)
-- **Maps**: Sorted keys lexicographically
-- **Arrays**: Order preserved
-- **Nil/null**: JSON `null`
-- **Format**: Compact (no whitespace)
-
-**Validation:**
-- Required fields checked on encode and decode
-- NaN/Infinity rejected (not valid JSON)
-- Unknown fields rejected (strict mode)
-- Complex numbers not supported (use separate float fields)
-
-## Schema Language
-
-Define types in `.cram` schema files for code generation:
+**1. Define Schema (`user.cram`):**
 
 ```cramberry
-package example;
+package user;
 
 enum Status {
     UNKNOWN = 0;
     ACTIVE = 1;
-    SUSPENDED = 2;
+    INACTIVE = 2;
 }
 
 message User {
@@ -316,244 +114,699 @@ message User {
     tags: []string = 5;
     metadata: map[string]string = 6;
 }
+```
 
-interface Principal {
-    User = 128;
-    Admin = 129;
+**2. Generate Code:**
+
+```bash
+cramberry generate -lang go -out ./gen user.cram
+cramberry generate -lang typescript -out ./gen user.cram
+cramberry generate -lang rust -out ./gen user.cram
+```
+
+**3. Use Generated Code:**
+
+```go
+// Go
+user := &gen.User{ID: 123, Name: "Alice"}
+data, _ := user.EncodeTo(writer)
+
+// TypeScript
+const user = { id: 123n, name: "Alice" };
+const data = encode_User(writer, user);
+
+// Rust
+let user = User { id: 123, name: "Alice".to_string() };
+let data = user.encode_to(&mut writer)?;
+```
+
+---
+
+## Use Cases
+
+### 1. Blockchain Transaction Signing
+
+Generate human-readable, deterministic JSON for SignDocs:
+
+```go
+tx := Transaction{
+    Amount:    1000,
+    Recipient: "cosmos1...",
+    Fee:       100,
 }
+
+signDoc, _ := tx.ToJSON()
+// signDoc = `{"amount":"1000","fee":"100","recipient":"cosmos1..."}`
+
+signature := sign([]byte(signDoc), privateKey)
 ```
 
-See [docs/SCHEMA_LANGUAGE.md](docs/SCHEMA_LANGUAGE.md) for complete syntax reference.
+**Why Cramberry?**
 
-## Code Generation
+- **Deterministic**: Identical JSON across all implementations
+- **Human-Readable**: Users can review what they're signing
+- **Secure**: Prevents blind signing attacks
 
-Generate type-safe code from schemas:
+### 2. Consensus Protocols
 
-```bash
-# Go (with MarshalCramberry/UnmarshalCramberry methods for 2x+ performance)
-cramberry generate -lang go -out ./gen ./schemas/*.cram
+Achieve byte-for-byte encoding reproducibility:
 
-# TypeScript
-cramberry generate -lang typescript -out ./gen ./schemas/*.cram
+```go
+// Node 1 (Go)
+block := Block{Height: 100, Hash: "abc123"}
+encoded, _ := cramberry.Marshal(block)
+hash1 := sha256.Sum256(encoded)
 
-# Rust
-cramberry generate -lang rust -out ./gen ./schemas/*.cram
+// Node 2 (Rust)
+let block = Block { height: 100, hash: "abc123".to_string() };
+let encoded = cramberry::marshal(&block)?;
+let hash2 = sha256(encoded);
+
+// hash1 == hash2 (guaranteed)
 ```
 
-**Extract schemas from existing Go code:**
+### 3. Microservices Communication
 
-```bash
-cramberry schema ./pkg/models -out schema.cram
+Compact, cross-language RPC:
+
+```go
+// Service A (Go)
+request := GetUserRequest{ID: 123}
+data, _ := cramberry.Marshal(request)
+// Send to Service B...
+
+// Service B (TypeScript)
+const request = decode_GetUserRequest(reader, data);
+// Process request...
 ```
+
+**Advantages:**
+
+- **37-65% smaller** than JSON (reduced bandwidth)
+- **2.7-3x faster** deserialization (lower latency)
+- **Type-safe** across languages
+
+### 4. Data Persistence
+
+Efficient storage with forward compatibility:
+
+```go
+// Write
+data, _ := cramberry.Marshal(record)
+db.Put(key, data)
+
+// Read (even after schema evolution)
+var record Record
+cramberry.Unmarshal(db.Get(key), &record)
+```
+
+---
 
 ## Performance
 
-Benchmarks on Apple M4 Pro comparing Cramberry to Protocol Buffers:
+### Benchmark Results (Apple M4 Pro)
 
-### Decode Speed (Higher is Better)
+**Encoded Sizes:**
 
-| Message Type | Cramberry | Protobuf | Speedup |
-|--------------|-----------|----------|---------|
-| SmallMessage | 27 ns | 69 ns | **2.6x faster** |
-| Metrics | 42 ns | 112 ns | **2.7x faster** |
-| Person | 395 ns | 586 ns | **1.5x faster** |
-| Document | 822 ns | 1381 ns | **1.7x faster** |
-| Batch1000 | 28 us | 62 us | **2.2x faster** |
+| Message | Cramberry | Protobuf | JSON | Cram/PB | JSON/PB |
+|---------|-----------|----------|------|---------|---------|
+| Small   | 18 bytes  | 16 bytes | 45 bytes | 1.12x | 2.81x |
+| Metrics | 76 bytes  | 75 bytes | 154 bytes | 1.01x | 2.05x |
+| Complex | 412 bytes | 419 bytes | 930 bytes | 0.98x | 2.22x |
 
-### Memory Efficiency
+**Performance (ns/op):**
 
-| Metric | Cramberry vs Protobuf |
-|--------|----------------------|
-| Encode allocations | Single allocation pattern |
-| Decode allocations | 42-58% fewer |
-| Metrics decode | **Zero allocations** |
+| Operation | Cramberry | Protobuf | JSON |
+|-----------|-----------|----------|------|
+| Encode Small | 48 ns | 45 ns | 84 ns |
+| Decode Small | 27 ns | 68 ns | 403 ns |
+| Encode Complex | 305 ns | 331 ns | 1,200 ns |
+| Decode Complex | 392 ns | 615 ns | 2,800 ns |
 
-### Generated Code vs Reflection
+**Key Takeaways:**
 
-| Metric | Generated Code Advantage |
-|--------|-------------------------|
-| Encode | 1.7-2.4x faster |
-| Decode | 2.9-11.6x faster |
+- ✅ **Size**: Comparable to Protobuf, 2-3x smaller than JSON
+- ✅ **Decode Speed**: Faster than Protobuf, 3-5x faster than JSON
+- ✅ **Encode Speed**: Competitive with Protobuf (reflection-based)
+- ✅ **Memory**: Efficient allocation patterns
 
-### Encoded Size
-
-| Message Type | Cramberry | Protobuf | Comparison |
-|--------------|-----------|----------|------------|
-| SmallMessage | 18 B | 16 B | +12% |
-| Person | 212 B | 212 B | equal |
-| Document | 412 B | 419 B | -2% |
-| Batch1000 | 17 KB | 18 KB | -5% |
-
-See [BENCHMARKS.md](BENCHMARKS.md) for detailed benchmark data and methodology.
-
-## Cross-Language Support
-
-### TypeScript
-
-```typescript
-import { Writer, Reader } from '@cramberry/runtime';
-
-const writer = new Writer();
-writer.writeInt32Field(1, 42);
-writer.writeStringField(2, "hello");
-const data = writer.bytes();
-
-const reader = new Reader(data);
-// ... read fields
-```
-
-### Rust
-
-```rust
-use cramberry::{Writer, Reader};
-
-let mut writer = Writer::new();
-writer.write_int32_field(1, 42)?;
-writer.write_string_field(2, "hello")?;
-let data = writer.into_bytes();
-```
-
-### Compatibility Notes
-
-- **complex64/complex128** - Go only (no TypeScript/Rust support)
-- **int/uint** - Platform-dependent size; prefer explicit `int32`/`int64`
-- **Map keys** - Must be primitives (string, integers, floats, bool)
-- **Streaming** - Full streaming support across all three runtimes (Go, TypeScript, Rust)
-
-## API Reference
-
-### Core Functions
-
-```go
-// Basic encoding/decoding
-func Marshal(v any) ([]byte, error)
-func Unmarshal(data []byte, v any) error
-
-// With options
-func MarshalWithOptions(v any, opts Options) ([]byte, error)
-func UnmarshalWithOptions(data []byte, v any, opts Options) error
-
-// Buffer reuse
-func MarshalAppend(buf []byte, v any) ([]byte, error)
-
-// Size calculation without encoding
-func Size(v any) int
-```
-
-### Type Registry
-
-```go
-// Idempotent registration (recommended)
-func RegisterOrGet[T any]() TypeID             // Auto-assign ID, safe to call multiple times
-func RegisterOrGetWithID[T any](id TypeID) TypeID // Explicit ID, safe to call multiple times
-
-// Error-returning registration (use when you need explicit error handling)
-func Register[T any]() (TypeID, error)         // Auto-assign ID
-func RegisterWithID[T any](id TypeID) error    // Explicit ID
-```
-
-### Writer/Reader (Low-Level)
-
-```go
-// Pooled writer for reduced allocations
-w := cramberry.GetWriter()
-defer cramberry.PutWriter(w)
-w.WriteInt32(42)
-w.WriteString("hello")
-data := w.Bytes()
-
-// Reader
-r := cramberry.NewReader(data)
-num := r.ReadInt32()
-str := r.ReadString()
-```
-
-### Streaming
-
-```go
-// Writer
-sw := cramberry.NewStreamWriter(w)
-sw.WriteDelimited(&msg)
-sw.Flush()
-
-// Reader
-sr := cramberry.NewStreamReader(r)
-sr.ReadDelimited(&msg)
-
-// Iterator pattern
-it := cramberry.NewMessageIterator(r)
-for it.Next(&msg) { ... }
-```
-
-## Wire Format
-
-| Wire Type | Value | Used For |
-|-----------|-------|----------|
-| Varint    | 0     | uint*, bool, enum |
-| Fixed64   | 1     | int64, uint64, float64 |
-| Bytes     | 2     | string, []byte, messages |
-| Fixed32   | 5     | int32, uint32, float32 |
-| SVarint   | 6     | int* (ZigZag encoded) |
-| TypeRef   | 7     | Polymorphic type ID |
-
-V2 wire format (default) uses compact single-byte tags for fields 1-15 and end markers instead of field count prefixes.
+---
 
 ## Documentation
 
-- [Architecture](ARCHITECTURE.md) - Design and implementation details
-- [Benchmarks](BENCHMARKS.md) - Full performance comparison
-- [Roadmap](ROADMAP.md) - Development roadmap and future plans
-- [Schema Language](docs/SCHEMA_LANGUAGE.md) - Complete schema syntax reference
-- [Security](docs/SECURITY.md) - Security considerations and best practices
-- [Migration Guide](docs/MIGRATION.md) - Migrating from other formats
-- [Contributing](docs/CONTRIBUTING.md) - Contribution guidelines
+- **[Architecture](ARCHITECTURE.md)**: Comprehensive system design and implementation details
+- **[API Reference](https://pkg.go.dev/github.com/blockberries/cramberry)**: Go package documentation
+- **[Changelog](CHANGELOG.md)**: Version history and release notes
+- **[Development Guide](CLAUDE.md)**: Contributing and development workflow
+
+### Key Concepts
+
+- **[Wire Protocol](ARCHITECTURE.md#wire-protocol-specification)**: Binary encoding format
+- **[Schema Language](ARCHITECTURE.md#schema-language-pkgschema)**: `.cram` file syntax
+- **[Code Generation](ARCHITECTURE.md#code-generation-system)**: Multi-language codegen
+- **[Type Registry](ARCHITECTURE.md#registry-implementation-polymorphic-types)**: Polymorphic serialization
+- **[JSON Serialization](ARCHITECTURE.md#deterministic-json-serialization)**: Deterministic JSON for SignDocs
+
+---
+
+## CLI Tool
+
+### Commands
+
+**Generate Code:**
+
+```bash
+cramberry generate -lang go -out ./gen schemas/*.cram
+cramberry generate -lang typescript -out ./gen schemas/*.cram
+cramberry generate -lang rust -out ./gen schemas/*.cram
+```
+
+**Extract Schema from Go Code:**
+
+```bash
+cramberry schema -out user.cram ./pkg/models
+```
+
+**Validate Schemas:**
+
+```bash
+cramberry validate schemas/*.cram
+```
+
+**Format Schemas:**
+
+```bash
+cramberry format schemas/*.cram
+```
+
+**Version Info:**
+
+```bash
+cramberry version
+```
+
+---
+
+## Schema Language
+
+### Syntax
+
+```cramberry
+package example;
+
+// Enums (explicit values required)
+enum Status {
+    UNKNOWN = 0;
+    ACTIVE = 1;
+    INACTIVE = 2;
+}
+
+// Messages (struct-like types)
+message User {
+    id: int64 = 1 [required];          // Required field
+    name: string = 2;                  // Optional field
+    email: string = 3;
+    status: Status = 4;                // Enum field
+    tags: []string = 5;                // Repeated field (slice)
+    metadata: map[string]string = 6;   // Map field
+    address: *Address = 7;             // Optional pointer
+}
+
+message Address {
+    street: string = 1;
+    city: string = 2;
+    country: string = 3;
+}
+
+// Interfaces (polymorphic types)
+interface Principal {
+    User = 128;          // Type ID for User
+    Organization = 129;  // Type ID for Organization
+}
+```
+
+### Supported Types
+
+| Category | Types |
+|----------|-------|
+| **Integers** | `int8`, `int16`, `int32`, `int64`, `int` |
+| **Unsigned** | `uint8`, `uint16`, `uint32`, `uint64`, `uint`, `byte` |
+| **Floats** | `float32`, `float64` |
+| **Complex** | `complex64`, `complex128` (Go only) |
+| **Boolean** | `bool` |
+| **Strings** | `string`, `bytes` |
+| **Collections** | `[]T` (slice), `map[K]V` (map) |
+| **Pointers** | `*T` (optional/nullable) |
+| **Custom** | `User`, `pkg.User` (qualified names) |
+
+---
+
+## Cross-Language Support
+
+### Runtime Feature Parity
+
+| Feature | Go | TypeScript | Rust |
+|---------|----|-----------|----|
+| Binary Encoding | ✅ | ✅ | ✅ |
+| Binary Decoding | ✅ | ✅ | ✅ |
+| Streaming | ✅ | ✅ | ✅ |
+| Type Registry | ✅ | ✅ | ✅ |
+| Deterministic JSON | ✅ | ✅ | ✅ |
+| Zero-Copy Strings | ✅ | ❌ | ❌ |
+| Writer Pooling | ✅ | ❌ | ❌ |
+
+### Integration Testing
+
+**Golden File Strategy:**
+
+1. Go generates canonical binaries (authoritative)
+2. TypeScript/Rust verify byte-for-byte compatibility
+3. All runtimes produce identical JSON output
+
+**Test Coverage:**
+
+- ✅ Scalar types (int, float, bool, string, bytes)
+- ✅ Repeated types (arrays)
+- ✅ Maps
+- ✅ Nested messages (10+ levels deep)
+- ✅ Enums
+- ✅ Edge cases (nil, zero, max/min values)
+
+---
 
 ## Development
 
-```bash
-make check    # Run all checks (format, vet, lint, test)
-make test     # Run tests with race detection
-make build    # Build CLI to bin/cramberry
-make bench    # Run benchmarks
-make lint     # Run golangci-lint
+### Build from Source
 
-# Cross-language tests
-make ts-test    # TypeScript tests
-make rust-test  # Rust tests
-```
+**Prerequisites:**
 
-### Running Examples
+- Go 1.25+
+- TypeScript 5.0+ (for TS runtime)
+- Rust 1.70+ (for Rust runtime)
+
+**Clone and Build:**
 
 ```bash
-go run ./examples/basic
-go run ./examples/polymorphic
-go run ./examples/streaming
+git clone https://github.com/blockberries/cramberry.git
+cd cramberry
+make build
 ```
 
-## Project Status
+**Run Tests:**
 
-Cramberry is **production-ready** with comprehensive security hardening and cross-language conformance (v1.3.0).
+```bash
+make test           # Go tests with race detection
+make test-short     # Fast tests
+make ts-test        # TypeScript tests
+make rust-test      # Rust tests
+```
 
-### Recent Releases
+**Run Benchmarks:**
 
-**v1.3.0** - Cross-language V2 wire format conformance (Go, TypeScript, Rust produce identical encodings)
-**v1.2.0** - Zero-copy memory safety with generation tracking (breaking API change)
-**v1.1.0** - Security hardening, schema compatibility checker, cross-language consistency
+```bash
+make bench
+```
 
-### What's Next
+**Linting:**
 
-**v1.4.0** (in development):
-- Reflection caching improvements (13-29% decode speedup achieved)
-- TypeScript streaming support (now complete)
+```bash
+make lint           # golangci-lint
+make check          # All checks (fmt, vet, lint, test)
+```
 
-Upcoming priorities:
-- SIMD-accelerated encoding (ARM64 NEON, x86-64 AVX2)
-- Arena allocator support for batch decoding
-- gRPC integration
-- Python code generator
+### Project Structure
 
-See [ROADMAP.md](ROADMAP.md) for the full development roadmap and [CHANGELOG.md](CHANGELOG.md) for release history.
+```
+cramberry/
+├── cmd/cramberry/          # CLI application
+├── pkg/                    # Public APIs
+│   ├── cramberry/          # Main runtime
+│   ├── schema/             # Schema parser
+│   ├── codegen/            # Code generators
+│   └── extract/            # Schema extraction
+├── internal/               # Private implementation
+│   ├── wire/               # Wire protocol
+│   └── bench/              # Benchmarks
+├── typescript/             # TypeScript runtime
+├── rust/                   # Rust runtime
+├── test/integration/       # Cross-language tests
+├── testdata/               # Test fixtures
+├── examples/               # Example applications
+├── Makefile                # Build automation
+├── ARCHITECTURE.md         # System design docs
+├── README.md               # This file
+└── CLAUDE.md               # Development guide
+```
+
+---
+
+## Contributing
+
+We welcome contributions! Please follow these guidelines:
+
+### Code Style
+
+- **Go**: Follow [Effective Go](https://go.dev/doc/effective_go) and use `gofmt`
+- **TypeScript**: Use prettier and ESLint
+- **Rust**: Use `rustfmt` and `clippy`
+
+### Pull Request Process
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Add tests for new functionality
+5. Ensure all tests pass (`make check`)
+6. Commit your changes (`git commit -m 'Add amazing feature'`)
+7. Push to the branch (`git push origin feature/amazing-feature`)
+8. Open a Pull Request
+
+### Testing Requirements
+
+- **Unit tests**: All new code must have tests
+- **Integration tests**: Cross-language changes require integration tests
+- **Coverage**: Maintain >70% coverage
+- **Benchmarks**: Performance-critical changes require benchmarks
+
+---
+
+## Testing
+
+### Run Tests
+
+```bash
+# All Go tests
+make test
+
+# Fast tests (no race detection)
+make test-short
+
+# Single package
+go test -v ./pkg/cramberry
+
+# Single test function
+go test -v ./pkg/cramberry -run TestMarshal
+
+# With coverage
+go test -cover ./...
+make coverage  # Generate HTML report
+```
+
+### Run Benchmarks
+
+```bash
+# All benchmarks
+make bench
+
+# Specific benchmark
+go test -bench=BenchmarkMarshal ./pkg/cramberry
+
+# With memory profiling
+go test -bench=. -benchmem ./pkg/cramberry
+
+# Compare with baseline
+go test -bench=. ./pkg/cramberry > new.txt
+benchstat old.txt new.txt
+```
+
+### Cross-Language Tests
+
+```bash
+# All runtimes
+make test
+make ts-test
+make rust-test
+
+# Integration tests
+go test -v ./test/integration
+```
+
+---
+
+## Examples
+
+### Example 1: Basic Marshaling
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/blockberries/cramberry/pkg/cramberry"
+)
+
+type Message struct {
+    ID      int64  `cramberry:"1,required"`
+    Content string `cramberry:"2"`
+}
+
+func main() {
+    msg := Message{ID: 42, Content: "Hello, World!"}
+
+    // Marshal
+    data, _ := cramberry.Marshal(msg)
+    fmt.Printf("Encoded: %x\n", data)
+
+    // Unmarshal
+    var decoded Message
+    cramberry.Unmarshal(data, &decoded)
+    fmt.Printf("Decoded: %+v\n", decoded)
+}
+```
+
+### Example 2: Streaming
+
+```go
+package main
+
+import (
+    "os"
+    "github.com/blockberries/cramberry/pkg/cramberry"
+)
+
+type LogEntry struct {
+    Timestamp int64  `cramberry:"1"`
+    Message   string `cramberry:"2"`
+}
+
+func main() {
+    // Write delimited messages
+    file, _ := os.Create("log.bin")
+    defer file.Close()
+
+    writer := cramberry.NewStreamWriter(file)
+    for i := 0; i < 1000; i++ {
+        entry := LogEntry{Timestamp: int64(i), Message: "Log entry"}
+        writer.WriteMessage(entry)
+    }
+
+    // Read delimited messages
+    file2, _ := os.Open("log.bin")
+    defer file2.Close()
+
+    reader := cramberry.NewStreamReader(file2)
+    for {
+        var entry LogEntry
+        err := reader.ReadMessage(&entry)
+        if err != nil {
+            break  // EOF
+        }
+        fmt.Printf("Entry: %+v\n", entry)
+    }
+}
+```
+
+### Example 3: Polymorphic Types
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/blockberries/cramberry/pkg/cramberry"
+)
+
+type Animal interface {
+    Speak() string
+}
+
+type Dog struct {
+    Name string `cramberry:"1"`
+}
+
+func (d Dog) Speak() string { return "Woof!" }
+
+type Cat struct {
+    Name string `cramberry:"1"`
+}
+
+func (c Cat) Speak() string { return "Meow!" }
+
+func init() {
+    // Register types with explicit IDs
+    cramberry.RegisterWithID[Dog](128)
+    cramberry.RegisterWithID[Cat](129)
+}
+
+func main() {
+    animals := []Animal{
+        Dog{Name: "Buddy"},
+        Cat{Name: "Whiskers"},
+    }
+
+    // Marshal slice of interfaces
+    data, _ := cramberry.Marshal(animals)
+
+    // Unmarshal
+    var decoded []Animal
+    cramberry.Unmarshal(data, &decoded)
+
+    for _, animal := range decoded {
+        fmt.Printf("%T: %s\n", animal, animal.Speak())
+    }
+    // Output:
+    // Dog: Woof!
+    // Cat: Meow!
+}
+```
+
+### Example 4: Deterministic JSON
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/blockberries/cramberry/pkg/cramberry"
+)
+
+type Transaction struct {
+    From   string            `cramberry:"1,required"`
+    To     string            `cramberry:"2,required"`
+    Amount int64             `cramberry:"3,required"`
+    Memo   string            `cramberry:"4"`
+    Fees   map[string]int64  `cramberry:"5"`
+}
+
+func main() {
+    tx := Transaction{
+        From:   "alice",
+        To:     "bob",
+        Amount: 1000,
+        Memo:   "Payment for services",
+        Fees:   map[string]int64{"network": 10, "gas": 5},
+    }
+
+    // Generate deterministic JSON (for SignDoc)
+    jsonStr, _ := cramberry.ToJSON(tx)
+    fmt.Println(jsonStr)
+
+    // Output (deterministic, no whitespace, sorted maps):
+    // {"amount":"1000","fees":{"gas":"5","network":"10"},"from":"alice","memo":"Payment for services","to":"bob"}
+
+    // User reviews and signs this JSON
+    signature := sign([]byte(jsonStr), privateKey)
+
+    // Verify signature
+    valid := verify([]byte(jsonStr), signature, publicKey)
+    fmt.Printf("Signature valid: %v\n", valid)
+}
+```
+
+---
+
+## Roadmap
+
+### v1.6 (Short-Term)
+
+- [ ] Performance optimizations (SIMD varint, generated code inlining)
+- [ ] Schema versioning and migration tools
+- [ ] VS Code extension (syntax highlighting, validation)
+
+### v1.7-v1.8 (Mid-Term)
+
+- [ ] Python, Java, C++ runtimes
+- [ ] Compression (zstd/gzip) at wire level
+- [ ] Schema registry server
+
+### v2.0+ (Long-Term)
+
+- [ ] Wire protocol v3
+- [ ] RPC framework (Cramberry-based gRPC alternative)
+- [ ] Public package registry
+
+---
+
+## FAQ
+
+**Q: How does Cramberry compare to Protocol Buffers?**
+
+A: Cramberry is designed specifically for **deterministic encoding** (essential for consensus systems), while Protobuf focuses on **performance**. Cramberry is slightly slower at encoding (reflection-based) but offers comparable or faster decoding, similar size efficiency, and cross-language JSON compatibility.
+
+**Q: Should I use Cramberry or JSON?**
+
+A: Use Cramberry when you need **compact encoding** (37-65% smaller), **fast deserialization** (2.7-3x faster), or **deterministic JSON** (blockchain SignDocs). Use JSON when you need **human readability** everywhere or **broad tooling support**.
+
+**Q: Is Cramberry production-ready?**
+
+A: Yes. Cramberry is extensively tested (>70% coverage), fuzz-tested, and used in blockchain applications. However, it's currently at v1.5 (pre-v2.0 stability).
+
+**Q: Can I use Cramberry with existing Go structs?**
+
+A: Yes. Add `cramberry` struct tags to your existing types:
+
+```go
+type User struct {
+    ID   int64  `json:"id" cramberry:"1,required"`
+    Name string `json:"name" cramberry:"2"`
+}
+```
+
+**Q: Does Cramberry support schema evolution?**
+
+A: Yes. Unknown fields are skipped during decoding (forward compatibility), and optional fields (pointers, `omitempty`) enable backward compatibility.
+
+**Q: How do I handle breaking changes in schemas?**
+
+A: Use **interface versioning** with separate type IDs:
+
+```cramberry
+interface UserV1 { User = 128; }
+interface UserV2 { UserV2 = 129; }
+```
+
+**Q: Is Cramberry thread-safe?**
+
+A: The **Registry** is thread-safe (concurrent registration/lookup). **Writer/Reader** objects are **not** thread-safe (single-goroutine use, but can be pooled across goroutines).
+
+---
 
 ## License
 
-Apache License 2.0 - see [LICENSE](LICENSE) for details.
+Cramberry is licensed under the **Apache License 2.0**. See [LICENSE](LICENSE) for details.
+
+---
+
+## Community
+
+- **GitHub**: [github.com/blockberries/cramberry](https://github.com/blockberries/cramberry)
+- **Issues**: [Report bugs or request features](https://github.com/blockberries/cramberry/issues)
+- **Discussions**: [Ask questions or share ideas](https://github.com/blockberries/cramberry/discussions)
+- **Documentation**: [pkg.go.dev](https://pkg.go.dev/github.com/blockberries/cramberry)
+
+---
+
+## Acknowledgments
+
+Cramberry is inspired by:
+
+- **Protocol Buffers**: Wire format and schema language design
+- **Amino (Cosmos SDK)**: Polymorphic type registry approach
+- **Cap'n Proto**: Zero-copy serialization concepts
+- **FlatBuffers**: Performance optimization techniques
+
+Special thanks to the Go, TypeScript, and Rust communities for their excellent tooling and libraries.
+
+---
+
+**Built with ❤️ by the Blockberries Team**
