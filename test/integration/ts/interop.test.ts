@@ -256,7 +256,7 @@ function decodeNestedMessage(reader: Reader): NestedMessage {
         result.value = reader.readSVarint();
         break;
       default:
-        reader.skipField(tag.wireType);
+        reader.skipValue(tag.wireType);
     }
   }
 
@@ -299,7 +299,7 @@ function decodeScalarTypes(reader: Reader): ScalarTypes {
         result.bytesVal = reader.readLengthPrefixedBytes();
         break;
       default:
-        reader.skipField(tag.wireType);
+        reader.skipValue(tag.wireType);
     }
   }
 
@@ -423,7 +423,7 @@ describe('TypeScript Interoperability Tests', () => {
           case 127: decoded.field127 = reader.readSVarint(); break;
           case 128: decoded.field128 = reader.readSVarint(); break;
           case 1000: decoded.field1000 = reader.readSVarint(); break;
-          default: reader.skipField(tag.wireType);
+          default: reader.skipValue(tag.wireType);
         }
       }
 
@@ -459,7 +459,7 @@ describe('TypeScript Interoperability Tests', () => {
           case 127: decoded.field127 = reader.readSVarint(); break;
           case 128: decoded.field128 = reader.readSVarint(); break;
           case 1000: decoded.field1000 = reader.readSVarint(); break;
-          default: reader.skipField(tag.wireType);
+          default: reader.skipValue(tag.wireType);
         }
       }
 

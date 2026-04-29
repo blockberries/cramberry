@@ -783,20 +783,6 @@ func (r *Reader) ReadRawBytesNoCopy(n int) ZeroCopyBytes {
 	}
 }
 
-// ReadTag reads a field tag (field number + wire type).
-func (r *Reader) ReadTag() (fieldNum int, wireType WireType) {
-	if !r.checkRead() {
-		return 0, 0
-	}
-	fn, wt, n, err := wire.DecodeTag(r.data[r.pos:])
-	if err != nil {
-		r.setErrorAt(err, "invalid field tag")
-		return 0, 0
-	}
-	r.pos += n
-	return fn, WireType(wt)
-}
-
 // ReadTypeID reads a type ID for polymorphic decoding.
 func (r *Reader) ReadTypeID() TypeID {
 	v := r.ReadUvarint()
@@ -894,37 +880,6 @@ func (r *Reader) ReadMapHeader() int {
 		return 0
 	}
 	return n
-}
-
-// SkipValue skips a value based on its wire type.
-func (r *Reader) SkipValue(wireType WireType) {
-	if !r.checkRead() {
-		return
-	}
-	switch wireType {
-	case WireVarint, WireSVarint:
-		_ = r.ReadUvarint()
-	case WireFixed64:
-		r.Skip(Fixed64Size)
-	case WireFixed32:
-		r.Skip(Fixed32Size)
-	case WireBytes:
-		length := r.ReadUvarint()
-		if r.err != nil {
-			return
-		}
-		if length > uint64(MaxInt) {
-			r.setErrorAt(ErrOverflow, "skip length overflow")
-			return
-		}
-		r.Skip(int(length))
-	case WireTypeRef:
-		// TypeRef is a varint type ID followed by the actual value
-		// We can't fully skip without knowing the type, so just skip the type ID
-		_ = r.ReadUvarint()
-	default:
-		r.setErrorAt(ErrInvalidWireType, "unknown wire type")
-	}
 }
 
 // SubReader creates a sub-reader for a portion of the data.

@@ -77,55 +77,55 @@ pub struct ScalarTypes {
 pub fn encode_scalar_types(writer: &mut Writer, msg: &ScalarTypes) -> Result<()> {
 
     // Field 1: bool_val
-    writer.write_compact_tag(1, WireType::Varint)?;
+    writer.write_tag(1, WireType::Varint)?;
     writer.write_bool(msg.bool_val)?;
 
     // Field 2: int8_val
-    writer.write_compact_tag(2, WireType::SVarint)?;
+    writer.write_tag(2, WireType::SVarint)?;
     writer.write_svarint(msg.int8_val)?;
 
     // Field 3: int16_val
-    writer.write_compact_tag(3, WireType::SVarint)?;
+    writer.write_tag(3, WireType::SVarint)?;
     writer.write_svarint(msg.int16_val)?;
 
     // Field 4: int32_val
-    writer.write_compact_tag(4, WireType::SVarint)?;
+    writer.write_tag(4, WireType::SVarint)?;
     writer.write_svarint(msg.int32_val)?;
 
     // Field 5: int64_val
-    writer.write_compact_tag(5, WireType::SVarint)?;
+    writer.write_tag(5, WireType::SVarint)?;
     writer.write_svarint64(msg.int64_val)?;
 
     // Field 6: uint8_val
-    writer.write_compact_tag(6, WireType::Varint)?;
+    writer.write_tag(6, WireType::Varint)?;
     writer.write_varint(msg.uint8_val)?;
 
     // Field 7: uint16_val
-    writer.write_compact_tag(7, WireType::Varint)?;
+    writer.write_tag(7, WireType::Varint)?;
     writer.write_varint(msg.uint16_val)?;
 
     // Field 8: uint32_val
-    writer.write_compact_tag(8, WireType::Varint)?;
+    writer.write_tag(8, WireType::Varint)?;
     writer.write_varint(msg.uint32_val)?;
 
     // Field 9: uint64_val
-    writer.write_compact_tag(9, WireType::Varint)?;
+    writer.write_tag(9, WireType::Varint)?;
     writer.write_varint64(msg.uint64_val)?;
 
     // Field 10: float32_val
-    writer.write_compact_tag(10, WireType::Fixed32)?;
+    writer.write_tag(10, WireType::Fixed32)?;
     writer.write_float32(msg.float32_val)?;
 
     // Field 11: float64_val
-    writer.write_compact_tag(11, WireType::Fixed64)?;
+    writer.write_tag(11, WireType::Fixed64)?;
     writer.write_float64(msg.float64_val)?;
 
     // Field 12: string_val
-    writer.write_compact_tag(12, WireType::Bytes)?;
+    writer.write_tag(12, WireType::Bytes)?;
     writer.write_string(&msg.string_val)?;
 
     // Field 13: bytes_val
-    writer.write_compact_tag(13, WireType::Bytes)?;
+    writer.write_tag(13, WireType::Bytes)?;
     writer.write_length_prefixed_bytes(&msg.bytes_val)?;
 
     // End marker
@@ -150,7 +150,7 @@ pub fn decode_scalar_types(reader: &mut Reader) -> Result<ScalarTypes> {
     let mut bytes_val: Vec<u8> = Default::default();
 
     loop {
-        let (field_num, wire_type) = reader.read_compact_tag()?;
+        let (field_num, wire_type) = reader.read_tag()?;
         if field_num == 0 { break; } // End marker
 
         match field_num {
@@ -167,7 +167,7 @@ pub fn decode_scalar_types(reader: &mut Reader) -> Result<ScalarTypes> {
             11 => float64_val = reader.read_float64()?,
             12 => string_val = reader.read_string()?.to_string(),
             13 => bytes_val = reader.read_length_prefixed_bytes()?.to_vec(),
-            _ => reader.skip_value_v2(wire_type)?,
+            _ => reader.skip_value(wire_type)?,
         }
     }
 
@@ -387,7 +387,7 @@ pub struct RepeatedTypes {
 pub fn encode_repeated_types(writer: &mut Writer, msg: &RepeatedTypes) -> Result<()> {
 
     // Field 1: strings
-    writer.write_compact_tag(1, WireType::Bytes)?;
+    writer.write_tag(1, WireType::Bytes)?;
     {
         let mut sub_writer = Writer::new();
         sub_writer.write_varint(msg.strings.len() as u32)?;
@@ -398,7 +398,7 @@ pub fn encode_repeated_types(writer: &mut Writer, msg: &RepeatedTypes) -> Result
     }?;
 
     // Field 2: ints
-    writer.write_compact_tag(2, WireType::SVarint)?;
+    writer.write_tag(2, WireType::SVarint)?;
     {
         let mut sub_writer = Writer::new();
         sub_writer.write_varint(msg.ints.len() as u32)?;
@@ -409,7 +409,7 @@ pub fn encode_repeated_types(writer: &mut Writer, msg: &RepeatedTypes) -> Result
     }?;
 
     // Field 3: bools
-    writer.write_compact_tag(3, WireType::Varint)?;
+    writer.write_tag(3, WireType::Varint)?;
     {
         let mut sub_writer = Writer::new();
         sub_writer.write_varint(msg.bools.len() as u32)?;
@@ -431,7 +431,7 @@ pub fn decode_repeated_types(reader: &mut Reader) -> Result<RepeatedTypes> {
     let mut bools: Vec<bool> = Default::default();
 
     loop {
-        let (field_num, wire_type) = reader.read_compact_tag()?;
+        let (field_num, wire_type) = reader.read_tag()?;
         if field_num == 0 { break; } // End marker
 
         match field_num {
@@ -465,7 +465,7 @@ pub fn decode_repeated_types(reader: &mut Reader) -> Result<RepeatedTypes> {
             }
             result
         },
-            _ => reader.skip_value_v2(wire_type)?,
+            _ => reader.skip_value(wire_type)?,
         }
     }
 
@@ -599,7 +599,7 @@ pub struct MapTypes {
 pub fn encode_map_types(writer: &mut Writer, msg: &MapTypes) -> Result<()> {
 
     // Field 1: string_map
-    writer.write_compact_tag(1, WireType::Bytes)?;
+    writer.write_tag(1, WireType::Bytes)?;
     {
         let mut sub_writer = Writer::new();
         sub_writer.write_varint(msg.string_map.len() as u32)?;
@@ -611,7 +611,7 @@ pub fn encode_map_types(writer: &mut Writer, msg: &MapTypes) -> Result<()> {
     }?;
 
     // Field 2: int_map
-    writer.write_compact_tag(2, WireType::Bytes)?;
+    writer.write_tag(2, WireType::Bytes)?;
     {
         let mut sub_writer = Writer::new();
         sub_writer.write_varint(msg.int_map.len() as u32)?;
@@ -633,7 +633,7 @@ pub fn decode_map_types(reader: &mut Reader) -> Result<MapTypes> {
     let mut int_map: std::collections::HashMap<String, i64> = Default::default();
 
     loop {
-        let (field_num, wire_type) = reader.read_compact_tag()?;
+        let (field_num, wire_type) = reader.read_tag()?;
         if field_num == 0 { break; } // End marker
 
         match field_num {
@@ -661,7 +661,7 @@ pub fn decode_map_types(reader: &mut Reader) -> Result<MapTypes> {
             }
             result
         },
-            _ => reader.skip_value_v2(wire_type)?,
+            _ => reader.skip_value(wire_type)?,
         }
     }
 
@@ -794,15 +794,15 @@ pub struct Address {
 pub fn encode_address(writer: &mut Writer, msg: &Address) -> Result<()> {
 
     // Field 1: street
-    writer.write_compact_tag(1, WireType::Bytes)?;
+    writer.write_tag(1, WireType::Bytes)?;
     writer.write_string(&msg.street)?;
 
     // Field 2: city
-    writer.write_compact_tag(2, WireType::Bytes)?;
+    writer.write_tag(2, WireType::Bytes)?;
     writer.write_string(&msg.city)?;
 
     // Field 3: zip
-    writer.write_compact_tag(3, WireType::Bytes)?;
+    writer.write_tag(3, WireType::Bytes)?;
     writer.write_string(&msg.zip)?;
 
     // End marker
@@ -817,14 +817,14 @@ pub fn decode_address(reader: &mut Reader) -> Result<Address> {
     let mut zip: String = Default::default();
 
     loop {
-        let (field_num, wire_type) = reader.read_compact_tag()?;
+        let (field_num, wire_type) = reader.read_tag()?;
         if field_num == 0 { break; } // End marker
 
         match field_num {
             1 => street = reader.read_string()?.to_string(),
             2 => city = reader.read_string()?.to_string(),
             3 => zip = reader.read_string()?.to_string(),
-            _ => reader.skip_value_v2(wire_type)?,
+            _ => reader.skip_value(wire_type)?,
         }
     }
 
@@ -927,19 +927,19 @@ pub struct Person {
 pub fn encode_person(writer: &mut Writer, msg: &Person) -> Result<()> {
 
     // Field 1: name
-    writer.write_compact_tag(1, WireType::Bytes)?;
+    writer.write_tag(1, WireType::Bytes)?;
     writer.write_string(&msg.name)?;
 
     // Field 2: age
-    writer.write_compact_tag(2, WireType::SVarint)?;
+    writer.write_tag(2, WireType::SVarint)?;
     writer.write_svarint(msg.age)?;
 
     // Field 3: address
-    writer.write_compact_tag(3, WireType::Bytes)?;
+    writer.write_tag(3, WireType::Bytes)?;
     encode_address(writer, &msg.address)?;
 
     // Field 4: emails
-    writer.write_compact_tag(4, WireType::Bytes)?;
+    writer.write_tag(4, WireType::Bytes)?;
     {
         let mut sub_writer = Writer::new();
         sub_writer.write_varint(msg.emails.len() as u32)?;
@@ -962,7 +962,7 @@ pub fn decode_person(reader: &mut Reader) -> Result<Person> {
     let mut emails: Vec<String> = Default::default();
 
     loop {
-        let (field_num, wire_type) = reader.read_compact_tag()?;
+        let (field_num, wire_type) = reader.read_tag()?;
         if field_num == 0 { break; } // End marker
 
         match field_num {
@@ -979,7 +979,7 @@ pub fn decode_person(reader: &mut Reader) -> Result<Person> {
             }
             result
         },
-            _ => reader.skip_value_v2(wire_type)?,
+            _ => reader.skip_value(wire_type)?,
         }
     }
 
@@ -1103,15 +1103,15 @@ pub struct RequiredFields {
 pub fn encode_required_fields(writer: &mut Writer, msg: &RequiredFields) -> Result<()> {
 
     // Field 1: id
-    writer.write_compact_tag(1, WireType::SVarint)?;
+    writer.write_tag(1, WireType::SVarint)?;
     writer.write_svarint64(msg.id)?;
 
     // Field 2: name
-    writer.write_compact_tag(2, WireType::Bytes)?;
+    writer.write_tag(2, WireType::Bytes)?;
     writer.write_string(&msg.name)?;
 
     // Field 3: optional_field
-    writer.write_compact_tag(3, WireType::Bytes)?;
+    writer.write_tag(3, WireType::Bytes)?;
     writer.write_string(&msg.optional_field)?;
 
     // End marker
@@ -1126,14 +1126,14 @@ pub fn decode_required_fields(reader: &mut Reader) -> Result<RequiredFields> {
     let mut optional_field: String = Default::default();
 
     loop {
-        let (field_num, wire_type) = reader.read_compact_tag()?;
+        let (field_num, wire_type) = reader.read_tag()?;
         if field_num == 0 { break; } // End marker
 
         match field_num {
             1 => id = reader.read_svarint64()?,
             2 => name = reader.read_string()?.to_string(),
             3 => optional_field = reader.read_string()?.to_string(),
-            _ => reader.skip_value_v2(wire_type)?,
+            _ => reader.skip_value(wire_type)?,
         }
     }
 
@@ -1234,7 +1234,7 @@ pub struct OptionalPointer {
 pub fn encode_optional_pointer(writer: &mut Writer, msg: &OptionalPointer) -> Result<()> {
 
     // Field 1: value
-    writer.write_compact_tag(1, WireType::Bytes)?;
+    writer.write_tag(1, WireType::Bytes)?;
     if let Some(inner) = &msg.value {
         writer.write_string(&inner)
     } else {
@@ -1242,7 +1242,7 @@ pub fn encode_optional_pointer(writer: &mut Writer, msg: &OptionalPointer) -> Re
     }?;
 
     // Field 2: number
-    writer.write_compact_tag(2, WireType::Bytes)?;
+    writer.write_tag(2, WireType::Bytes)?;
     if let Some(inner) = &msg.number {
         writer.write_svarint64(inner)
     } else {
@@ -1260,13 +1260,13 @@ pub fn decode_optional_pointer(reader: &mut Reader) -> Result<OptionalPointer> {
     let mut number: Option<Box<i64>> = Default::default();
 
     loop {
-        let (field_num, wire_type) = reader.read_compact_tag()?;
+        let (field_num, wire_type) = reader.read_tag()?;
         if field_num == 0 { break; } // End marker
 
         match field_num {
             1 => value = Some(Box::new(reader.read_string()?.to_string())),
             2 => number = Some(Box::new(reader.read_svarint64()?)),
-            _ => reader.skip_value_v2(wire_type)?,
+            _ => reader.skip_value(wire_type)?,
         }
     }
 
@@ -1377,11 +1377,11 @@ pub struct EnumTest {
 pub fn encode_enum_test(writer: &mut Writer, msg: &EnumTest) -> Result<()> {
 
     // Field 1: status
-    writer.write_compact_tag(1, WireType::SVarint)?;
+    writer.write_tag(1, WireType::SVarint)?;
     writer.write_svarint(msg.status as i32)?;
 
     // Field 2: statuses
-    writer.write_compact_tag(2, WireType::SVarint)?;
+    writer.write_tag(2, WireType::SVarint)?;
     {
         let mut sub_writer = Writer::new();
         sub_writer.write_varint(msg.statuses.len() as u32)?;
@@ -1402,7 +1402,7 @@ pub fn decode_enum_test(reader: &mut Reader) -> Result<EnumTest> {
     let mut statuses: Vec<Status> = Default::default();
 
     loop {
-        let (field_num, wire_type) = reader.read_compact_tag()?;
+        let (field_num, wire_type) = reader.read_tag()?;
         if field_num == 0 { break; } // End marker
 
         match field_num {
@@ -1417,7 +1417,7 @@ pub fn decode_enum_test(reader: &mut Reader) -> Result<EnumTest> {
             }
             result
         },
-            _ => reader.skip_value_v2(wire_type)?,
+            _ => reader.skip_value(wire_type)?,
         }
     }
 
@@ -1551,11 +1551,11 @@ pub fn encode_empty_message(writer: &mut Writer, msg: &EmptyMessage) -> Result<(
 pub fn decode_empty_message(reader: &mut Reader) -> Result<EmptyMessage> {
 
     loop {
-        let (field_num, wire_type) = reader.read_compact_tag()?;
+        let (field_num, wire_type) = reader.read_tag()?;
         if field_num == 0 { break; } // End marker
 
         match field_num {
-            _ => reader.skip_value_v2(wire_type)?,
+            _ => reader.skip_value(wire_type)?,
         }
     }
 
@@ -1629,19 +1629,19 @@ pub struct AllZeroValues {
 pub fn encode_all_zero_values(writer: &mut Writer, msg: &AllZeroValues) -> Result<()> {
 
     // Field 1: zero_int
-    writer.write_compact_tag(1, WireType::SVarint)?;
+    writer.write_tag(1, WireType::SVarint)?;
     writer.write_svarint64(msg.zero_int)?;
 
     // Field 2: zero_string
-    writer.write_compact_tag(2, WireType::Bytes)?;
+    writer.write_tag(2, WireType::Bytes)?;
     writer.write_string(&msg.zero_string)?;
 
     // Field 3: zero_bool
-    writer.write_compact_tag(3, WireType::Varint)?;
+    writer.write_tag(3, WireType::Varint)?;
     writer.write_bool(msg.zero_bool)?;
 
     // Field 4: empty_array
-    writer.write_compact_tag(4, WireType::Bytes)?;
+    writer.write_tag(4, WireType::Bytes)?;
     {
         let mut sub_writer = Writer::new();
         sub_writer.write_varint(msg.empty_array.len() as u32)?;
@@ -1664,7 +1664,7 @@ pub fn decode_all_zero_values(reader: &mut Reader) -> Result<AllZeroValues> {
     let mut empty_array: Vec<String> = Default::default();
 
     loop {
-        let (field_num, wire_type) = reader.read_compact_tag()?;
+        let (field_num, wire_type) = reader.read_tag()?;
         if field_num == 0 { break; } // End marker
 
         match field_num {
@@ -1681,7 +1681,7 @@ pub fn decode_all_zero_values(reader: &mut Reader) -> Result<AllZeroValues> {
             }
             result
         },
-            _ => reader.skip_value_v2(wire_type)?,
+            _ => reader.skip_value(wire_type)?,
         }
     }
 

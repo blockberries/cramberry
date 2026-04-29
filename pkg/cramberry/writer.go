@@ -395,19 +395,6 @@ func (w *Writer) WriteRawBytes(b []byte) {
 	w.buf = append(w.buf, b...)
 }
 
-// WriteTag writes a field tag (field number + wire type).
-func (w *Writer) WriteTag(fieldNum int, wireType WireType) {
-	if !w.checkWrite() {
-		return
-	}
-	if fieldNum <= 0 {
-		w.setError(ErrInvalidFieldNumber)
-		return
-	}
-	w.grow(MaxTagSize)
-	w.buf = wire.AppendTag(w.buf, fieldNum, wire.Type(wireType))
-}
-
 // WriteNil writes a nil marker (TypeID 0).
 func (w *Writer) WriteNil() {
 	if !w.checkWrite() {

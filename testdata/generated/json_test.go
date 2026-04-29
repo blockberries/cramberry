@@ -98,55 +98,55 @@ func (m *ScalarTypes) MarshalCramberry() ([]byte, error) {
 // EncodeTo encodes the message directly to the writer using V2 format.
 func (m *ScalarTypes) EncodeTo(w *cramberry.Writer) {
 	if m.BoolVal {
-		w.WriteCompactTag(1, cramberry.WireTypeV2Varint)
+		w.WriteTag(1, cramberry.WireVarint)
 		w.WriteBool(m.BoolVal)
 	}
 	if m.Int8Val != 0 {
-		w.WriteCompactTag(2, cramberry.WireTypeV2SVarint)
+		w.WriteTag(2, cramberry.WireSVarint)
 		w.WriteInt8(m.Int8Val)
 	}
 	if m.Int16Val != 0 {
-		w.WriteCompactTag(3, cramberry.WireTypeV2SVarint)
+		w.WriteTag(3, cramberry.WireSVarint)
 		w.WriteInt16(m.Int16Val)
 	}
 	if m.Int32Val != 0 {
-		w.WriteCompactTag(4, cramberry.WireTypeV2SVarint)
+		w.WriteTag(4, cramberry.WireSVarint)
 		w.WriteInt32(m.Int32Val)
 	}
 	if m.Int64Val != 0 {
-		w.WriteCompactTag(5, cramberry.WireTypeV2SVarint)
+		w.WriteTag(5, cramberry.WireSVarint)
 		w.WriteInt64(m.Int64Val)
 	}
 	if m.Uint8Val != 0 {
-		w.WriteCompactTag(6, cramberry.WireTypeV2Varint)
+		w.WriteTag(6, cramberry.WireVarint)
 		w.WriteUint8(m.Uint8Val)
 	}
 	if m.Uint16Val != 0 {
-		w.WriteCompactTag(7, cramberry.WireTypeV2Varint)
+		w.WriteTag(7, cramberry.WireVarint)
 		w.WriteUint16(m.Uint16Val)
 	}
 	if m.Uint32Val != 0 {
-		w.WriteCompactTag(8, cramberry.WireTypeV2Varint)
+		w.WriteTag(8, cramberry.WireVarint)
 		w.WriteUint32(m.Uint32Val)
 	}
 	if m.Uint64Val != 0 {
-		w.WriteCompactTag(9, cramberry.WireTypeV2Varint)
+		w.WriteTag(9, cramberry.WireVarint)
 		w.WriteUint64(m.Uint64Val)
 	}
 	if m.Float32Val != 0 {
-		w.WriteCompactTag(10, cramberry.WireTypeV2Fixed32)
+		w.WriteTag(10, cramberry.WireFixed32)
 		w.WriteFloat32(m.Float32Val)
 	}
 	if m.Float64Val != 0 {
-		w.WriteCompactTag(11, cramberry.WireTypeV2Fixed64)
+		w.WriteTag(11, cramberry.WireFixed64)
 		w.WriteFloat64(m.Float64Val)
 	}
 	if m.StringVal != "" {
-		w.WriteCompactTag(12, cramberry.WireTypeV2Bytes)
+		w.WriteTag(12, cramberry.WireBytes)
 		w.WriteString(m.StringVal)
 	}
 	if len(m.BytesVal) > 0 {
-		w.WriteCompactTag(13, cramberry.WireTypeV2Bytes)
+		w.WriteTag(13, cramberry.WireBytes)
 		w.WriteBytes(m.BytesVal)
 	}
 	w.WriteEndMarker()
@@ -163,7 +163,7 @@ func (m *ScalarTypes) UnmarshalCramberry(data []byte) error {
 // DecodeFrom decodes the message from the reader using V2 format.
 func (m *ScalarTypes) DecodeFrom(r *cramberry.Reader) {
 	for {
-		fieldNum, wireType := r.ReadCompactTag()
+		fieldNum, wireType := r.ReadTag()
 		if fieldNum == 0 {
 			break
 		}
@@ -196,7 +196,7 @@ func (m *ScalarTypes) DecodeFrom(r *cramberry.Reader) {
 			m.BytesVal = r.ReadBytes()
 		default:
 			// Skip unknown field for forward compatibility
-			r.SkipValueV2(wireType)
+			r.SkipValue(wireType)
 		}
 		if r.Err() != nil {
 			return
@@ -527,21 +527,21 @@ func (m *RepeatedTypes) MarshalCramberry() ([]byte, error) {
 // EncodeTo encodes the message directly to the writer using V2 format.
 func (m *RepeatedTypes) EncodeTo(w *cramberry.Writer) {
 	if len(m.Strings) > 0 {
-		w.WriteCompactTag(1, cramberry.WireTypeV2Bytes)
+		w.WriteTag(1, cramberry.WireBytes)
 		w.WriteUvarint(uint64(len(m.Strings)))
 		for _, v := range m.Strings {
 			w.WriteString(v)
 		}
 	}
 	if len(m.Ints) > 0 {
-		w.WriteCompactTag(2, cramberry.WireTypeV2Bytes)
+		w.WriteTag(2, cramberry.WireBytes)
 		w.WriteUvarint(uint64(len(m.Ints)))
 		for _, v := range m.Ints {
 			w.WriteInt64(v)
 		}
 	}
 	if len(m.Bools) > 0 {
-		w.WriteCompactTag(3, cramberry.WireTypeV2Bytes)
+		w.WriteTag(3, cramberry.WireBytes)
 		w.WriteUvarint(uint64(len(m.Bools)))
 		for _, v := range m.Bools {
 			w.WriteBool(v)
@@ -561,7 +561,7 @@ func (m *RepeatedTypes) UnmarshalCramberry(data []byte) error {
 // DecodeFrom decodes the message from the reader using V2 format.
 func (m *RepeatedTypes) DecodeFrom(r *cramberry.Reader) {
 	for {
-		fieldNum, wireType := r.ReadCompactTag()
+		fieldNum, wireType := r.ReadTag()
 		if fieldNum == 0 {
 			break
 		}
@@ -595,7 +595,7 @@ func (m *RepeatedTypes) DecodeFrom(r *cramberry.Reader) {
 		}
 		default:
 			// Skip unknown field for forward compatibility
-			r.SkipValueV2(wireType)
+			r.SkipValue(wireType)
 		}
 		if r.Err() != nil {
 			return
@@ -756,7 +756,7 @@ func (m *MapTypes) MarshalCramberry() ([]byte, error) {
 // EncodeTo encodes the message directly to the writer using V2 format.
 func (m *MapTypes) EncodeTo(w *cramberry.Writer) {
 	if m.StringMap != nil {
-		w.WriteCompactTag(1, cramberry.WireTypeV2Bytes)
+		w.WriteTag(1, cramberry.WireBytes)
 		w.WriteUvarint(uint64(len(m.StringMap)))
 		for k, v := range m.StringMap {
 			w.WriteString(k)
@@ -764,7 +764,7 @@ func (m *MapTypes) EncodeTo(w *cramberry.Writer) {
 		}
 	}
 	if m.IntMap != nil {
-		w.WriteCompactTag(2, cramberry.WireTypeV2Bytes)
+		w.WriteTag(2, cramberry.WireBytes)
 		w.WriteUvarint(uint64(len(m.IntMap)))
 		for k, v := range m.IntMap {
 			w.WriteString(k)
@@ -785,7 +785,7 @@ func (m *MapTypes) UnmarshalCramberry(data []byte) error {
 // DecodeFrom decodes the message from the reader using V2 format.
 func (m *MapTypes) DecodeFrom(r *cramberry.Reader) {
 	for {
-		fieldNum, wireType := r.ReadCompactTag()
+		fieldNum, wireType := r.ReadTag()
 		if fieldNum == 0 {
 			break
 		}
@@ -818,7 +818,7 @@ func (m *MapTypes) DecodeFrom(r *cramberry.Reader) {
 		}
 		default:
 			// Skip unknown field for forward compatibility
-			r.SkipValueV2(wireType)
+			r.SkipValue(wireType)
 		}
 		if r.Err() != nil {
 			return
@@ -972,15 +972,15 @@ func (m *Address) MarshalCramberry() ([]byte, error) {
 // EncodeTo encodes the message directly to the writer using V2 format.
 func (m *Address) EncodeTo(w *cramberry.Writer) {
 	if m.Street != "" {
-		w.WriteCompactTag(1, cramberry.WireTypeV2Bytes)
+		w.WriteTag(1, cramberry.WireBytes)
 		w.WriteString(m.Street)
 	}
 	if m.City != "" {
-		w.WriteCompactTag(2, cramberry.WireTypeV2Bytes)
+		w.WriteTag(2, cramberry.WireBytes)
 		w.WriteString(m.City)
 	}
 	if m.Zip != "" {
-		w.WriteCompactTag(3, cramberry.WireTypeV2Bytes)
+		w.WriteTag(3, cramberry.WireBytes)
 		w.WriteString(m.Zip)
 	}
 	w.WriteEndMarker()
@@ -997,7 +997,7 @@ func (m *Address) UnmarshalCramberry(data []byte) error {
 // DecodeFrom decodes the message from the reader using V2 format.
 func (m *Address) DecodeFrom(r *cramberry.Reader) {
 	for {
-		fieldNum, wireType := r.ReadCompactTag()
+		fieldNum, wireType := r.ReadTag()
 		if fieldNum == 0 {
 			break
 		}
@@ -1010,7 +1010,7 @@ func (m *Address) DecodeFrom(r *cramberry.Reader) {
 			m.Zip = r.ReadString()
 		default:
 			// Skip unknown field for forward compatibility
-			r.SkipValueV2(wireType)
+			r.SkipValue(wireType)
 		}
 		if r.Err() != nil {
 			return
@@ -1114,17 +1114,17 @@ func (m *Person) MarshalCramberry() ([]byte, error) {
 // EncodeTo encodes the message directly to the writer using V2 format.
 func (m *Person) EncodeTo(w *cramberry.Writer) {
 	if m.Name != "" {
-		w.WriteCompactTag(1, cramberry.WireTypeV2Bytes)
+		w.WriteTag(1, cramberry.WireBytes)
 		w.WriteString(m.Name)
 	}
 	if m.Age != 0 {
-		w.WriteCompactTag(2, cramberry.WireTypeV2SVarint)
+		w.WriteTag(2, cramberry.WireSVarint)
 		w.WriteInt32(m.Age)
 	}
-	w.WriteCompactTag(3, cramberry.WireTypeV2Bytes)
+	w.WriteTag(3, cramberry.WireBytes)
 	m.Address.EncodeTo(w)
 	if len(m.Emails) > 0 {
-		w.WriteCompactTag(4, cramberry.WireTypeV2Bytes)
+		w.WriteTag(4, cramberry.WireBytes)
 		w.WriteUvarint(uint64(len(m.Emails)))
 		for _, v := range m.Emails {
 			w.WriteString(v)
@@ -1144,7 +1144,7 @@ func (m *Person) UnmarshalCramberry(data []byte) error {
 // DecodeFrom decodes the message from the reader using V2 format.
 func (m *Person) DecodeFrom(r *cramberry.Reader) {
 	for {
-		fieldNum, wireType := r.ReadCompactTag()
+		fieldNum, wireType := r.ReadTag()
 		if fieldNum == 0 {
 			break
 		}
@@ -1166,7 +1166,7 @@ func (m *Person) DecodeFrom(r *cramberry.Reader) {
 		}
 		default:
 			// Skip unknown field for forward compatibility
-			r.SkipValueV2(wireType)
+			r.SkipValue(wireType)
 		}
 		if r.Err() != nil {
 			return
@@ -1311,15 +1311,15 @@ func (m *RequiredFields) MarshalCramberry() ([]byte, error) {
 // EncodeTo encodes the message directly to the writer using V2 format.
 func (m *RequiredFields) EncodeTo(w *cramberry.Writer) {
 	if m.Id != nil {
-		w.WriteCompactTag(1, cramberry.WireTypeV2SVarint)
+		w.WriteTag(1, cramberry.WireSVarint)
 		w.WriteInt64(*m.Id)
 	}
 	if m.Name != nil {
-		w.WriteCompactTag(2, cramberry.WireTypeV2Bytes)
+		w.WriteTag(2, cramberry.WireBytes)
 		w.WriteString(*m.Name)
 	}
 	if m.OptionalField != "" {
-		w.WriteCompactTag(3, cramberry.WireTypeV2Bytes)
+		w.WriteTag(3, cramberry.WireBytes)
 		w.WriteString(m.OptionalField)
 	}
 	w.WriteEndMarker()
@@ -1336,7 +1336,7 @@ func (m *RequiredFields) UnmarshalCramberry(data []byte) error {
 // DecodeFrom decodes the message from the reader using V2 format.
 func (m *RequiredFields) DecodeFrom(r *cramberry.Reader) {
 	for {
-		fieldNum, wireType := r.ReadCompactTag()
+		fieldNum, wireType := r.ReadTag()
 		if fieldNum == 0 {
 			break
 		}
@@ -1353,7 +1353,7 @@ func (m *RequiredFields) DecodeFrom(r *cramberry.Reader) {
 			m.OptionalField = r.ReadString()
 		default:
 			// Skip unknown field for forward compatibility
-			r.SkipValueV2(wireType)
+			r.SkipValue(wireType)
 		}
 		if r.Err() != nil {
 			return
@@ -1490,11 +1490,11 @@ func (m *OptionalPointer) MarshalCramberry() ([]byte, error) {
 // EncodeTo encodes the message directly to the writer using V2 format.
 func (m *OptionalPointer) EncodeTo(w *cramberry.Writer) {
 	if m.Value != nil {
-		w.WriteCompactTag(1, cramberry.WireTypeV2Bytes)
+		w.WriteTag(1, cramberry.WireBytes)
 		w.WriteString(*m.Value)
 	}
 	if m.Number != nil {
-		w.WriteCompactTag(2, cramberry.WireTypeV2Bytes)
+		w.WriteTag(2, cramberry.WireBytes)
 		w.WriteInt64(*m.Number)
 	}
 	w.WriteEndMarker()
@@ -1511,7 +1511,7 @@ func (m *OptionalPointer) UnmarshalCramberry(data []byte) error {
 // DecodeFrom decodes the message from the reader using V2 format.
 func (m *OptionalPointer) DecodeFrom(r *cramberry.Reader) {
 	for {
-		fieldNum, wireType := r.ReadCompactTag()
+		fieldNum, wireType := r.ReadTag()
 		if fieldNum == 0 {
 			break
 		}
@@ -1530,7 +1530,7 @@ func (m *OptionalPointer) DecodeFrom(r *cramberry.Reader) {
 		}
 		default:
 			// Skip unknown field for forward compatibility
-			r.SkipValueV2(wireType)
+			r.SkipValue(wireType)
 		}
 		if r.Err() != nil {
 			return
@@ -1646,10 +1646,10 @@ func (m *EnumTest) MarshalCramberry() ([]byte, error) {
 
 // EncodeTo encodes the message directly to the writer using V2 format.
 func (m *EnumTest) EncodeTo(w *cramberry.Writer) {
-	w.WriteCompactTag(1, cramberry.WireTypeV2SVarint)
+	w.WriteTag(1, cramberry.WireSVarint)
 	m.Status.EncodeTo(w)
 	if len(m.Statuses) > 0 {
-		w.WriteCompactTag(2, cramberry.WireTypeV2Bytes)
+		w.WriteTag(2, cramberry.WireBytes)
 		w.WriteUvarint(uint64(len(m.Statuses)))
 		for _, v := range m.Statuses {
 			v.EncodeTo(w)
@@ -1669,7 +1669,7 @@ func (m *EnumTest) UnmarshalCramberry(data []byte) error {
 // DecodeFrom decodes the message from the reader using V2 format.
 func (m *EnumTest) DecodeFrom(r *cramberry.Reader) {
 	for {
-		fieldNum, wireType := r.ReadCompactTag()
+		fieldNum, wireType := r.ReadTag()
 		if fieldNum == 0 {
 			break
 		}
@@ -1687,7 +1687,7 @@ func (m *EnumTest) DecodeFrom(r *cramberry.Reader) {
 		}
 		default:
 			// Skip unknown field for forward compatibility
-			r.SkipValueV2(wireType)
+			r.SkipValue(wireType)
 		}
 		if r.Err() != nil {
 			return
@@ -1828,14 +1828,14 @@ func (m *EmptyMessage) UnmarshalCramberry(data []byte) error {
 // DecodeFrom decodes the message from the reader using V2 format.
 func (m *EmptyMessage) DecodeFrom(r *cramberry.Reader) {
 	for {
-		fieldNum, wireType := r.ReadCompactTag()
+		fieldNum, wireType := r.ReadTag()
 		if fieldNum == 0 {
 			break
 		}
 		switch fieldNum {
 		default:
 			// Skip unknown field for forward compatibility
-			r.SkipValueV2(wireType)
+			r.SkipValue(wireType)
 		}
 		if r.Err() != nil {
 			return
@@ -1901,19 +1901,19 @@ func (m *AllZeroValues) MarshalCramberry() ([]byte, error) {
 // EncodeTo encodes the message directly to the writer using V2 format.
 func (m *AllZeroValues) EncodeTo(w *cramberry.Writer) {
 	if m.ZeroInt != 0 {
-		w.WriteCompactTag(1, cramberry.WireTypeV2SVarint)
+		w.WriteTag(1, cramberry.WireSVarint)
 		w.WriteInt64(m.ZeroInt)
 	}
 	if m.ZeroString != "" {
-		w.WriteCompactTag(2, cramberry.WireTypeV2Bytes)
+		w.WriteTag(2, cramberry.WireBytes)
 		w.WriteString(m.ZeroString)
 	}
 	if m.ZeroBool {
-		w.WriteCompactTag(3, cramberry.WireTypeV2Varint)
+		w.WriteTag(3, cramberry.WireVarint)
 		w.WriteBool(m.ZeroBool)
 	}
 	if len(m.EmptyArray) > 0 {
-		w.WriteCompactTag(4, cramberry.WireTypeV2Bytes)
+		w.WriteTag(4, cramberry.WireBytes)
 		w.WriteUvarint(uint64(len(m.EmptyArray)))
 		for _, v := range m.EmptyArray {
 			w.WriteString(v)
@@ -1933,7 +1933,7 @@ func (m *AllZeroValues) UnmarshalCramberry(data []byte) error {
 // DecodeFrom decodes the message from the reader using V2 format.
 func (m *AllZeroValues) DecodeFrom(r *cramberry.Reader) {
 	for {
-		fieldNum, wireType := r.ReadCompactTag()
+		fieldNum, wireType := r.ReadTag()
 		if fieldNum == 0 {
 			break
 		}
@@ -1955,7 +1955,7 @@ func (m *AllZeroValues) DecodeFrom(r *cramberry.Reader) {
 		}
 		default:
 			// Skip unknown field for forward compatibility
-			r.SkipValueV2(wireType)
+			r.SkipValue(wireType)
 		}
 		if r.Err() != nil {
 			return

@@ -125,7 +125,7 @@ pub fn decode_scalar_types(reader: &mut Reader) -> Result<ScalarTypes> {
             7 => float64_val = reader.read_float64()?,
             8 => string_val = reader.read_string()?.to_string(),
             9 => bytes_val = reader.read_length_prefixed_bytes()?.to_vec(),
-            _ => reader.skip_field(tag.wire_type)?,
+            _ => reader.skip_value(tag.wire_type)?,
         }
     }
 
@@ -249,7 +249,7 @@ pub fn decode_repeated_types(reader: &mut Reader) -> Result<RepeatedTypes> {
             }
             result
         },
-            _ => reader.skip_field(tag.wire_type)?,
+            _ => reader.skip_value(tag.wire_type)?,
         }
     }
 
@@ -311,7 +311,7 @@ pub fn decode_nested_message(reader: &mut Reader) -> Result<NestedMessage> {
         match tag.field_number {
             1 => name = reader.read_string()?.to_string(),
             2 => value = reader.read_svarint()?,
-            _ => reader.skip_field(tag.wire_type)?,
+            _ => reader.skip_value(tag.wire_type)?,
         }
     }
 
@@ -465,7 +465,7 @@ pub fn decode_complex_types(reader: &mut Reader) -> Result<ComplexTypes> {
             }
             result
         },
-            _ => reader.skip_field(tag.wire_type)?,
+            _ => reader.skip_value(tag.wire_type)?,
         }
     }
 
@@ -602,7 +602,7 @@ pub fn decode_edge_cases(reader: &mut Reader) -> Result<EdgeCases> {
             9 => empty_string = reader.read_string()?.to_string(),
             10 => unicode_string = reader.read_string()?.to_string(),
             11 => empty_bytes = reader.read_length_prefixed_bytes()?.to_vec(),
-            _ => reader.skip_field(tag.wire_type)?,
+            _ => reader.skip_value(tag.wire_type)?,
         }
     }
 
@@ -704,7 +704,7 @@ pub fn decode_all_field_numbers(reader: &mut Reader) -> Result<AllFieldNumbers> 
             127 => field_127 = reader.read_svarint()?,
             128 => field_128 = reader.read_svarint()?,
             1000 => field_1000 = reader.read_svarint()?,
-            _ => reader.skip_field(tag.wire_type)?,
+            _ => reader.skip_value(tag.wire_type)?,
         }
     }
 

@@ -29,7 +29,7 @@
 //!                 let value = reader.read_string()?;
 //!                 assert_eq!(value, "hello");
 //!             }
-//!             _ => reader.skip_field(tag.wire_type)?,
+//!             _ => reader.skip_value(tag.wire_type)?,
 //!         }
 //!     }
 //!     Ok(())
@@ -49,7 +49,7 @@ pub use reader::Reader;
 pub use registry::{Decoder, Encoder, Registry};
 pub use stream::{StreamReader, StreamWriter};
 pub use types::{
-    decode_compact_tag, CompactTagResult, FieldTag, TypeId, WireType,
+    decode_tag, CompactTagResult, FieldTag, TypeId, WireType,
     // V2 compact tag constants
     END_MARKER, MAX_COMPACT_FIELD_NUM, TAG_EXTENDED_BIT, TAG_FIELD_NUM_SHIFT, TAG_WIRE_TYPE_MASK,
     TAG_WIRE_TYPE_SHIFT,

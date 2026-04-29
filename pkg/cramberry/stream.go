@@ -333,19 +333,6 @@ func (sw *StreamWriter) WriteRawBytes(b []byte) {
 	sw.write(b)
 }
 
-// WriteTag writes a field tag (field number + wire type).
-func (sw *StreamWriter) WriteTag(fieldNum int, wireType WireType) {
-	if !sw.checkWrite() {
-		return
-	}
-	if fieldNum <= 0 {
-		sw.setError(ErrInvalidFieldNumber)
-		return
-	}
-	n := wire.AppendTag(sw.scratch[:0], fieldNum, wire.Type(wireType))
-	sw.write(n)
-}
-
 // WriteNil writes a nil marker (TypeID 0).
 func (sw *StreamWriter) WriteNil() {
 	sw.WriteUvarint(uint64(TypeIDNil))
@@ -809,21 +796,6 @@ func (sr *StreamReader) ReadRawBytes(n int) []byte {
 		return nil
 	}
 	return buf
-}
-
-// ReadTag reads a field tag (field number + wire type).
-func (sr *StreamReader) ReadTag() (fieldNum int, wireType WireType) {
-	v := sr.ReadUvarint()
-	if sr.err != nil {
-		return 0, 0
-	}
-	fieldNum = int(v >> 3)
-	wireType = WireType(v & 7)
-	if fieldNum <= 0 {
-		sr.setError(ErrInvalidFieldNumber)
-		return 0, 0
-	}
-	return fieldNum, wireType
 }
 
 // ReadTypeID reads a type ID for polymorphic decoding.

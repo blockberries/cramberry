@@ -12,25 +12,25 @@ func TestCompactTagEncodeDecode(t *testing.T) {
 		fieldNum int
 		wireType byte
 	}{
-		{"field 1 varint", 1, WireTypeV2Varint},
-		{"field 15 bytes", 15, WireTypeV2Bytes},
-		{"field 16 fixed32", 16, WireTypeV2Fixed32},
-		{"field 100 fixed64", 100, WireTypeV2Fixed64},
-		{"field 1000 svarint", 1000, WireTypeV2SVarint},
-		{"field 16383 varint", 16383, WireTypeV2Varint},
+		{"field 1 varint", 1, WireVarint},
+		{"field 15 bytes", 15, WireBytes},
+		{"field 16 fixed32", 16, WireFixed32},
+		{"field 100 fixed64", 100, WireFixed64},
+		{"field 1000 svarint", 1000, WireSVarint},
+		{"field 16383 varint", 16383, WireVarint},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Test standalone encode/decode functions
-			encoded := EncodeCompactTag(tt.fieldNum, tt.wireType)
+			encoded := EncodeTag(tt.fieldNum, tt.wireType)
 			if len(encoded) == 0 {
-				t.Fatalf("EncodeCompactTag returned empty for field %d", tt.fieldNum)
+				t.Fatalf("EncodeTag returned empty for field %d", tt.fieldNum)
 			}
 
-			decodedNum, decodedType, n := DecodeCompactTag(encoded)
+			decodedNum, decodedType, n := DecodeTag(encoded)
 			if n != len(encoded) {
-				t.Errorf("DecodeCompactTag consumed %d bytes, expected %d", n, len(encoded))
+				t.Errorf("DecodeTag consumed %d bytes, expected %d", n, len(encoded))
 			}
 			if decodedNum != tt.fieldNum {
 				t.Errorf("fieldNum = %d, want %d", decodedNum, tt.fieldNum)
@@ -40,7 +40,7 @@ func TestCompactTagEncodeDecode(t *testing.T) {
 			}
 
 			// Verify compact tags for fields 1-15 are single byte
-			expectedSize := CompactTagSize(tt.fieldNum)
+			expectedSize := TagSize(tt.fieldNum)
 			if len(encoded) != expectedSize {
 				t.Errorf("encoded size = %d, expected %d", len(encoded), expectedSize)
 			}
@@ -51,7 +51,7 @@ func TestCompactTagEncodeDecode(t *testing.T) {
 	}
 }
 
-func TestCompactTagSize(t *testing.T) {
+func TestTagSize(t *testing.T) {
 	tests := []struct {
 		fieldNum     int
 		expectedSize int
@@ -66,9 +66,9 @@ func TestCompactTagSize(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		size := CompactTagSize(tt.fieldNum)
+		size := TagSize(tt.fieldNum)
 		if size != tt.expectedSize {
-			t.Errorf("CompactTagSize(%d) = %d, want %d", tt.fieldNum, size, tt.expectedSize)
+			t.Errorf("TagSize(%d) = %d, want %d", tt.fieldNum, size, tt.expectedSize)
 		}
 	}
 }
@@ -76,7 +76,7 @@ func TestCompactTagSize(t *testing.T) {
 func TestEndMarker(t *testing.T) {
 	// Verify end marker is decoded as fieldNum=0
 	data := []byte{EndMarker}
-	fieldNum, wireType, n := DecodeCompactTag(data)
+	fieldNum, wireType, n := DecodeTag(data)
 	if fieldNum != 0 {
 		t.Errorf("end marker fieldNum = %d, want 0", fieldNum)
 	}
@@ -92,10 +92,10 @@ func TestWriterReaderCompactTag(t *testing.T) {
 	w := NewWriterWithOptions(DefaultOptions)
 
 	// Write several compact tags
-	w.WriteCompactTag(1, WireTypeV2Varint)
-	w.WriteCompactTag(15, WireTypeV2Bytes)
-	w.WriteCompactTag(16, WireTypeV2Fixed32)
-	w.WriteCompactTag(100, WireTypeV2Fixed64)
+	w.WriteTag(1, WireVarint)
+	w.WriteTag(15, WireBytes)
+	w.WriteTag(16, WireFixed32)
+	w.WriteTag(100, WireFixed64)
 	w.WriteEndMarker()
 
 	if w.Err() != nil {
@@ -111,15 +111,15 @@ func TestWriterReaderCompactTag(t *testing.T) {
 		expectedNum  int
 		expectedType byte
 	}{
-		{1, WireTypeV2Varint},
-		{15, WireTypeV2Bytes},
-		{16, WireTypeV2Fixed32},
-		{100, WireTypeV2Fixed64},
+		{1, WireVarint},
+		{15, WireBytes},
+		{16, WireFixed32},
+		{100, WireFixed64},
 		{0, 0}, // End marker
 	}
 
 	for i, tt := range tests {
-		num, wt := r.ReadCompactTag()
+		num, wt := r.ReadTag()
 		if r.Err() != nil {
 			t.Fatalf("Read %d error: %v", i, r.Err())
 		}
@@ -238,15 +238,15 @@ func TestV2SkipUnknownFields(t *testing.T) {
 	w := NewWriterWithOptions(DefaultOptions)
 
 	// Field 1: int32 (known)
-	w.WriteCompactTag(1, WireTypeV2SVarint)
+	w.WriteTag(1, WireSVarint)
 	w.WriteSvarint(42)
 
 	// Field 99: string (unknown - will be skipped)
-	w.WriteCompactTag(99, WireTypeV2Bytes)
+	w.WriteTag(99, WireBytes)
 	w.WriteString("unknown field")
 
 	// Field 2: bool (known)
-	w.WriteCompactTag(2, WireTypeV2Varint)
+	w.WriteTag(2, WireVarint)
 	w.WriteBool(true)
 
 	w.WriteEndMarker()

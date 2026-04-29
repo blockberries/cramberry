@@ -292,7 +292,7 @@ mod tests {
             match tag.field_number {
                 1 => value = reader.read_int32()?,
                 2 => name = reader.read_string()?.to_string(),
-                _ => reader.skip_field(tag.wire_type)?,
+                _ => reader.skip_value(tag.wire_type)?,
             }
         }
 

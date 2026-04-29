@@ -476,14 +476,13 @@ func TestReadRawBytesNegative(t *testing.T) {
 func TestReadTag(t *testing.T) {
 	tests := []struct {
 		fieldNum int
-		wireType WireType
+		wireType byte
 	}{
 		{1, WireVarint},
 		{2, WireFixed64},
 		{15, WireBytes},
 		{16, WireFixed32},
 		{100, WireSVarint},
-		{1000, WireTypeRef},
 	}
 
 	for _, tc := range tests {
@@ -743,7 +742,7 @@ func TestReaderSkipPastEOF(t *testing.T) {
 func TestSkipValue(t *testing.T) {
 	tests := []struct {
 		name     string
-		wireType WireType
+		wireType byte
 		setup    func(*Writer)
 	}{
 		{"Varint", WireVarint, func(w *Writer) { w.WriteUvarint(12345) }},
@@ -751,7 +750,6 @@ func TestSkipValue(t *testing.T) {
 		{"Fixed32", WireFixed32, func(w *Writer) { w.WriteFixed32(12345) }},
 		{"Fixed64", WireFixed64, func(w *Writer) { w.WriteFixed64(12345) }},
 		{"Bytes", WireBytes, func(w *Writer) { w.WriteBytes([]byte{1, 2, 3, 4, 5}) }},
-		{"TypeRef", WireTypeRef, func(w *Writer) { w.WriteTypeID(TypeID(128)) }},
 	}
 
 	for _, tc := range tests {
@@ -776,7 +774,7 @@ func TestSkipValue(t *testing.T) {
 
 func TestSkipValueUnknownWireType(t *testing.T) {
 	r := NewReader([]byte{1, 2, 3})
-	r.SkipValue(WireType(99))
+	r.SkipValue(99)
 	if r.Err() == nil {
 		t.Error("SkipValue with unknown wire type should fail")
 	}

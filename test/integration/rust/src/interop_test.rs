@@ -88,7 +88,7 @@ fn decode_nested_message(reader: &mut Reader) -> Result<NestedMessage> {
         match tag.field_number {
             1 => name = reader.read_string()?.to_string(),
             2 => value = reader.read_svarint()?,
-            _ => reader.skip_field(tag.wire_type)?,
+            _ => reader.skip_value(tag.wire_type)?,
         }
     }
 
@@ -168,7 +168,7 @@ fn decode_scalar_types(reader: &mut Reader) -> Result<ScalarTypes> {
             7 => result.float64_val = reader.read_float64()?,
             8 => result.string_val = reader.read_string()?.to_string(),
             9 => result.bytes_val = reader.read_length_prefixed_bytes()?.to_vec(),
-            _ => reader.skip_field(tag.wire_type)?,
+            _ => reader.skip_value(tag.wire_type)?,
         }
     }
 
@@ -225,7 +225,7 @@ fn decode_all_field_numbers(reader: &mut Reader) -> Result<AllFieldNumbers> {
             127 => result.field_127 = reader.read_svarint()?,
             128 => result.field_128 = reader.read_svarint()?,
             1000 => result.field_1000 = reader.read_svarint()?,
-            _ => reader.skip_field(tag.wire_type)?,
+            _ => reader.skip_value(tag.wire_type)?,
         }
     }
 

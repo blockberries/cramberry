@@ -66,45 +66,8 @@ func TestTypeIDConstants(t *testing.T) {
 	}
 }
 
-func TestWireTypeString(t *testing.T) {
-	tests := []struct {
-		wt       WireType
-		expected string
-	}{
-		{WireVarint, "Varint"},
-		{WireFixed64, "Fixed64"},
-		{WireBytes, "Bytes"},
-		{WireFixed32, "Fixed32"},
-		{WireSVarint, "SVarint"},
-		{WireTypeRef, "TypeRef"},
-		{WireType(100), "Unknown"},
-	}
-
-	for _, tc := range tests {
-		if tc.wt.String() != tc.expected {
-			t.Errorf("WireType(%d).String() = %q, want %q", tc.wt, tc.wt.String(), tc.expected)
-		}
-	}
-}
-
-func TestWireTypeIsValid(t *testing.T) {
-	validTypes := []WireType{WireVarint, WireFixed64, WireBytes, WireFixed32, WireSVarint, WireTypeRef}
-	for _, wt := range validTypes {
-		if !wt.IsValid() {
-			t.Errorf("WireType(%d).IsValid() = false, want true", wt)
-		}
-	}
-
-	invalidTypes := []WireType{3, 4, 8, 100}
-	for _, wt := range invalidTypes {
-		if wt.IsValid() {
-			t.Errorf("WireType(%d).IsValid() = true, want false", wt)
-		}
-	}
-}
-
 func TestWireTypeConstants(t *testing.T) {
-	// Verify wire type values (must match protobuf for compatibility)
+	// Verify wire type values used in the tag layout.
 	if WireVarint != 0 {
 		t.Errorf("WireVarint = %d, want 0", WireVarint)
 	}
@@ -114,14 +77,11 @@ func TestWireTypeConstants(t *testing.T) {
 	if WireBytes != 2 {
 		t.Errorf("WireBytes = %d, want 2", WireBytes)
 	}
-	if WireFixed32 != 5 {
-		t.Errorf("WireFixed32 = %d, want 5", WireFixed32)
+	if WireFixed32 != 3 {
+		t.Errorf("WireFixed32 = %d, want 3", WireFixed32)
 	}
-	if WireSVarint != 6 {
-		t.Errorf("WireSVarint = %d, want 6", WireSVarint)
-	}
-	if WireTypeRef != 7 {
-		t.Errorf("WireTypeRef = %d, want 7", WireTypeRef)
+	if WireSVarint != 4 {
+		t.Errorf("WireSVarint = %d, want 4", WireSVarint)
 	}
 }
 

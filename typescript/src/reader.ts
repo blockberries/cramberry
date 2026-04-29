@@ -1,5 +1,5 @@
 import { BufferUnderflowError, InvalidWireTypeError, DecodeError } from "./errors";
-import { WireType, TypeID, FieldTag, decodeCompactTag, zigzagDecode, zigzagDecode64, END_MARKER, TAG_EXTENDED_BIT, TAG_WIRE_TYPE_MASK, TAG_WIRE_TYPE_SHIFT, TAG_FIELD_NUM_SHIFT } from "./types";
+import { WireType, TypeID, FieldTag, decodeTag, zigzagDecode, zigzagDecode64, END_MARKER, TAG_EXTENDED_BIT, TAG_WIRE_TYPE_MASK, TAG_WIRE_TYPE_SHIFT, TAG_FIELD_NUM_SHIFT } from "./types";
 
 // Module-level singleton to avoid repeated instantiation
 const textDecoder = new TextDecoder();
@@ -357,7 +357,7 @@ export class Reader {
   /**
    * Skips a field based on its V2 wire type.
    */
-  skipField(wireType: WireType): void {
+  skipValue(wireType: WireType): void {
     switch (wireType) {
       case WireType.Varint: // 0
       case WireType.SVarint: // 4

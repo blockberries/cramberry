@@ -121,7 +121,7 @@ pub struct CompactTagResult {
 
 /// Decodes a V2 compact tag from a byte slice.
 /// Returns None if the buffer is empty or the wire type is invalid.
-pub fn decode_compact_tag(data: &[u8]) -> Option<CompactTagResult> {
+pub fn decode_tag(data: &[u8]) -> Option<CompactTagResult> {
     if data.is_empty() {
         return None;
     }
@@ -223,47 +223,47 @@ mod tests {
     }
 
     #[test]
-    fn test_compact_tag_field_1_varint() {
+    fn test_tag_field_1_varint() {
         let tag = FieldTag::new(1, WireType::Varint);
         let encoded = tag.encode_compact();
         assert_eq!(encoded.len(), 1);
         // Field 1, wire type 0: (1 << 4) | (0 << 1) | 0 = 0x10
         assert_eq!(encoded[0], 0x10);
 
-        let decoded = decode_compact_tag(&encoded).unwrap();
+        let decoded = decode_tag(&encoded).unwrap();
         assert_eq!(decoded.field_number, 1);
         assert_eq!(decoded.wire_type, WireType::Varint);
         assert_eq!(decoded.bytes_read, 1);
     }
 
     #[test]
-    fn test_compact_tag_field_1_bytes() {
+    fn test_tag_field_1_bytes() {
         let tag = FieldTag::new(1, WireType::Bytes);
         let encoded = tag.encode_compact();
         assert_eq!(encoded.len(), 1);
         // Field 1, wire type 2: (1 << 4) | (2 << 1) | 0 = 0x14
         assert_eq!(encoded[0], 0x14);
 
-        let decoded = decode_compact_tag(&encoded).unwrap();
+        let decoded = decode_tag(&encoded).unwrap();
         assert_eq!(decoded.field_number, 1);
         assert_eq!(decoded.wire_type, WireType::Bytes);
     }
 
     #[test]
-    fn test_compact_tag_field_15() {
+    fn test_tag_field_15() {
         let tag = FieldTag::new(15, WireType::SVarint);
         let encoded = tag.encode_compact();
         assert_eq!(encoded.len(), 1);
         // Field 15, wire type 4: (15 << 4) | (4 << 1) | 0 = 0xf8
         assert_eq!(encoded[0], 0xf8);
 
-        let decoded = decode_compact_tag(&encoded).unwrap();
+        let decoded = decode_tag(&encoded).unwrap();
         assert_eq!(decoded.field_number, 15);
         assert_eq!(decoded.wire_type, WireType::SVarint);
     }
 
     #[test]
-    fn test_compact_tag_field_16_extended() {
+    fn test_tag_field_16_extended() {
         let tag = FieldTag::new(16, WireType::Varint);
         let encoded = tag.encode_compact();
         assert_eq!(encoded.len(), 2);
@@ -271,26 +271,26 @@ mod tests {
         assert_eq!(encoded[0], 0x01);
         assert_eq!(encoded[1], 16);
 
-        let decoded = decode_compact_tag(&encoded).unwrap();
+        let decoded = decode_tag(&encoded).unwrap();
         assert_eq!(decoded.field_number, 16);
         assert_eq!(decoded.wire_type, WireType::Varint);
         assert_eq!(decoded.bytes_read, 2);
     }
 
     #[test]
-    fn test_compact_tag_large_field_number() {
+    fn test_tag_large_field_number() {
         let tag = FieldTag::new(1000, WireType::SVarint);
         let encoded = tag.encode_compact();
         // Field 1000 needs 2 varint bytes (1000 = 0x3e8)
         assert!(encoded.len() >= 3);
 
-        let decoded = decode_compact_tag(&encoded).unwrap();
+        let decoded = decode_tag(&encoded).unwrap();
         assert_eq!(decoded.field_number, 1000);
         assert_eq!(decoded.wire_type, WireType::SVarint);
     }
 
     #[test]
-    fn test_compact_tag_roundtrip() {
+    fn test_tag_roundtrip() {
         // Test compact format (fields 1-15)
         for field in 1..=15 {
             for wire_type in [
@@ -304,7 +304,7 @@ mod tests {
                 let encoded = tag.encode_compact();
                 assert_eq!(encoded.len(), 1, "Field {} should be single byte", field);
 
-                let decoded = decode_compact_tag(&encoded).unwrap();
+                let decoded = decode_tag(&encoded).unwrap();
                 assert_eq!(decoded.field_number, field);
                 assert_eq!(decoded.wire_type, wire_type);
             }
@@ -323,7 +323,7 @@ mod tests {
                 let encoded = tag.encode_compact();
                 assert!(encoded.len() >= 2, "Field {} should be extended format", field);
 
-                let decoded = decode_compact_tag(&encoded).unwrap();
+                let decoded = decode_tag(&encoded).unwrap();
                 assert_eq!(decoded.field_number, field);
                 assert_eq!(decoded.wire_type, wire_type);
             }
@@ -332,7 +332,7 @@ mod tests {
 
     #[test]
     fn test_end_marker() {
-        let decoded = decode_compact_tag(&[END_MARKER]).unwrap();
+        let decoded = decode_tag(&[END_MARKER]).unwrap();
         assert_eq!(decoded.field_number, 0);
         assert_eq!(decoded.bytes_read, 1);
     }

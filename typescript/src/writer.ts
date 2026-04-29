@@ -1,4 +1,4 @@
-import { WireType, TypeID, encodeCompactTag, zigzagEncode, zigzagEncode64, END_MARKER } from "./types";
+import { WireType, TypeID, encodeTag, zigzagEncode, zigzagEncode64, END_MARKER } from "./types";
 
 const INITIAL_CAPACITY = 256;
 const GROWTH_FACTOR = 2;
@@ -65,7 +65,7 @@ export class Writer {
    * Writes a V2 compact field tag.
    */
   writeTag(fieldNumber: number, wireType: WireType): void {
-    const tagBytes = encodeCompactTag(fieldNumber, wireType);
+    const tagBytes = encodeTag(fieldNumber, wireType);
     this.writeBytes(tagBytes);
   }
 

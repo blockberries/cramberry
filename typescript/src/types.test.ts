@@ -8,8 +8,8 @@ import {
   MaxInt64,
   encodeTag,
   decodeTag,
-  encodeCompactTag,
-  decodeCompactTag,
+  encodeTag,
+  decodeTag,
   WireType,
   END_MARKER,
 } from './types';
@@ -110,28 +110,28 @@ describe('zigzag encoding (64-bit)', () => {
 
 describe('V2 compact tag encoding', () => {
   it('encodes field 1 with Varint wire type as single byte', () => {
-    const encoded = encodeCompactTag(1, WireType.Varint);
+    const encoded = encodeTag(1, WireType.Varint);
     expect(encoded.length).toBe(1);
     // Field 1, wire type 0: (1 << 4) | (0 << 1) | 0 = 0x10
     expect(encoded[0]).toBe(0x10);
   });
 
   it('encodes field 1 with Bytes wire type as single byte', () => {
-    const encoded = encodeCompactTag(1, WireType.Bytes);
+    const encoded = encodeTag(1, WireType.Bytes);
     expect(encoded.length).toBe(1);
     // Field 1, wire type 2: (1 << 4) | (2 << 1) | 0 = 0x14
     expect(encoded[0]).toBe(0x14);
   });
 
   it('encodes field 15 as single byte', () => {
-    const encoded = encodeCompactTag(15, WireType.Varint);
+    const encoded = encodeTag(15, WireType.Varint);
     expect(encoded.length).toBe(1);
     // Field 15, wire type 0: (15 << 4) | (0 << 1) | 0 = 0xf0
     expect(encoded[0]).toBe(0xf0);
   });
 
   it('encodes field 16 as extended format', () => {
-    const encoded = encodeCompactTag(16, WireType.Varint);
+    const encoded = encodeTag(16, WireType.Varint);
     expect(encoded.length).toBe(2);
     // Extended: (0 << 4) | (0 << 1) | 1 = 0x01, then varint 16
     expect(encoded[0]).toBe(0x01);
@@ -147,8 +147,8 @@ describe('V2 compact tag encoding', () => {
         WireType.Fixed32,
         WireType.SVarint,
       ]) {
-        const encoded = encodeCompactTag(fieldNumber, wireType);
-        const decoded = decodeCompactTag(encoded);
+        const encoded = encodeTag(fieldNumber, wireType);
+        const decoded = decodeTag(encoded);
         expect(decoded.fieldNumber).toBe(fieldNumber);
         expect(decoded.wireType).toBe(wireType);
         expect(decoded.bytesRead).toBe(1);
@@ -165,8 +165,8 @@ describe('V2 compact tag encoding', () => {
         WireType.Fixed32,
         WireType.SVarint,
       ]) {
-        const encoded = encodeCompactTag(fieldNumber, wireType);
-        const decoded = decodeCompactTag(encoded);
+        const encoded = encodeTag(fieldNumber, wireType);
+        const decoded = decodeTag(encoded);
         expect(decoded.fieldNumber).toBe(fieldNumber);
         expect(decoded.wireType).toBe(wireType);
       }
@@ -174,36 +174,10 @@ describe('V2 compact tag encoding', () => {
   });
 
   it('decodes end marker', () => {
-    const decoded = decodeCompactTag(new Uint8Array([END_MARKER]));
+    const decoded = decodeTag(new Uint8Array([END_MARKER]));
     expect(decoded.fieldNumber).toBe(0);
     expect(decoded.wireType).toBe(0);
     expect(decoded.bytesRead).toBe(1);
   });
 });
 
-describe('legacy tag encoding (deprecated)', () => {
-  it('encodes field 1 with Varint wire type', () => {
-    expect(encodeTag(1, WireType.Varint)).toBe(8);
-  });
-
-  it('encodes field 2 with Bytes wire type', () => {
-    expect(encodeTag(2, WireType.Bytes)).toBe(18);
-  });
-
-  it('roundtrips tag values', () => {
-    for (const fieldNumber of [1, 2, 15, 16, 100, 536870911]) {
-      for (const wireType of [
-        WireType.Varint,
-        WireType.Fixed64,
-        WireType.Bytes,
-        WireType.Fixed32,
-        WireType.SVarint,
-      ]) {
-        const tag = encodeTag(fieldNumber, wireType);
-        const decoded = decodeTag(tag);
-        expect(decoded.fieldNumber).toBe(fieldNumber);
-        expect(decoded.wireType).toBe(wireType);
-      }
-    }
-  });
-});

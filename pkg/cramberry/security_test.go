@@ -62,7 +62,7 @@ func TestSecurityVarintOverflow(t *testing.T) {
 }
 
 func TestSecurityCompactTagVarintOverflow(t *testing.T) {
-	t.Run("ReadCompactTagTooManyBytes", func(t *testing.T) {
+	t.Run("ReadTagTooManyBytes", func(t *testing.T) {
 		// Extended tag format with too many varint bytes
 		// First byte: extended bit set, wireType=0
 		data := make([]byte, 13)
@@ -75,7 +75,7 @@ func TestSecurityCompactTagVarintOverflow(t *testing.T) {
 		data[12] = 0x00 // terminate
 
 		r := NewReader(data)
-		fieldNum, _ := r.ReadCompactTag()
+		fieldNum, _ := r.ReadTag()
 		if r.Err() == nil {
 			t.Error("expected error for compact tag with too many varint bytes")
 		}
@@ -84,8 +84,8 @@ func TestSecurityCompactTagVarintOverflow(t *testing.T) {
 		}
 	})
 
-	t.Run("DecodeCompactTagTooManyBytes", func(t *testing.T) {
-		// Same test for standalone DecodeCompactTag
+	t.Run("DecodeTagTooManyBytes", func(t *testing.T) {
+		// Same test for standalone DecodeTag
 		data := make([]byte, 13)
 		data[0] = tagExtendedBit
 
@@ -94,7 +94,7 @@ func TestSecurityCompactTagVarintOverflow(t *testing.T) {
 		}
 		data[12] = 0x00
 
-		fieldNum, _, n := DecodeCompactTag(data)
+		fieldNum, _, n := DecodeTag(data)
 		if n != 0 || fieldNum != 0 {
 			t.Error("expected 0 return values for invalid tag")
 		}
@@ -102,29 +102,29 @@ func TestSecurityCompactTagVarintOverflow(t *testing.T) {
 
 	t.Run("ValidExtendedFieldNumber", func(t *testing.T) {
 		// Field number 1000 should work
-		encoded := EncodeCompactTag(1000, WireTypeV2Varint)
+		encoded := EncodeTag(1000, WireVarint)
 
 		r := NewReader(encoded)
-		fieldNum, wireType := r.ReadCompactTag()
+		fieldNum, wireType := r.ReadTag()
 		if r.Err() != nil {
 			t.Errorf("unexpected error: %v", r.Err())
 		}
 		if fieldNum != 1000 {
 			t.Errorf("got fieldNum %d, want 1000", fieldNum)
 		}
-		if wireType != WireTypeV2Varint {
-			t.Errorf("got wireType %d, want %d", wireType, WireTypeV2Varint)
+		if wireType != WireVarint {
+			t.Errorf("got wireType %d, want %d", wireType, WireVarint)
 		}
 	})
 }
 
 // =============================================================================
-// SEC-03: SkipValueV2 Length Overflow Protection
+// SEC-03: SkipValue Length Overflow Protection
 // =============================================================================
 
-func TestSecuritySkipValueV2LengthOverflow(t *testing.T) {
+func TestSecuritySkipValueLengthOverflow(t *testing.T) {
 	t.Run("MaxUint64Length", func(t *testing.T) {
-		// Encode a WireTypeV2Bytes with length = MaxUint64
+		// Encode a WireBytes with length = MaxUint64
 		var buf bytes.Buffer
 
 		// Write varint for MaxUint64
@@ -132,7 +132,7 @@ func TestSecuritySkipValueV2LengthOverflow(t *testing.T) {
 		buf.Write(lengthBytes)
 
 		r := NewReader(buf.Bytes())
-		r.SkipValueV2(WireTypeV2Bytes)
+		r.SkipValue(WireBytes)
 
 		if r.Err() == nil {
 			t.Error("expected error when skipping value with MaxUint64 length")
@@ -149,7 +149,7 @@ func TestSecuritySkipValueV2LengthOverflow(t *testing.T) {
 		buf.Write(make([]byte, 10)) // only 10 bytes of data
 
 		r := NewReader(buf.Bytes())
-		r.SkipValueV2(WireTypeV2Bytes)
+		r.SkipValue(WireBytes)
 
 		if r.Err() == nil {
 			t.Error("expected error when length exceeds remaining data")
@@ -163,7 +163,7 @@ func TestSecuritySkipValueV2LengthOverflow(t *testing.T) {
 		buf.Write([]byte("hello"))
 
 		r := NewReader(buf.Bytes())
-		r.SkipValueV2(WireTypeV2Bytes)
+		r.SkipValue(WireBytes)
 
 		if r.Err() != nil {
 			t.Errorf("unexpected error: %v", r.Err())
@@ -183,7 +183,7 @@ func TestSecuritySkipVarintOverflow(t *testing.T) {
 		}
 
 		r := NewReader(data)
-		r.SkipValueV2(WireTypeV2Varint)
+		r.SkipValue(WireVarint)
 
 		if r.Err() == nil {
 			t.Error("expected error when skipping varint with too many bytes")
@@ -656,7 +656,7 @@ func TestSecurityMalformedInput(t *testing.T) {
 
 	t.Run("UnknownWireType", func(t *testing.T) {
 		r := NewReader([]byte{})
-		r.SkipValueV2(99) // Invalid wire type
+		r.SkipValue(99) // Invalid wire type
 
 		if r.Err() == nil {
 			t.Error("expected error for unknown wire type")

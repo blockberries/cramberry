@@ -1,8 +1,8 @@
 /**
- * Wire types used in the Cramberry V2 encoding format.
+ * Wire types used in the Cramberry encoding format.
  *
- * V2 uses a simplified set of wire types (0-4) compared to protobuf.
- * Type references are encoded as Bytes with a type ID prefix.
+ * The wire type lives in 3 bits of the field tag and identifies how the
+ * following value is encoded.
  */
 export enum WireType {
   /** Variable-length unsigned integer (LEB128) */
@@ -43,7 +43,7 @@ export const MinInt64 = BigInt("-9223372036854775808"); // -2^63
 export const MaxInt64 = BigInt("9223372036854775807"); // 2^63 - 1
 
 /**
- * V2 Compact Tag Format Constants
+ * Tag format constants.
  *
  * Tag encoding:
  *   Fields 1-15:  [fieldNum:4][wireType:3][0:1] = single byte
@@ -58,10 +58,10 @@ export const TAG_FIELD_NUM_SHIFT = 4;
 export const MAX_COMPACT_FIELD_NUM = 15;
 
 /**
- * Encode a V2 compact tag from field number and wire type.
+ * Encode a field tag from field number and wire type.
  * Returns the encoded bytes.
  */
-export function encodeCompactTag(fieldNumber: number, wireType: WireType): Uint8Array {
+export function encodeTag(fieldNumber: number, wireType: WireType): Uint8Array {
   if (fieldNumber <= 0) {
     return new Uint8Array(0); // Invalid field number
   }
@@ -88,19 +88,19 @@ export function encodeCompactTag(fieldNumber: number, wireType: WireType): Uint8
 }
 
 /**
- * Result of decoding a V2 compact tag.
+ * Result of decoding a field tag.
  */
-export interface CompactTagResult {
+export interface TagResult {
   fieldNumber: number;
   wireType: WireType;
   bytesRead: number;
 }
 
 /**
- * Decode a V2 compact tag from a buffer.
+ * Decode a field tag from a buffer.
  * Returns fieldNumber (0 for end marker), wireType, and bytes consumed.
  */
-export function decodeCompactTag(data: Uint8Array, offset: number = 0): CompactTagResult {
+export function decodeTag(data: Uint8Array, offset: number = 0): TagResult {
   if (offset >= data.length) {
     return { fieldNumber: 0, wireType: 0, bytesRead: 0 };
   }
@@ -136,25 +136,6 @@ export function decodeCompactTag(data: Uint8Array, offset: number = 0): CompactT
 
   // Invalid varint
   return { fieldNumber: 0, wireType: 0, bytesRead: 0 };
-}
-
-/**
- * @deprecated Use encodeCompactTag for V2 format
- * Legacy protobuf-style tag encoding (kept for reference).
- */
-export function encodeTag(fieldNumber: number, wireType: WireType): number {
-  return (fieldNumber << 3) | wireType;
-}
-
-/**
- * @deprecated Use decodeCompactTag for V2 format
- * Legacy protobuf-style tag decoding (kept for reference).
- */
-export function decodeTag(tag: number): FieldTag {
-  return {
-    fieldNumber: tag >>> 3,
-    wireType: tag & 0x07,
-  };
 }
 
 /**

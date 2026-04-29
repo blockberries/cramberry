@@ -58,61 +58,6 @@ func (id TypeID) String() string {
 	return fmt.Sprintf("%d", id)
 }
 
-// WireType indicates how a value is encoded on the wire.
-// Re-exported from internal/wire for public use.
-type WireType uint8
-
-// Wire type constants.
-const (
-	// WireVarint is used for unsigned integers, booleans, and enums.
-	WireVarint WireType = 0
-
-	// WireFixed64 is used for fixed 64-bit values (uint64, int64, float64).
-	WireFixed64 WireType = 1
-
-	// WireBytes is used for length-prefixed data (strings, bytes, messages).
-	WireBytes WireType = 2
-
-	// WireFixed32 is used for fixed 32-bit values (uint32, int32, float32).
-	WireFixed32 WireType = 5
-
-	// WireSVarint is used for signed integers with ZigZag encoding.
-	WireSVarint WireType = 6
-
-	// WireTypeRef is used for polymorphic type references.
-	WireTypeRef WireType = 7
-)
-
-// String returns a human-readable name for the wire type.
-func (w WireType) String() string {
-	switch w {
-	case WireVarint:
-		return "Varint"
-	case WireFixed64:
-		return "Fixed64"
-	case WireBytes:
-		return "Bytes"
-	case WireFixed32:
-		return "Fixed32"
-	case WireSVarint:
-		return "SVarint"
-	case WireTypeRef:
-		return "TypeRef"
-	default:
-		return "Unknown"
-	}
-}
-
-// IsValid returns true if the wire type is known.
-func (w WireType) IsValid() bool {
-	switch w {
-	case WireVarint, WireFixed64, WireBytes, WireFixed32, WireSVarint, WireTypeRef:
-		return true
-	default:
-		return false
-	}
-}
-
 // Limits defines resource limits for encoding/decoding.
 type Limits struct {
 	// MaxMessageSize is the maximum total message size in bytes.

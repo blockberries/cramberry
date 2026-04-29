@@ -202,9 +202,9 @@ func TestForwardCompatAllWireTypes(t *testing.T) {
 
 	t.Run("skip varint field", func(t *testing.T) {
 		w := NewWriter()
-		w.WriteCompactTag(1, WireTypeV2SVarint)
+		w.WriteTag(1, WireSVarint)
 		w.WriteSvarint(42) // Known field
-		w.WriteCompactTag(99, WireTypeV2Varint)
+		w.WriteTag(99, WireVarint)
 		w.WriteUvarint(12345) // Unknown varint
 		w.WriteEndMarker()
 
@@ -224,9 +224,9 @@ func TestForwardCompatAllWireTypes(t *testing.T) {
 
 	t.Run("skip fixed32 field", func(t *testing.T) {
 		w := NewWriter()
-		w.WriteCompactTag(1, WireTypeV2SVarint)
+		w.WriteTag(1, WireSVarint)
 		w.WriteSvarint(42) // Known field
-		w.WriteCompactTag(99, WireTypeV2Fixed32)
+		w.WriteTag(99, WireFixed32)
 		w.WriteFixed32(0xDEADBEEF) // Unknown fixed32
 		w.WriteEndMarker()
 
@@ -246,9 +246,9 @@ func TestForwardCompatAllWireTypes(t *testing.T) {
 
 	t.Run("skip fixed64 field", func(t *testing.T) {
 		w := NewWriter()
-		w.WriteCompactTag(1, WireTypeV2SVarint)
+		w.WriteTag(1, WireSVarint)
 		w.WriteSvarint(42) // Known field
-		w.WriteCompactTag(99, WireTypeV2Fixed64)
+		w.WriteTag(99, WireFixed64)
 		w.WriteFixed64(0xDEADBEEFCAFEBABE) // Unknown fixed64
 		w.WriteEndMarker()
 
@@ -268,9 +268,9 @@ func TestForwardCompatAllWireTypes(t *testing.T) {
 
 	t.Run("skip bytes field", func(t *testing.T) {
 		w := NewWriter()
-		w.WriteCompactTag(1, WireTypeV2SVarint)
+		w.WriteTag(1, WireSVarint)
 		w.WriteSvarint(42) // Known field
-		w.WriteCompactTag(99, WireTypeV2Bytes)
+		w.WriteTag(99, WireBytes)
 		w.WriteBytes([]byte("unknown data that should be skipped")) // Unknown bytes
 		w.WriteEndMarker()
 
@@ -293,14 +293,14 @@ func TestForwardCompatFieldOrder(t *testing.T) {
 	t.Run("unknown fields at start", func(t *testing.T) {
 		w := NewWriter()
 		// Unknown fields first
-		w.WriteCompactTag(50, WireTypeV2Bytes)
+		w.WriteTag(50, WireBytes)
 		w.WriteString("unknown1")
-		w.WriteCompactTag(51, WireTypeV2Varint)
+		w.WriteTag(51, WireVarint)
 		w.WriteUvarint(999)
 		// Then known fields
-		w.WriteCompactTag(1, WireTypeV2SVarint)
+		w.WriteTag(1, WireSVarint)
 		w.WriteSvarint(42)
-		w.WriteCompactTag(2, WireTypeV2Bytes)
+		w.WriteTag(2, WireBytes)
 		w.WriteString("hello")
 		w.WriteEndMarker()
 
@@ -317,14 +317,14 @@ func TestForwardCompatFieldOrder(t *testing.T) {
 	t.Run("unknown fields at end", func(t *testing.T) {
 		w := NewWriter()
 		// Known fields first
-		w.WriteCompactTag(1, WireTypeV2SVarint)
+		w.WriteTag(1, WireSVarint)
 		w.WriteSvarint(42)
-		w.WriteCompactTag(2, WireTypeV2Bytes)
+		w.WriteTag(2, WireBytes)
 		w.WriteString("hello")
 		// Then unknown fields
-		w.WriteCompactTag(50, WireTypeV2Bytes)
+		w.WriteTag(50, WireBytes)
 		w.WriteString("unknown1")
-		w.WriteCompactTag(51, WireTypeV2Varint)
+		w.WriteTag(51, WireVarint)
 		w.WriteUvarint(999)
 		w.WriteEndMarker()
 
@@ -340,15 +340,15 @@ func TestForwardCompatFieldOrder(t *testing.T) {
 
 	t.Run("unknown fields interleaved", func(t *testing.T) {
 		w := NewWriter()
-		w.WriteCompactTag(50, WireTypeV2Bytes)
+		w.WriteTag(50, WireBytes)
 		w.WriteString("unknown before")
-		w.WriteCompactTag(1, WireTypeV2SVarint)
+		w.WriteTag(1, WireSVarint)
 		w.WriteSvarint(42)
-		w.WriteCompactTag(51, WireTypeV2Varint)
+		w.WriteTag(51, WireVarint)
 		w.WriteUvarint(999)
-		w.WriteCompactTag(2, WireTypeV2Bytes)
+		w.WriteTag(2, WireBytes)
 		w.WriteString("hello")
-		w.WriteCompactTag(52, WireTypeV2Fixed64)
+		w.WriteTag(52, WireFixed64)
 		w.WriteFixed64(123456789)
 		w.WriteEndMarker()
 

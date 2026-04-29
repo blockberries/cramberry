@@ -853,7 +853,7 @@ impl {{rustEnumType $enum}} {
 pub fn encode_{{toSnake $msg.Name}}(writer: &mut Writer, msg: &{{rustMessageType $msg}}) -> Result<()> {
 {{range $msg.Fields}}
     // Field {{.Number}}: {{.Name}}
-    writer.write_compact_tag({{.Number}}, {{rustWireType .}})?;
+    writer.write_tag({{.Number}}, {{rustWireType .}})?;
     {{rustWriteField .}}?;
 {{end}}
     // End marker
@@ -868,14 +868,14 @@ pub fn decode_{{toSnake $msg.Name}}(reader: &mut Reader) -> Result<{{rustMessage
 {{- end}}
 
     loop {
-        let (field_num, wire_type) = reader.read_compact_tag()?;
+        let (field_num, wire_type) = reader.read_tag()?;
         if field_num == 0 { break; } // End marker
 
         match field_num {
 {{- range $msg.Fields}}
             {{.Number}} => {{rustFieldName .}} = {{rustReadField .}},
 {{- end}}
-            _ => reader.skip_value_v2(wire_type)?,
+            _ => reader.skip_value(wire_type)?,
         }
     }
 

@@ -2,7 +2,7 @@
 
 use crate::error::{Error, Result};
 use crate::types::{
-    decode_compact_tag, zigzag_decode_32, zigzag_decode_64, FieldTag, WireType, END_MARKER,
+    decode_tag, zigzag_decode_32, zigzag_decode_64, FieldTag, WireType, END_MARKER,
 };
 
 /// Reader decodes Cramberry data from a binary buffer.
@@ -144,7 +144,7 @@ impl<'a> Reader<'a> {
             return Err(Error::buffer_underflow(1, 0));
         }
 
-        let result = decode_compact_tag(remaining)
+        let result = decode_tag(remaining)
             .ok_or_else(|| Error::InvalidWireType(remaining[0]))?;
 
         self.pos += result.bytes_read;
@@ -228,7 +228,7 @@ impl<'a> Reader<'a> {
     }
 
     /// Skips a field based on its wire type.
-    pub fn skip_field(&mut self, wire_type: WireType) -> Result<()> {
+    pub fn skip_value(&mut self, wire_type: WireType) -> Result<()> {
         match wire_type {
             WireType::Varint | WireType::SVarint => {
                 self.read_varint64()?; // Use 64-bit to handle large varints
@@ -300,7 +300,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_v2_compact_tag() {
+    fn test_read_tag() {
         // Field 1, wire type Varint: (1 << 4) | (0 << 1) = 0x10
         let mut reader = Reader::new(&[0x10]);
         let tag = reader.read_tag().unwrap();

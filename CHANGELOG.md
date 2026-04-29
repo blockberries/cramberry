@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-04-29
+
+### Changed (BREAKING)
+
+- **Wire format consolidation**: removed the legacy V1 wire-type surface and
+  renamed the V2 names to drop the suffix. There is now a single canonical
+  wire format. No on-the-wire bytes change — only the Go/TS/Rust API names.
+  - `WireTypeV2Varint`/`WireTypeV2Fixed64`/`WireTypeV2Bytes`/`WireTypeV2Fixed32`/`WireTypeV2SVarint`
+    → `WireVarint`/`WireFixed64`/`WireBytes`/`WireFixed32`/`WireSVarint`.
+  - The legacy `WireFixed32 = 5`, `WireSVarint = 6`, `WireTypeRef = 7` constants
+    and the `WireType` named type (in `pkg/cramberry/types.go`) are removed.
+  - `Writer.WriteCompactTag` → `Writer.WriteTag`.
+  - `Reader.ReadCompactTag` → `Reader.ReadTag`.
+  - `Reader.SkipValueV2` → `Reader.SkipValue` (the legacy `SkipValue` and its
+    V1 wire-type switch are removed).
+  - `EncodeCompactTag`/`DecodeCompactTag`/`CompactTagSize` → `EncodeTag`/`DecodeTag`/`TagSize`.
+  - `getWireTypeV2Cached`/`computeWireTypeV2` → `getWireTypeCached`/`computeWireType`.
+  - `StreamWriter.WriteTag` and `StreamReader.ReadTag` (legacy V1 protobuf-style
+    tag layout) are removed; nest a regular `Writer`/`Reader` inside a stream
+    message instead.
+  - TypeScript: `WireTypeV2` enum → `WireType`; `encodeCompactTag`/`decodeCompactTag`
+    → `encodeTag`/`decodeTag`; `Reader.skipField` → `Reader.skipValue`.
+  - Rust: `write_compact_tag`/`read_compact_tag`/`skip_field`/`skip_value_v2`
+    → `write_tag`/`read_tag`/`skip_value`.
+  - `internal/wire/tag.go` is reduced to `MaxFieldNumber` (the V1 protobuf-style
+    tag helpers are removed).
+- `pkg/cramberry/wire_v2.go` is renamed to `pkg/cramberry/wire.go`; tests in
+  `wire_v2_test.go` move to `wire_test.go`.
+
 ## [1.5.5] - 2026-01-29
 
 ### Fixed

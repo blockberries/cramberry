@@ -219,40 +219,6 @@ func TestStreamWriterComplex(t *testing.T) {
 	}
 }
 
-func TestStreamWriterTag(t *testing.T) {
-	var buf bytes.Buffer
-	sw := NewStreamWriter(&buf)
-
-	sw.WriteTag(1, WireVarint)
-	sw.WriteTag(100, WireBytes)
-	sw.WriteTag(1000, WireFixed64)
-
-	if err := sw.Flush(); err != nil {
-		t.Fatalf("flush error: %v", err)
-	}
-
-	sr := NewStreamReader(&buf)
-
-	fn, wt := sr.ReadTag()
-	if fn != 1 || wt != WireVarint {
-		t.Errorf("expected (1, WireVarint), got (%d, %d)", fn, wt)
-	}
-
-	fn, wt = sr.ReadTag()
-	if fn != 100 || wt != WireBytes {
-		t.Errorf("expected (100, WireBytes), got (%d, %d)", fn, wt)
-	}
-
-	fn, wt = sr.ReadTag()
-	if fn != 1000 || wt != WireFixed64 {
-		t.Errorf("expected (1000, WireFixed64), got (%d, %d)", fn, wt)
-	}
-
-	if sr.Err() != nil {
-		t.Fatalf("read error: %v", sr.Err())
-	}
-}
-
 func TestStreamWriterHeaders(t *testing.T) {
 	var buf bytes.Buffer
 	sw := NewStreamWriter(&buf)

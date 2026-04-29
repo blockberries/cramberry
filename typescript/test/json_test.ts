@@ -4,7 +4,7 @@
 import {
   Writer,
   Reader,
-  WireTypeV2,
+  WireType,
   formatBigIntToString,
   formatNumberToString,
   formatFloat32,
@@ -94,79 +94,79 @@ export function encodeScalarTypes(writer: Writer, msg: ScalarTypes): void {
 
   // Field 1: bool_val
   if (msg.boolVal !== undefined && msg.boolVal !== null) {
-    writer.writeCompactTag(1, WireTypeV2.Varint);
+    writer.writeTag(1, WireType.Varint);
     writer.writeBool(msg.boolVal);
   }
 
   // Field 2: int8_val
   if (msg.int8Val !== undefined && msg.int8Val !== null) {
-    writer.writeCompactTag(2, WireTypeV2.SVarint);
+    writer.writeTag(2, WireType.SVarint);
     writer.writeSVarint(msg.int8Val);
   }
 
   // Field 3: int16_val
   if (msg.int16Val !== undefined && msg.int16Val !== null) {
-    writer.writeCompactTag(3, WireTypeV2.SVarint);
+    writer.writeTag(3, WireType.SVarint);
     writer.writeSVarint(msg.int16Val);
   }
 
   // Field 4: int32_val
   if (msg.int32Val !== undefined && msg.int32Val !== null) {
-    writer.writeCompactTag(4, WireTypeV2.SVarint);
+    writer.writeTag(4, WireType.SVarint);
     writer.writeSVarint(msg.int32Val);
   }
 
   // Field 5: int64_val
   if (msg.int64Val !== undefined && msg.int64Val !== null) {
-    writer.writeCompactTag(5, WireTypeV2.SVarint);
+    writer.writeTag(5, WireType.SVarint);
     writer.writeSVarint64(msg.int64Val);
   }
 
   // Field 6: uint8_val
   if (msg.uint8Val !== undefined && msg.uint8Val !== null) {
-    writer.writeCompactTag(6, WireTypeV2.Varint);
+    writer.writeTag(6, WireType.Varint);
     writer.writeVarint(msg.uint8Val);
   }
 
   // Field 7: uint16_val
   if (msg.uint16Val !== undefined && msg.uint16Val !== null) {
-    writer.writeCompactTag(7, WireTypeV2.Varint);
+    writer.writeTag(7, WireType.Varint);
     writer.writeVarint(msg.uint16Val);
   }
 
   // Field 8: uint32_val
   if (msg.uint32Val !== undefined && msg.uint32Val !== null) {
-    writer.writeCompactTag(8, WireTypeV2.Varint);
+    writer.writeTag(8, WireType.Varint);
     writer.writeVarint(msg.uint32Val);
   }
 
   // Field 9: uint64_val
   if (msg.uint64Val !== undefined && msg.uint64Val !== null) {
-    writer.writeCompactTag(9, WireTypeV2.Varint);
+    writer.writeTag(9, WireType.Varint);
     writer.writeVarint64(msg.uint64Val);
   }
 
   // Field 10: float32_val
   if (msg.float32Val !== undefined && msg.float32Val !== null) {
-    writer.writeCompactTag(10, WireTypeV2.Fixed32);
+    writer.writeTag(10, WireType.Fixed32);
     writer.writeFloat32(msg.float32Val);
   }
 
   // Field 11: float64_val
   if (msg.float64Val !== undefined && msg.float64Val !== null) {
-    writer.writeCompactTag(11, WireTypeV2.Fixed64);
+    writer.writeTag(11, WireType.Fixed64);
     writer.writeFloat64(msg.float64Val);
   }
 
   // Field 12: string_val
   if (msg.stringVal !== undefined && msg.stringVal !== null) {
-    writer.writeCompactTag(12, WireTypeV2.Bytes);
+    writer.writeTag(12, WireType.Bytes);
     writer.writeString(msg.stringVal);
   }
 
   // Field 13: bytes_val
   if (msg.bytesVal !== undefined && msg.bytesVal !== null) {
-    writer.writeCompactTag(13, WireTypeV2.Bytes);
+    writer.writeTag(13, WireType.Bytes);
     writer.writeLengthPrefixedBytes(msg.bytesVal);
   }
 // End marker
@@ -178,7 +178,7 @@ export function decodeScalarTypes(reader: Reader): ScalarTypes {
   const result: Partial<ScalarTypes> = {};
 
   while (true) {
-    const { fieldNum, wireType } = reader.readCompactTag();
+    const { fieldNum, wireType } = reader.readTag();
     if (fieldNum === 0) break; // End marker
 
     switch (fieldNum) {
@@ -222,7 +222,7 @@ export function decodeScalarTypes(reader: Reader): ScalarTypes {
         result.bytesVal = reader.readLengthPrefixedBytes();
         break;
       default:
-        reader.skipValueV2(wireType);
+        reader.skipValue(wireType);
     }
   }
 
@@ -415,19 +415,19 @@ export function encodeRepeatedTypes(writer: Writer, msg: RepeatedTypes): void {
 
   // Field 1: strings
   if (msg.strings !== undefined && msg.strings !== null) {
-    writer.writeCompactTag(1, WireTypeV2.Bytes);
+    writer.writeTag(1, WireType.Bytes);
     writeArray(writer, msg.strings, (w, v) => { w.writeString(v) });
   }
 
   // Field 2: ints
   if (msg.ints !== undefined && msg.ints !== null) {
-    writer.writeCompactTag(2, WireTypeV2.SVarint);
+    writer.writeTag(2, WireType.SVarint);
     writeArray(writer, msg.ints, (w, v) => { w.writeSVarint64(v) });
   }
 
   // Field 3: bools
   if (msg.bools !== undefined && msg.bools !== null) {
-    writer.writeCompactTag(3, WireTypeV2.Varint);
+    writer.writeTag(3, WireType.Varint);
     writeArray(writer, msg.bools, (w, v) => { w.writeBool(v) });
   }
 // End marker
@@ -439,7 +439,7 @@ export function decodeRepeatedTypes(reader: Reader): RepeatedTypes {
   const result: Partial<RepeatedTypes> = {};
 
   while (true) {
-    const { fieldNum, wireType } = reader.readCompactTag();
+    const { fieldNum, wireType } = reader.readTag();
     if (fieldNum === 0) break; // End marker
 
     switch (fieldNum) {
@@ -453,7 +453,7 @@ export function decodeRepeatedTypes(reader: Reader): RepeatedTypes {
         result.bools = readArray(reader, (r) => reader.readBool());
         break;
       default:
-        reader.skipValueV2(wireType);
+        reader.skipValue(wireType);
     }
   }
 
@@ -581,13 +581,13 @@ export function encodeMapTypes(writer: Writer, msg: MapTypes): void {
 
   // Field 1: string_map
   if (msg.stringMap !== undefined && msg.stringMap !== null) {
-    writer.writeCompactTag(1, WireTypeV2.Bytes);
+    writer.writeTag(1, WireType.Bytes);
     writeMap(writer, msg.stringMap, (w, k) => { w.writeString(k) }, (w, v) => { w.writeString(v) });
   }
 
   // Field 2: int_map
   if (msg.intMap !== undefined && msg.intMap !== null) {
-    writer.writeCompactTag(2, WireTypeV2.Bytes);
+    writer.writeTag(2, WireType.Bytes);
     writeMap(writer, msg.intMap, (w, k) => { w.writeString(k) }, (w, v) => { w.writeSVarint64(v) });
   }
 // End marker
@@ -599,7 +599,7 @@ export function decodeMapTypes(reader: Reader): MapTypes {
   const result: Partial<MapTypes> = {};
 
   while (true) {
-    const { fieldNum, wireType } = reader.readCompactTag();
+    const { fieldNum, wireType } = reader.readTag();
     if (fieldNum === 0) break; // End marker
 
     switch (fieldNum) {
@@ -610,7 +610,7 @@ export function decodeMapTypes(reader: Reader): MapTypes {
         result.intMap = readMap(reader, (r) => reader.readString(), (r) => reader.readSVarint64());
         break;
       default:
-        reader.skipValueV2(wireType);
+        reader.skipValue(wireType);
     }
   }
 
@@ -731,19 +731,19 @@ export function encodeAddress(writer: Writer, msg: Address): void {
 
   // Field 1: street
   if (msg.street !== undefined && msg.street !== null) {
-    writer.writeCompactTag(1, WireTypeV2.Bytes);
+    writer.writeTag(1, WireType.Bytes);
     writer.writeString(msg.street);
   }
 
   // Field 2: city
   if (msg.city !== undefined && msg.city !== null) {
-    writer.writeCompactTag(2, WireTypeV2.Bytes);
+    writer.writeTag(2, WireType.Bytes);
     writer.writeString(msg.city);
   }
 
   // Field 3: zip
   if (msg.zip !== undefined && msg.zip !== null) {
-    writer.writeCompactTag(3, WireTypeV2.Bytes);
+    writer.writeTag(3, WireType.Bytes);
     writer.writeString(msg.zip);
   }
 // End marker
@@ -755,7 +755,7 @@ export function decodeAddress(reader: Reader): Address {
   const result: Partial<Address> = {};
 
   while (true) {
-    const { fieldNum, wireType } = reader.readCompactTag();
+    const { fieldNum, wireType } = reader.readTag();
     if (fieldNum === 0) break; // End marker
 
     switch (fieldNum) {
@@ -769,7 +769,7 @@ export function decodeAddress(reader: Reader): Address {
         result.zip = reader.readString();
         break;
       default:
-        reader.skipValueV2(wireType);
+        reader.skipValue(wireType);
     }
   }
 
@@ -863,25 +863,25 @@ export function encodePerson(writer: Writer, msg: Person): void {
 
   // Field 1: name
   if (msg.name !== undefined && msg.name !== null) {
-    writer.writeCompactTag(1, WireTypeV2.Bytes);
+    writer.writeTag(1, WireType.Bytes);
     writer.writeString(msg.name);
   }
 
   // Field 2: age
   if (msg.age !== undefined && msg.age !== null) {
-    writer.writeCompactTag(2, WireTypeV2.SVarint);
+    writer.writeTag(2, WireType.SVarint);
     writer.writeSVarint(msg.age);
   }
 
   // Field 3: address
   if (msg.address !== undefined && msg.address !== null) {
-    writer.writeCompactTag(3, WireTypeV2.Bytes);
+    writer.writeTag(3, WireType.Bytes);
     encodeAddress(writer, msg.address);
   }
 
   // Field 4: emails
   if (msg.emails !== undefined && msg.emails !== null) {
-    writer.writeCompactTag(4, WireTypeV2.Bytes);
+    writer.writeTag(4, WireType.Bytes);
     writeArray(writer, msg.emails, (w, v) => { w.writeString(v) });
   }
 // End marker
@@ -893,7 +893,7 @@ export function decodePerson(reader: Reader): Person {
   const result: Partial<Person> = {};
 
   while (true) {
-    const { fieldNum, wireType } = reader.readCompactTag();
+    const { fieldNum, wireType } = reader.readTag();
     if (fieldNum === 0) break; // End marker
 
     switch (fieldNum) {
@@ -910,7 +910,7 @@ export function decodePerson(reader: Reader): Person {
         result.emails = readArray(reader, (r) => reader.readString());
         break;
       default:
-        reader.skipValueV2(wireType);
+        reader.skipValue(wireType);
     }
   }
 
@@ -1025,19 +1025,19 @@ export function encodeRequiredFields(writer: Writer, msg: RequiredFields): void 
 
   // Field 1: id
   if (msg.id !== undefined && msg.id !== null) {
-    writer.writeCompactTag(1, WireTypeV2.SVarint);
+    writer.writeTag(1, WireType.SVarint);
     writer.writeSVarint64(msg.id);
   }
 
   // Field 2: name
   if (msg.name !== undefined && msg.name !== null) {
-    writer.writeCompactTag(2, WireTypeV2.Bytes);
+    writer.writeTag(2, WireType.Bytes);
     writer.writeString(msg.name);
   }
 
   // Field 3: optional_field
   if (msg.optionalField !== undefined && msg.optionalField !== null) {
-    writer.writeCompactTag(3, WireTypeV2.Bytes);
+    writer.writeTag(3, WireType.Bytes);
     writer.writeString(msg.optionalField);
   }
 // End marker
@@ -1049,7 +1049,7 @@ export function decodeRequiredFields(reader: Reader): RequiredFields {
   const result: Partial<RequiredFields> = {};
 
   while (true) {
-    const { fieldNum, wireType } = reader.readCompactTag();
+    const { fieldNum, wireType } = reader.readTag();
     if (fieldNum === 0) break; // End marker
 
     switch (fieldNum) {
@@ -1063,7 +1063,7 @@ export function decodeRequiredFields(reader: Reader): RequiredFields {
         result.optionalField = reader.readString();
         break;
       default:
-        reader.skipValueV2(wireType);
+        reader.skipValue(wireType);
     }
   }
 
@@ -1155,13 +1155,13 @@ export function encodeOptionalPointer(writer: Writer, msg: OptionalPointer): voi
 
   // Field 1: value
   if (msg.value !== undefined && msg.value !== null) {
-    writer.writeCompactTag(1, WireTypeV2.Bytes);
+    writer.writeTag(1, WireType.Bytes);
     if (msg.value !== null) { writer.writeString(msg.value) };
   }
 
   // Field 2: number
   if (msg.number !== undefined && msg.number !== null) {
-    writer.writeCompactTag(2, WireTypeV2.Bytes);
+    writer.writeTag(2, WireType.Bytes);
     if (msg.number !== null) { writer.writeSVarint64(msg.number) };
   }
 // End marker
@@ -1173,7 +1173,7 @@ export function decodeOptionalPointer(reader: Reader): OptionalPointer {
   const result: Partial<OptionalPointer> = {};
 
   while (true) {
-    const { fieldNum, wireType } = reader.readCompactTag();
+    const { fieldNum, wireType } = reader.readTag();
     if (fieldNum === 0) break; // End marker
 
     switch (fieldNum) {
@@ -1184,7 +1184,7 @@ export function decodeOptionalPointer(reader: Reader): OptionalPointer {
         result.number = reader.readSVarint64();
         break;
       default:
-        reader.skipValueV2(wireType);
+        reader.skipValue(wireType);
     }
   }
 
@@ -1282,13 +1282,13 @@ export function encodeEnumTest(writer: Writer, msg: EnumTest): void {
 
   // Field 1: status
   if (msg.status !== undefined && msg.status !== null) {
-    writer.writeCompactTag(1, WireTypeV2.SVarint);
+    writer.writeTag(1, WireType.SVarint);
     writer.writeSVarint(msg.status);
   }
 
   // Field 2: statuses
   if (msg.statuses !== undefined && msg.statuses !== null) {
-    writer.writeCompactTag(2, WireTypeV2.SVarint);
+    writer.writeTag(2, WireType.SVarint);
     writeArray(writer, msg.statuses, (w, v) => { w.writeSVarint(v) });
   }
 // End marker
@@ -1300,7 +1300,7 @@ export function decodeEnumTest(reader: Reader): EnumTest {
   const result: Partial<EnumTest> = {};
 
   while (true) {
-    const { fieldNum, wireType } = reader.readCompactTag();
+    const { fieldNum, wireType } = reader.readTag();
     if (fieldNum === 0) break; // End marker
 
     switch (fieldNum) {
@@ -1311,7 +1311,7 @@ export function decodeEnumTest(reader: Reader): EnumTest {
         result.statuses = readArray(reader, (r) => reader.readSVarint());
         break;
       default:
-        reader.skipValueV2(wireType);
+        reader.skipValue(wireType);
     }
   }
 
@@ -1441,12 +1441,12 @@ export function decodeEmptyMessage(reader: Reader): EmptyMessage {
   const result: Partial<EmptyMessage> = {};
 
   while (true) {
-    const { fieldNum, wireType } = reader.readCompactTag();
+    const { fieldNum, wireType } = reader.readTag();
     if (fieldNum === 0) break; // End marker
 
     switch (fieldNum) {
       default:
-        reader.skipValueV2(wireType);
+        reader.skipValue(wireType);
     }
   }
 
@@ -1511,25 +1511,25 @@ export function encodeAllZeroValues(writer: Writer, msg: AllZeroValues): void {
 
   // Field 1: zero_int
   if (msg.zeroInt !== undefined && msg.zeroInt !== null) {
-    writer.writeCompactTag(1, WireTypeV2.SVarint);
+    writer.writeTag(1, WireType.SVarint);
     writer.writeSVarint64(msg.zeroInt);
   }
 
   // Field 2: zero_string
   if (msg.zeroString !== undefined && msg.zeroString !== null) {
-    writer.writeCompactTag(2, WireTypeV2.Bytes);
+    writer.writeTag(2, WireType.Bytes);
     writer.writeString(msg.zeroString);
   }
 
   // Field 3: zero_bool
   if (msg.zeroBool !== undefined && msg.zeroBool !== null) {
-    writer.writeCompactTag(3, WireTypeV2.Varint);
+    writer.writeTag(3, WireType.Varint);
     writer.writeBool(msg.zeroBool);
   }
 
   // Field 4: empty_array
   if (msg.emptyArray !== undefined && msg.emptyArray !== null) {
-    writer.writeCompactTag(4, WireTypeV2.Bytes);
+    writer.writeTag(4, WireType.Bytes);
     writeArray(writer, msg.emptyArray, (w, v) => { w.writeString(v) });
   }
 // End marker
@@ -1541,7 +1541,7 @@ export function decodeAllZeroValues(reader: Reader): AllZeroValues {
   const result: Partial<AllZeroValues> = {};
 
   while (true) {
-    const { fieldNum, wireType } = reader.readCompactTag();
+    const { fieldNum, wireType } = reader.readTag();
     if (fieldNum === 0) break; // End marker
 
     switch (fieldNum) {
@@ -1558,7 +1558,7 @@ export function decodeAllZeroValues(reader: Reader): AllZeroValues {
         result.emptyArray = readArray(reader, (r) => reader.readString());
         break;
       default:
-        reader.skipValueV2(wireType);
+        reader.skipValue(wireType);
     }
   }
 

@@ -93,26 +93,26 @@ func (c *goContext) wireTypeV2(f *schema.Field) string {
 func (c *goContext) wireTypeV2ForType(t schema.TypeRef, repeated bool) string {
 	// Slices of packable types use Bytes wire type
 	if repeated {
-		return "cramberry.WireTypeV2Bytes"
+		return "cramberry.WireBytes"
 	}
 
 	switch typ := t.(type) {
 	case *schema.ScalarType:
 		switch typ.Name {
 		case "bool":
-			return "cramberry.WireTypeV2Varint"
+			return "cramberry.WireVarint"
 		case "int8", "int16", "int32", "int64", "int":
-			return "cramberry.WireTypeV2SVarint"
+			return "cramberry.WireSVarint"
 		case "uint8", "uint16", "uint32", "uint64", "uint", "byte":
-			return "cramberry.WireTypeV2Varint"
+			return "cramberry.WireVarint"
 		case "float32":
-			return "cramberry.WireTypeV2Fixed32"
+			return "cramberry.WireFixed32"
 		case "float64":
-			return "cramberry.WireTypeV2Fixed64"
+			return "cramberry.WireFixed64"
 		case "string", "bytes":
-			return "cramberry.WireTypeV2Bytes"
+			return "cramberry.WireBytes"
 		default:
-			return "cramberry.WireTypeV2Bytes"
+			return "cramberry.WireBytes"
 		}
 	case *schema.NamedType:
 		// Named types (enums, messages) - enums are svarint, messages are bytes.
@@ -122,15 +122,15 @@ func (c *goContext) wireTypeV2ForType(t schema.TypeRef, repeated bool) string {
 		if typ.Package == "" {
 			for _, e := range c.Schema.Enums {
 				if e.Name == typ.Name {
-					return "cramberry.WireTypeV2SVarint"
+					return "cramberry.WireSVarint"
 				}
 			}
 		}
-		return "cramberry.WireTypeV2Bytes"
+		return "cramberry.WireBytes"
 	case *schema.ArrayType, *schema.MapType:
-		return "cramberry.WireTypeV2Bytes"
+		return "cramberry.WireBytes"
 	default:
-		return "cramberry.WireTypeV2Bytes"
+		return "cramberry.WireBytes"
 	}
 }
 
@@ -158,7 +158,7 @@ func (c *goContext) encodePointerFieldV2(f *schema.Field, fieldName string, fiel
 	inner := c.encodeValueV2(f.Type, fieldName, true)
 
 	return fmt.Sprintf(`if %s != nil {
-		w.WriteCompactTag(%d, %s)
+		w.WriteTag(%d, %s)
 		%s
 	}`, fieldName, fieldNum, wireType, inner)
 }
@@ -169,7 +169,7 @@ func (c *goContext) encodeRepeatedFieldV2(f *schema.Field, fieldName string, fie
 	// Check if it's a packable type
 	if c.isPackableType(f.Type) {
 		return fmt.Sprintf(`if len(%s) > 0 {
-		w.WriteCompactTag(%d, %s)
+		w.WriteTag(%d, %s)
 		w.WriteUvarint(uint64(len(%s)))
 		for _, v := range %s {
 			%s
@@ -180,7 +180,7 @@ func (c *goContext) encodeRepeatedFieldV2(f *schema.Field, fieldName string, fie
 	// Non-packable types (messages, strings, etc.)
 	// Note: range variable v is the value, not a pointer
 	return fmt.Sprintf(`if len(%s) > 0 {
-		w.WriteCompactTag(%d, %s)
+		w.WriteTag(%d, %s)
 		w.WriteUvarint(uint64(len(%s)))
 		for _, v := range %s {
 			%s
@@ -196,13 +196,13 @@ func (c *goContext) encodeScalarFieldV2(f *schema.Field, fieldName string, field
 	// For optional fields, always emit if non-zero
 	if zeroCheck != "" {
 		return fmt.Sprintf(`if %s {
-		w.WriteCompactTag(%d, %s)
+		w.WriteTag(%d, %s)
 		%s
 	}`, zeroCheck, fieldNum, wireType, inner)
 	}
 
 	// Always emit for required fields
-	return fmt.Sprintf(`w.WriteCompactTag(%d, %s)
+	return fmt.Sprintf(`w.WriteTag(%d, %s)
 	%s`, fieldNum, wireType, inner)
 }
 
@@ -1395,7 +1395,7 @@ func (m *{{goMessageType $msg}}) UnmarshalCramberry(data []byte) error {
 // DecodeFrom decodes the message from the reader using V2 format.
 func (m *{{goMessageType $msg}}) DecodeFrom(r *cramberry.Reader) {
 	for {
-		fieldNum, wireType := r.ReadCompactTag()
+		fieldNum, wireType := r.ReadTag()
 		if fieldNum == 0 {
 			break
 		}
@@ -1406,7 +1406,7 @@ func (m *{{goMessageType $msg}}) DecodeFrom(r *cramberry.Reader) {
 {{- end}}
 		default:
 			// Skip unknown field for forward compatibility
-			r.SkipValueV2(wireType)
+			r.SkipValue(wireType)
 		}
 		if r.Err() != nil {
 			return

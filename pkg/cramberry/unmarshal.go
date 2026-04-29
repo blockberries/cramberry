@@ -340,7 +340,7 @@ func decodeStruct(r *Reader, v reflect.Value) error {
 
 	// Read fields until end marker
 	for {
-		fieldNum, wireType := r.ReadCompactTag()
+		fieldNum, wireType := r.ReadTag()
 		if r.Err() != nil {
 			return r.Err()
 		}
@@ -356,7 +356,7 @@ func decodeStruct(r *Reader, v reflect.Value) error {
 			if r.Options().StrictMode {
 				return NewFieldDecodeError(v.Type().Name(), "", fieldNum, r.Pos(), "unknown field", ErrUnknownField)
 			}
-			r.SkipValueV2(wireType)
+			r.SkipValue(wireType)
 			continue
 		}
 
@@ -530,7 +530,7 @@ func sizeStruct(v reflect.Value, opts Options) int {
 			continue
 		}
 		// Compact tag size + value size
-		size += CompactTagSize(field.num)
+		size += TagSize(field.num)
 		size += sizeValue(fv, opts)
 	}
 

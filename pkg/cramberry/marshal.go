@@ -391,7 +391,7 @@ func encodeStruct(w *Writer, v reflect.Value) error {
 		}
 
 		// Write compact field tag
-		w.WriteCompactTag(field.num, getWireTypeV2Cached(fv.Type()))
+		w.WriteTag(field.num, getWireTypeCached(fv.Type()))
 		if w.Err() != nil {
 			return w.Err()
 		}
@@ -407,36 +407,36 @@ func encodeStruct(w *Writer, v reflect.Value) error {
 	return w.Err()
 }
 
-// getWireTypeV2Cached returns the V2 wire type for a reflect.Type, using cache.
-func getWireTypeV2Cached(t reflect.Type) byte {
+// getWireTypeCached returns the V2 wire type for a reflect.Type, using cache.
+func getWireTypeCached(t reflect.Type) byte {
 	if wt, ok := wireTypeCache.Load(t); ok {
 		return wt.(byte)
 	}
-	computed := computeWireTypeV2(t)
+	computed := computeWireType(t)
 	wireTypeCache.Store(t, computed)
 	return computed
 }
 
-// computeWireTypeV2 computes the V2 wire type for a reflect.Type.
-func computeWireTypeV2(t reflect.Type) byte {
+// computeWireType computes the V2 wire type for a reflect.Type.
+func computeWireType(t reflect.Type) byte {
 	switch t.Kind() {
 	case reflect.Bool, reflect.Uint8, reflect.Uint16, reflect.Uint32,
 		reflect.Uint, reflect.Uint64, reflect.Uintptr:
-		return WireTypeV2Varint
+		return WireVarint
 	case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int, reflect.Int64:
-		return WireTypeV2SVarint
+		return WireSVarint
 	case reflect.Float32:
-		return WireTypeV2Fixed32
+		return WireFixed32
 	case reflect.Float64:
-		return WireTypeV2Fixed64
+		return WireFixed64
 	case reflect.Complex64:
-		return WireTypeV2Fixed64 // 2x float32 = 8 bytes
+		return WireFixed64 // 2x float32 = 8 bytes
 	case reflect.Complex128, reflect.String, reflect.Slice, reflect.Array, reflect.Map, reflect.Struct:
-		return WireTypeV2Bytes
+		return WireBytes
 	case reflect.Ptr, reflect.Interface:
-		return WireTypeV2Bytes
+		return WireBytes
 	default:
-		return WireTypeV2Bytes
+		return WireBytes
 	}
 }
 

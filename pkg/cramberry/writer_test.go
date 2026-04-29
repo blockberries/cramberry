@@ -402,14 +402,13 @@ func TestWriteRawBytes(t *testing.T) {
 func TestWriteTag(t *testing.T) {
 	tests := []struct {
 		fieldNum int
-		wireType WireType
+		wireType byte
 	}{
 		{1, WireVarint},
 		{2, WireFixed64},
 		{15, WireBytes},
 		{16, WireFixed32},
 		{100, WireSVarint},
-		{1000, WireTypeRef},
 	}
 
 	for _, tc := range tests {

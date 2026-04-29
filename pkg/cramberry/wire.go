@@ -4,62 +4,58 @@ import (
 	"github.com/blockberries/cramberry/internal/wire"
 )
 
-// Wire Format V2 - Optimized encoding format
+// Wire format
 //
-// Key changes from V1:
-// 1. End marker instead of field count prefix
-// 2. Compact tags for fields 1-15 (single byte)
-// 3. Packed repeated primitives
-// 4. Optional deterministic mode (map sorting opt-in)
+// A message is a sequence of (tag, value) pairs terminated by a single 0x00
+// end marker. Tags use one of two encodings:
 //
-// Tag encoding:
-//   Fields 1-15:  [fieldNum:4][wireType:3][0:1] = single byte
-//   Fields 16+:   [0:4][wireType:3][1:1] followed by varint fieldNum
-//   End marker:   0x00 (fieldNum=0, wireType=0, extended=0)
+//	Fields 1-15:  [fieldNum:4][wireType:3][0:1]  — single byte
+//	Fields 16+:   [0:4][wireType:3][1:1] followed by varint fieldNum
+//	End marker:   0x00 (fieldNum=0, wireType=0, extended=0)
 
 const (
-	// EndMarker signals the end of a struct's fields
+	// EndMarker signals the end of a struct's fields.
 	EndMarker byte = 0x00
 
-	// tagExtendedBit indicates the field number is in the following varint
+	// tagExtendedBit indicates the field number is in the following varint.
 	tagExtendedBit byte = 0x01
 
-	// tagWireTypeMask extracts the wire type from a compact tag
+	// tagWireTypeMask extracts the wire type from a tag byte.
 	tagWireTypeMask byte = 0x0E
 
-	// tagWireTypeShift is the bit shift for wire type in compact tag
+	// tagWireTypeShift is the bit shift for wire type in a tag byte.
 	tagWireTypeShift = 1
 
-	// tagFieldNumShift is the bit shift for field number in compact tag
+	// tagFieldNumShift is the bit shift for field number in a compact tag byte.
 	tagFieldNumShift = 4
 
-	// maxCompactFieldNum is the maximum field number that fits in a compact tag
+	// maxCompactFieldNum is the maximum field number that fits in a compact tag.
 	maxCompactFieldNum = 15
 )
 
-// V2 Wire Types (simplified from V1)
+// Wire types.
 const (
-	// WireTypeV2Varint is for integers, bools, enums (unsigned varint)
-	WireTypeV2Varint byte = 0
+	// WireVarint is for unsigned integers, bools, and enums (LEB128).
+	WireVarint byte = 0
 
-	// WireTypeV2Fixed64 is for fixed 64-bit values (float64, fixed64)
-	WireTypeV2Fixed64 byte = 1
+	// WireFixed64 is for fixed 64-bit values (float64, fixed64).
+	WireFixed64 byte = 1
 
-	// WireTypeV2Bytes is for length-prefixed data (string, bytes, messages, packed arrays)
-	WireTypeV2Bytes byte = 2
+	// WireBytes is for length-prefixed payloads (string, bytes, message,
+	// packed array).
+	WireBytes byte = 2
 
-	// WireTypeV2Fixed32 is for fixed 32-bit values (float32, fixed32)
-	WireTypeV2Fixed32 byte = 3
+	// WireFixed32 is for fixed 32-bit values (float32, fixed32).
+	WireFixed32 byte = 3
 
-	// WireTypeV2SVarint is for signed integers (zigzag encoded)
-	WireTypeV2SVarint byte = 4
+	// WireSVarint is for signed integers (ZigZag-LEB128).
+	WireSVarint byte = 4
 )
 
-// EncodeCompactTag encodes a field tag in compact format.
-// Returns the encoded bytes.
-func EncodeCompactTag(fieldNum int, wireType byte) []byte {
+// EncodeTag encodes a field tag and returns the encoded bytes.
+func EncodeTag(fieldNum int, wireType byte) []byte {
 	if fieldNum <= 0 {
-		return nil // Invalid field number
+		return nil
 	}
 
 	if fieldNum <= maxCompactFieldNum {
@@ -71,7 +67,6 @@ func EncodeCompactTag(fieldNum int, wireType byte) []byte {
 	// Extended format: marker byte + varint field number
 	marker := (wireType << tagWireTypeShift) | tagExtendedBit
 	result := []byte{marker}
-	// Append varint-encoded field number
 	for fieldNum >= 0x80 {
 		result = append(result, byte(fieldNum)|0x80)
 		fieldNum >>= 7
@@ -80,16 +75,15 @@ func EncodeCompactTag(fieldNum int, wireType byte) []byte {
 	return result
 }
 
-// DecodeCompactTag decodes a field tag from the compact format.
+// DecodeTag decodes a field tag from data.
 // Returns fieldNum (0 for end marker), wireType, and bytes consumed.
-func DecodeCompactTag(data []byte) (fieldNum int, wireType byte, n int) {
+func DecodeTag(data []byte) (fieldNum int, wireType byte, n int) {
 	if len(data) == 0 {
 		return 0, 0, 0
 	}
 
 	tag := data[0]
 
-	// Check for end marker
 	if tag == EndMarker {
 		return 0, 0, 1
 	}
@@ -107,27 +101,30 @@ func DecodeCompactTag(data []byte) (fieldNum int, wireType byte, n int) {
 		return 0, 0, 0 // Need more data
 	}
 
-	// Decode varint with safety limits matching internal/wire/varint.go
+	var fn uint64
 	var shift uint
 	n = 1
 	for i := 1; i < len(data) && i <= wire.MaxVarintLen64; i++ {
 		b := data[i]
 
-		// At the 10th varint byte (index 10 in data), check for overflow
-		// We've consumed 63 bits (9 bytes * 7 bits); only 1 more bit allowed
+		// At the 10th varint byte (index 10 in data), check for overflow.
+		// We've consumed 63 bits (9 bytes * 7 bits); only 1 more bit allowed.
 		if i == 10 {
 			if b >= 0x80 {
 				return 0, 0, 0 // Varint too long
 			}
 			if b > 1 {
-				return 0, 0, 0 // Would overflow uint64/int
+				return 0, 0, 0 // Would overflow uint64
 			}
 		}
 
-		fieldNum |= int(b&0x7F) << shift
+		fn |= uint64(b&0x7F) << shift
 		n++
 		if b < 0x80 {
-			return fieldNum, wireType, n
+			if fn > uint64(wire.MaxFieldNumber) {
+				return 0, 0, 0 // Field number too large
+			}
+			return int(fn), wireType, n
 		}
 		shift += 7
 	}
@@ -136,8 +133,8 @@ func DecodeCompactTag(data []byte) (fieldNum int, wireType byte, n int) {
 	return 0, 0, 0
 }
 
-// CompactTagSize returns the encoded size of a compact tag.
-func CompactTagSize(fieldNum int) int {
+// TagSize returns the encoded size of a tag.
+func TagSize(fieldNum int) int {
 	if fieldNum <= maxCompactFieldNum {
 		return 1
 	}
@@ -150,8 +147,8 @@ func CompactTagSize(fieldNum int) int {
 	return size + 1
 }
 
-// WriteCompactTag writes a compact tag to the writer.
-func (w *Writer) WriteCompactTag(fieldNum int, wireType byte) {
+// WriteTag writes a field tag to the writer.
+func (w *Writer) WriteTag(fieldNum int, wireType byte) {
 	if !w.checkWrite() {
 		return
 	}
@@ -191,9 +188,9 @@ func (w *Writer) WriteEndMarker() {
 	w.buf = append(w.buf, EndMarker)
 }
 
-// ReadCompactTag reads a compact tag from the reader.
+// ReadTag reads a field tag from the reader.
 // Returns fieldNum=0 for end marker or on error.
-func (r *Reader) ReadCompactTag() (fieldNum int, wireType byte) {
+func (r *Reader) ReadTag() (fieldNum int, wireType byte) {
 	if r.err != nil || r.pos >= len(r.data) {
 		return 0, 0
 	}
@@ -201,7 +198,6 @@ func (r *Reader) ReadCompactTag() (fieldNum int, wireType byte) {
 	tag := r.data[r.pos]
 	r.pos++
 
-	// Check for end marker
 	if tag == EndMarker {
 		return 0, 0
 	}
@@ -215,14 +211,14 @@ func (r *Reader) ReadCompactTag() (fieldNum int, wireType byte) {
 	}
 
 	// Extended format: read varint field number with safety limits
-	// Matches the rigor of internal/wire/varint.go:DecodeUvarint
+	var fn uint64
 	var shift uint
 	for i := 0; i < wire.MaxVarintLen64 && r.pos < len(r.data); i++ {
 		b := r.data[r.pos]
 		r.pos++
 
-		// At the 10th byte (index 9), check for overflow
-		// We've consumed 63 bits; only 1 more bit allowed
+		// At the 10th byte (index 9), check for overflow.
+		// We've consumed 63 bits; only 1 more bit allowed.
 		if i == 9 {
 			if b >= 0x80 {
 				r.setError(ErrInvalidVarint)
@@ -234,9 +230,13 @@ func (r *Reader) ReadCompactTag() (fieldNum int, wireType byte) {
 			}
 		}
 
-		fieldNum |= int(b&0x7F) << shift
+		fn |= uint64(b&0x7F) << shift
 		if b < 0x80 {
-			return fieldNum, wireType
+			if fn > uint64(wire.MaxFieldNumber) {
+				r.setError(ErrOverflow)
+				return 0, 0
+			}
+			return int(fn), wireType
 		}
 		shift += 7
 	}
@@ -246,14 +246,14 @@ func (r *Reader) ReadCompactTag() (fieldNum int, wireType byte) {
 	return 0, 0
 }
 
-// SkipValueV2 skips a value based on V2 wire type.
-func (r *Reader) SkipValueV2(wireType byte) {
+// SkipValue skips a value based on its wire type.
+func (r *Reader) SkipValue(wireType byte) {
 	if r.err != nil {
 		return
 	}
 
 	switch wireType {
-	case WireTypeV2Varint, WireTypeV2SVarint:
+	case WireVarint, WireSVarint:
 		// Skip varint with max length limit
 		for i := 0; i < wire.MaxVarintLen64 && r.pos < len(r.data); i++ {
 			b := r.data[r.pos]
@@ -265,19 +265,19 @@ func (r *Reader) SkipValueV2(wireType byte) {
 		// Either ran out of data or exceeded max varint length
 		r.setError(ErrInvalidVarint)
 
-	case WireTypeV2Fixed32:
+	case WireFixed32:
 		if !r.ensure(4) {
 			return
 		}
 		r.pos += 4
 
-	case WireTypeV2Fixed64:
+	case WireFixed64:
 		if !r.ensure(8) {
 			return
 		}
 		r.pos += 8
 
-	case WireTypeV2Bytes:
+	case WireBytes:
 		// Read length, then skip that many bytes
 		length := r.ReadUvarint()
 		if r.err != nil {
