@@ -216,10 +216,22 @@ describe('sortMapKeysLexicographic', () => {
     expect(sorted).toEqual([]);
   });
 
-  it('handles unicode', () => {
+  it('handles unicode (BMP)', () => {
     const keys = ['世界', 'hello', 'мир'];
     const sorted = sortMapKeysLexicographic(keys);
     expect(sorted).toEqual(['hello', 'мир', '世界']);
+  });
+
+  it('sorts non-BMP keys by UTF-8 bytes (matches Go sort.Strings)', () => {
+    //  (BMP private-use) encodes to UTF-8 bytes 0xEE 0x80 0x80.
+    // 😀 (U+1F600) encodes to UTF-8 bytes 0xF0 0x9F 0x98 0x80.
+    // In UTF-8 byte order:  < 😀.
+    // In default JS UTF-16 code-unit order: 😀ʼs surrogate pair starts at
+    // 0xD83D, which sorts BEFORE 0xE000 — the WRONG order. This test
+    // catches a regression to that bug.
+    const keys = ['', '😀'];
+    const sorted = sortMapKeysLexicographic(keys);
+    expect(sorted).toEqual(['', '😀']);
   });
 });
 

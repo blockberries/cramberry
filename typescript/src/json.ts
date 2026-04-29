@@ -189,12 +189,33 @@ export function parseNumberFromJSON(value: string | number): number {
   return Math.floor(value);
 }
 
+const __sortKeyEncoder = new TextEncoder();
+
+/**
+ * Compares two strings by raw UTF-8 byte order, matching Go's `sort.Strings`.
+ *
+ * The default JS string comparator (`<`/`>`) uses UTF-16 code unit order,
+ * which agrees with UTF-8 for BMP characters but disagrees for code points
+ * `>= U+10000` (which encode as a surrogate pair `0xD800..0xDFFF` in UTF-16
+ * but as bytes starting with `0xF0` in UTF-8). Using this comparator ensures
+ * non-BMP keys sort the same way they do on the Go side.
+ */
+export function compareUtf8(a: string, b: string): number {
+  const ab = __sortKeyEncoder.encode(a);
+  const bb = __sortKeyEncoder.encode(b);
+  const n = Math.min(ab.length, bb.length);
+  for (let i = 0; i < n; i++) {
+    if (ab[i] !== bb[i]) return ab[i] - bb[i];
+  }
+  return ab.length - bb.length;
+}
+
 /**
  * Sorts map keys lexicographically by UTF-8 byte order.
  * This ensures deterministic JSON output for maps.
  */
 export function sortMapKeysLexicographic(keys: string[]): string[] {
-  return [...keys].sort();
+  return [...keys].sort(compareUtf8);
 }
 
 /**

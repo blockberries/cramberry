@@ -104,6 +104,7 @@ export {
   parseBigIntFromJSON,
   parseNumberFromJSON,
   sortMapKeysLexicographic,
+  compareUtf8,
   escapeJSONString,
   JSONWriter,
   JSONReader,
