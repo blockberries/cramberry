@@ -500,6 +500,20 @@ func (c *tsContext) jsonEncodeField(idx int, f *schema.Field) string {
 
 	// Generate value encoding
 	valueCode := c.jsonEncodeValue(f.Type, "msg."+fieldName, f.Repeated)
+
+	// Optional non-pointer fields have TS type `T | undefined`; the
+	// inner encoders (escapeJSONString, formatNumberToString, etc.)
+	// require T. Without this guard, `tsc --strict` rejects the
+	// generated code with TS2345 ("undefined not assignable").
+	if f.Optional {
+		if _, isPtr := f.Type.(*schema.PointerType); !isPtr {
+			code.WriteString(fmt.Sprintf("  if (msg.%s !== undefined && msg.%s !== null) {\n", fieldName, fieldName))
+			code.WriteString(strings.ReplaceAll(valueCode, "  result", "    result"))
+			code.WriteString("  } else {\n    result += 'null';\n  }\n")
+			return code.String()
+		}
+	}
+
 	code.WriteString(valueCode)
 
 	return code.String()
@@ -674,14 +688,20 @@ func (c *tsContext) jsonDecodeValue(t schema.TypeRef, targetVar string, sourceVa
 }
 
 // jsonDecodeScalar generates code to decode a scalar JSON value.
+//
+// `sourceVar` may be typed as `unknown` (e.g. when iterating a JSON
+// object via Object.entries) so each parser is wrapped with `as
+// string | number` (or `as string | number | bigint` for the bigint
+// variant). The runtime parsers do their own type-narrowing inside;
+// the cast is purely to satisfy `tsc --strict`.
 func (c *tsContext) jsonDecodeScalar(t *schema.ScalarType, targetVar string, sourceVar string) string {
 	switch t.Name {
 	case "bool":
 		return fmt.Sprintf("    %s = Boolean(%s);\n", targetVar, sourceVar)
 	case "int8", "int16", "int32", "uint8", "uint16", "uint32":
-		return fmt.Sprintf("    %s = parseNumberFromJSON(%s);\n", targetVar, sourceVar)
+		return fmt.Sprintf("    %s = parseNumberFromJSON(%s as string | number);\n", targetVar, sourceVar)
 	case "int64", "uint64":
-		return fmt.Sprintf("    %s = parseBigIntFromJSON(%s);\n", targetVar, sourceVar)
+		return fmt.Sprintf("    %s = parseBigIntFromJSON(%s as string | number);\n", targetVar, sourceVar)
 	case "float32", "float64":
 		return fmt.Sprintf("    %s = Number(%s);\n", targetVar, sourceVar)
 	case "string":
@@ -977,8 +997,10 @@ export function fromJSON_{{tsMessageType $msg}}(json: string): {{tsMessageType $
     throw new Error('expected JSON object');
   }
 
-  // Check for unknown fields (strict mode)
-  const allowedFields = new Set([
+  // Check for unknown fields (strict mode). Explicit string type
+  // arg keeps tsc --strict happy when the message has zero fields
+  // (otherwise the empty array literal infers as never[]).
+  const allowedFields = new Set<string>([
 {{- range $msg.Fields}}
     '{{jsonFieldName .}}',
 {{- end}}

@@ -2,7 +2,8 @@
 .PHONY: tidy deps verify check ci pre-commit generate-test
 .PHONY: examples example-basic example-streaming example-polymorphic
 .PHONY: schema-generate schema-extract
-.PHONY: ts-build ts-test ts-fmt ts-lint rust-build rust-test rust-fmt rust-lint rust-codegen-check
+.PHONY: ts-build ts-test ts-fmt ts-lint rust-build rust-test rust-fmt rust-lint
+.PHONY: rust-codegen-check ts-codegen-check go-codegen-check codegen-check
 .PHONY: runtimes runtimes-test ts-integration-test rust-integration-test integration-test
 .PHONY: lint-all fmt-all
 
@@ -191,7 +192,17 @@ rust-codegen-check: build ## Generate + compile-check Rust output for every exam
 	@echo "Compile-checking generated Rust output..."
 	@./scripts/rust-codegen-check.sh
 
-integration-test: ts-integration-test rust-integration-test rust-codegen-check ## Run cross-language integration tests
+ts-codegen-check: build ts-build ## Generate + tsc-check TypeScript output for every schema
+	@echo "Compile-checking generated TypeScript output..."
+	@./scripts/ts-codegen-check.sh
+
+go-codegen-check: build ## Generate + compile-check Go output for every schema
+	@echo "Compile-checking generated Go output..."
+	@./scripts/go-codegen-check.sh
+
+codegen-check: go-codegen-check ts-codegen-check rust-codegen-check ## Compile-check generated output for all three languages
+
+integration-test: ts-integration-test rust-integration-test codegen-check ## Run cross-language integration tests
 
 runtimes: ts-build rust-build ## Build all cross-language runtimes
 

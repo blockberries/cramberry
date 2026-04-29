@@ -67,14 +67,12 @@ export interface StreamReaderOptions {
  */
 export class StreamWriter {
   private buffer: Uint8Array;
-  private view: DataView;
   private pos: number;
   private closed: boolean;
 
   constructor(options: StreamWriterOptions = {}) {
     const capacity = options.initialCapacity ?? DEFAULT_STREAM_BUFFER_CAPACITY;
     this.buffer = new Uint8Array(capacity);
-    this.view = new DataView(this.buffer.buffer);
     this.pos = 0;
     this.closed = false;
   }
@@ -110,7 +108,6 @@ export class StreamWriter {
     const newBuffer = new Uint8Array(newCapacity);
     newBuffer.set(this.buffer.subarray(0, this.pos));
     this.buffer = newBuffer;
-    this.view = new DataView(this.buffer.buffer);
   }
 
   /**

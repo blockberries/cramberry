@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (TypeScript codegen — `tsc --strict` errors)
+
+The TypeScript generator emitted code that didn't pass `tsc --strict`
+for any non-trivial schema. Verified by tsc-checking the output of
+every example/testdata schema against the runtime.
+
+- **Optional non-pointer field encode** passed `Option<T>` (i.e.
+  `string | undefined`) directly to helpers like `escapeJSONString`
+  that require `T`. The JSON encoder now wraps each optional field
+  in an `if (msg.x !== undefined && msg.x !== null) { ... } else
+  { result += 'null'; }` block.
+- **`parseNumberFromJSON` / `parseBigIntFromJSON` got `unknown`** from
+  `Object.entries` and from `obj['key']` lookups — `tsc --strict`
+  rejected the call. Added `as string | number` casts. The runtime
+  parsers do their own narrowing internally, so the cast is purely
+  a strict-mode shim.
+- **`new Set([])` for empty allowed-fields list** inferred as
+  `Set<never>`, so `allowedFields.has(key: string)` failed. Now
+  emits `new Set<string>([])` so the empty case still typechecks.
+- **TS runtime `StreamWriter.view`** was assigned twice but never
+  read — `tsup`'s DTS build (strict mode) failed with TS6133.
+  Removed the dead field.
+- **Unused `decodeTag` import in `reader.ts`** triggered the same
+  TS6133. Dropped from the import list.
+
+### Added (tooling)
+
+- New `make ts-codegen-check` and `make go-codegen-check` targets,
+  matching the existing `rust-codegen-check`. Each generates output
+  for every schema in `examples/` and `testdata/` and compiles it
+  against the appropriate runtime. Wired into `make codegen-check`
+  (the umbrella) and `make integration-test`. CI now catches any
+  generator output that doesn't compile.
+
 ### Fixed (Rust codegen — multiple compile errors)
 
 The Rust generator emitted code that did not type-check for any

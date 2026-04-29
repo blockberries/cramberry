@@ -1,5 +1,5 @@
 import { BufferUnderflowError, InvalidWireTypeError, DecodeError } from "./errors";
-import { WireType, TypeID, FieldTag, decodeTag, zigzagDecode, zigzagDecode64, END_MARKER, TAG_EXTENDED_BIT, TAG_WIRE_TYPE_MASK, TAG_WIRE_TYPE_SHIFT, TAG_FIELD_NUM_SHIFT, MAX_FIELD_NUMBER } from "./types";
+import { WireType, TypeID, FieldTag, zigzagDecode, zigzagDecode64, END_MARKER, TAG_EXTENDED_BIT, TAG_WIRE_TYPE_MASK, TAG_WIRE_TYPE_SHIFT, TAG_FIELD_NUM_SHIFT, MAX_FIELD_NUMBER } from "./types";
 
 // Module-level singleton to avoid repeated instantiation
 const textDecoder = new TextDecoder();
