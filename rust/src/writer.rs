@@ -1,6 +1,6 @@
 //! Cramberry encoder.
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::types::{zigzag_encode_32, zigzag_encode_64, FieldTag, WireType, END_MARKER};
 
 /// Canonical 32-bit quiet NaN: sign 0, exponent all 1s, only the quiet bit set.
@@ -85,7 +85,15 @@ impl Writer {
     }
 
     /// Writes a V2 compact field tag.
+    ///
+    /// Field number 0 is reserved for the end marker; calling
+    /// `write_tag(0, ...)` is a programming error and used to silently
+    /// emit no bytes (so the next value byte was decoded as a
+    /// mis-shaped tag). Now it errors.
     pub fn write_tag(&mut self, field_number: u32, wire_type: WireType) -> Result<()> {
+        if field_number == 0 {
+            return Err(Error::InvalidFieldNumber(field_number));
+        }
         let tag = FieldTag::new(field_number, wire_type);
         let encoded = tag.encode_compact();
         self.buffer.extend_from_slice(&encoded);
@@ -199,15 +207,20 @@ impl Writer {
     }
 
     /// Writes a length-prefixed string.
+    ///
+    /// Uses the 64-bit varint writer so a string longer than `u32::MAX`
+    /// bytes (4 GiB) doesn't silently truncate its length prefix — Go's
+    /// canon encodes lengths as `uint64`, and `usize as u32` would wrap.
     pub fn write_string(&mut self, value: &str) -> Result<()> {
-        self.write_varint(value.len() as u32)?;
+        self.write_varint64(value.len() as u64)?;
         self.buffer.extend_from_slice(value.as_bytes());
         Ok(())
     }
 
-    /// Writes length-prefixed bytes.
+    /// Writes length-prefixed bytes. See `write_string` re: the 64-bit
+    /// varint length prefix.
     pub fn write_length_prefixed_bytes(&mut self, data: &[u8]) -> Result<()> {
-        self.write_varint(data.len() as u32)?;
+        self.write_varint64(data.len() as u64)?;
         self.buffer.extend_from_slice(data);
         Ok(())
     }

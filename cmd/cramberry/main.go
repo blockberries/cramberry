@@ -340,7 +340,13 @@ Options:`)
 		formatted := schema.FormatSchema(s)
 
 		if *write {
-			if err := os.WriteFile(inputFile, []byte(formatted), 0o644); err != nil {
+			// Atomic write via temp + rename: a crash mid-write must not
+			// leave the user's source file truncated.
+			err := atomicfile.Write(inputFile, 0o644, func(w io.Writer) error {
+				_, werr := w.Write([]byte(formatted))
+				return werr
+			})
+			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error writing %s: %v\n", inputFile, err)
 				hasErrors = true
 				continue

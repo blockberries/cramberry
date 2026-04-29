@@ -697,3 +697,42 @@ message User {
 		t.Errorf("expected package 'test', got %q", schema.Package.Name)
 	}
 }
+
+// TestLoader_RejectsImportTraversal exercises the containment check on
+// import paths. A `.cram` file that imports "../../something" should
+// not resolve outside the importer's directory or any search path.
+func TestLoader_RejectsImportTraversal(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create the importing file in a sub-directory.
+	subdir := filepath.Join(dir, "sub")
+	if err := os.MkdirAll(subdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	importerPath := filepath.Join(subdir, "main.cram")
+	if err := os.WriteFile(importerPath, []byte(`package test;
+import "../escape.cram";
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Create the file the importer would escape to. It exists so the
+	// containment check, not the os.Stat, is what rejects the import.
+	if err := os.WriteFile(filepath.Join(dir, "escape.cram"), []byte(`package test;`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	l := NewLoader()
+	resolved := l.resolveImportPath("../escape.cram", subdir)
+	if resolved != "" {
+		t.Fatalf("expected empty resolution for traversal import, got %q", resolved)
+	}
+
+	// A non-traversing import in the same directory should still resolve.
+	if err := os.WriteFile(filepath.Join(subdir, "ok.cram"), []byte(`package test;`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	resolved = l.resolveImportPath("ok.cram", subdir)
+	if resolved == "" {
+		t.Fatal("non-traversing import should resolve")
+	}
+}

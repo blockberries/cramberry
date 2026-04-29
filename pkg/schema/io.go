@@ -116,24 +116,55 @@ func (l *Loader) loadFileInternal(absPath string, importChain []string) (*Schema
 }
 
 // resolveImportPath resolves an import path to an absolute file path.
+//
+// The import path comes from the source `.cram` file's `import "..."`
+// directive, which may be attacker-controlled. To prevent traversal
+// (e.g. `import "../../../../etc/passwd"`), the resolved file must be
+// physically contained within the directory it was searched in: any
+// candidate whose absolute path escapes `baseDir` / a `SearchPaths`
+// entry is rejected.
 func (l *Loader) resolveImportPath(importPath, baseDir string) string {
 	// Try relative to current file first
-	candidate := filepath.Join(baseDir, importPath)
-	if _, err := os.Stat(candidate); err == nil {
-		absPath, _ := filepath.Abs(candidate)
-		return absPath
+	if p := containedAbs(baseDir, importPath); p != "" {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
 	}
 
 	// Try search paths
 	for _, searchPath := range l.SearchPaths {
-		candidate := filepath.Join(searchPath, importPath)
-		if _, err := os.Stat(candidate); err == nil {
-			absPath, _ := filepath.Abs(candidate)
-			return absPath
+		if p := containedAbs(searchPath, importPath); p != "" {
+			if _, err := os.Stat(p); err == nil {
+				return p
+			}
 		}
 	}
 
 	return ""
+}
+
+// containedAbs joins root and rel into an absolute path, then verifies
+// the result is still rooted at root. Returns "" if the resolved path
+// escapes root (e.g. via `..` segments) or if either path can't be
+// absoluted.
+func containedAbs(root, rel string) string {
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return ""
+	}
+	candidate := filepath.Join(rootAbs, rel)
+	candidateAbs, err := filepath.Abs(candidate)
+	if err != nil {
+		return ""
+	}
+	// candidate must be exactly rootAbs or a descendant. filepath.Rel
+	// returning a path that starts with ".." means the candidate
+	// escaped the root.
+	relPath, err := filepath.Rel(rootAbs, candidateAbs)
+	if err != nil || relPath == ".." || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) {
+		return ""
+	}
+	return candidateAbs
 }
 
 // AllSchemas returns all loaded schemas.

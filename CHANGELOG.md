@@ -7,6 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (consensus-critical)
+
+- **Non-canonical varint encodings now rejected** in Go and Rust. Two
+  byte sequences could decode to the same value (e.g. `0x80 0x00` and
+  `0x00` both decoded to 0), so a hash over received bytes diverged
+  across runtimes for the same logical input — a silent consensus
+  split. The decoders now return `ErrVarintNonCanonical` (Go) /
+  `Error::VarintOverflow` (Rust) on any multi-byte varint whose
+  terminating byte is zero. The fast-path `Reader.ReadUvarintInline`
+  and the standalone tag decoders (`DecodeTag`, `Reader.ReadTag`)
+  carry the same check.
+- **Length-prefix amplification DoS** in `decodeMap`, `decodeSlice`,
+  and `decodePackedSlice`: a 3-byte varint header could claim
+  1,000,000 entries (the default `MaxArrayLength` / `MaxMapSize`),
+  forcing a multi-MB allocation against a few input bytes before any
+  body byte was read. The decoders now bound the declared count by
+  the reader's remaining bytes — every entry needs at least one
+  wire byte — so the amplification factor is at most ~1×.
+- **Rust `Writer::write_string` / `write_length_prefixed_bytes`** now
+  use the 64-bit varint writer for the length prefix. The previous
+  `value.len() as u32` silently wrapped strings larger than
+  `u32::MAX` bytes, producing a corrupt length prefix that Go and
+  Rust would each parse differently.
+- **Rust `StreamReader::read_varint`** now applies the same 10th-byte
+  overflow check the in-memory `Reader::read_varint64` does and the
+  same canonical-encoding rejection. Without the checks, a crafted
+  10-byte varint with byte 9 = `0x10` would silently shift bits
+  beyond 64 and return a wrong large value.
+- **Rust `Writer::write_tag(0, ...)`** now returns
+  `Error::InvalidFieldNumber(0)` instead of silently emitting an
+  empty `Vec<u8>`. The empty-emit case meant the next value byte was
+  decoded as a malformed tag, corrupting the rest of the message.
+- **TypeScript `Writer.writeVarint`** validates `value ≤ u32::MAX`
+  and throws on overflow. The previous `value >>>= 7` coerced to
+  int32, so a length above 2^32 silently became 0 followed by all
+  the data bytes — a corrupt frame. `writeString` and
+  `writeLengthPrefixedBytes` now route through `writeVarint64` so
+  any `bytes.length` is encoded losslessly.
+
+### Fixed (correctness)
+
+- **Streaming pool didn't reset options**: `StreamWriter::Reset` and
+  `StreamReader::Reset` now restore `DefaultOptions`. A pooled
+  writer that was previously used with `SecureLimits` would
+  otherwise inherit those tighter limits and reject otherwise-valid
+  input.
+- **`PutStreamWriter` documented**: the function does not flush; the
+  contract is now clearly that the caller must call `Flush()` (or
+  `Close()`) before returning the writer to the pool.
+- **`atomicfile.Write` no longer leaks the file descriptor on panic**:
+  if the user-supplied write callback panicked, the deferred cleanup
+  removed the temp file but did not close the file handle. The close
+  is now idempotent and always runs.
+- **`cramberry format -w` now uses `atomicfile.Write`**: the previous
+  `os.WriteFile` truncated the user's source `.cram` first, so a
+  crash mid-write left it half-written or empty.
+- **Schema import path traversal**: `(*Loader).resolveImportPath` now
+  rejects any `import "..."` directive whose resolved path escapes
+  the importing file's directory or any `SearchPaths` entry. A
+  malicious `.cram` file with `import "../../etc/passwd"` previously
+  resolved to wherever `filepath.Join` collapsed to.
+
 ### Fixed
 
 - **T1-10 (per-field `,omitempty`)**: the reflection marshaller now

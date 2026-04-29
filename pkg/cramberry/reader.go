@@ -436,10 +436,17 @@ func (r *Reader) ReadUvarintInline() uint64 {
 		return uint64(b)
 	}
 
-	// Fast path: two bytes (value < 16384)
+	// Fast path: two bytes (value < 16384). The second byte must be
+	// non-zero — otherwise the varint is non-canonical (the value would
+	// fit in one byte). The slow path's ErrVarintNonCanonical guards
+	// the same invariant for longer varints.
 	if r.pos+1 < len(r.data) {
 		b2 := r.data[r.pos+1]
 		if b2 < 0x80 {
+			if b2 == 0 {
+				r.setErrorAt(wire.ErrVarintNonCanonical, "non-canonical varint")
+				return 0
+			}
 			r.pos += 2
 			return uint64(b&0x7f) | uint64(b2)<<7
 		}

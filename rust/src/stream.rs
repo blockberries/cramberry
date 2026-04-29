@@ -210,16 +210,38 @@ impl<R: Read> StreamReader<R> {
     }
 
     /// Reads a varint from the stream.
+    ///
+    /// Mirrors `Reader::read_varint64`: the 10th byte (i==9) carries
+    /// only one usable bit (bit 63 of the result), so its data nibble
+    /// must be 0 or 1 and the continuation bit must be clear.
+    /// Otherwise the shift would silently drop the high bits.
     fn read_varint(&mut self) -> Result<u64> {
         let mut result: u64 = 0;
         let mut shift = 0;
         let mut buf = [0u8; 1];
 
-        for _ in 0..10 {
+        for i in 0..10 {
             self.inner.read_exact(&mut buf).map_err(Error::from)?;
             let b = buf[0];
+            if i == 9 {
+                // Continuation bit on the 10th byte means an 11+ byte
+                // varint, which can't fit in u64.
+                if b >= 0x80 {
+                    return Err(Error::VarintOverflow);
+                }
+                // Data portion >1 means bit-65+ is set in the value.
+                if b > 1 {
+                    return Err(Error::VarintOverflow);
+                }
+            }
             result |= ((b & 0x7f) as u64) << shift;
             if b & 0x80 == 0 {
+                // Canonical-encoding check: a multi-byte varint whose
+                // terminating byte is zero could have been encoded in
+                // one fewer byte, so reject as non-canonical.
+                if i > 0 && b == 0 {
+                    return Err(Error::VarintOverflow);
+                }
                 return Ok(result);
             }
             shift += 7;

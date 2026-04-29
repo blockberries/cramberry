@@ -24,6 +24,10 @@ pub enum Error {
     #[error("invalid wire type: {0}")]
     InvalidWireType(u8),
 
+    /// Invalid field number (must be ≥ 1).
+    #[error("invalid field number: {0}")]
+    InvalidFieldNumber(u32),
+
     /// Unknown type ID.
     #[error("unknown type ID: {0}")]
     UnknownTypeId(u32),

@@ -63,6 +63,12 @@ func GetStreamWriter(w io.Writer) *StreamWriter {
 }
 
 // PutStreamWriter returns a StreamWriter to the pool.
+//
+// Callers MUST call Flush (or Close) before PutStreamWriter; otherwise
+// any data still in the underlying bufio.Writer is silently dropped on
+// the floor when the writer's reference is cleared. PutStreamWriter
+// does not flush itself because the underlying io.Writer may already be
+// closed by the caller.
 func PutStreamWriter(sw *StreamWriter) {
 	if sw == nil {
 		return
@@ -72,6 +78,11 @@ func PutStreamWriter(sw *StreamWriter) {
 }
 
 // Reset resets the StreamWriter to write to a new io.Writer.
+//
+// Resetting also restores the writer's options to DefaultOptions: the
+// pool returned a writer that may have been used by an earlier caller
+// with custom options (e.g. SecureLimits), and the next caller would
+// otherwise inherit those silently and reject otherwise-valid input.
 func (sw *StreamWriter) Reset(w io.Writer) {
 	if sw.w == nil {
 		sw.w = bufio.NewWriterSize(w, 4096)
@@ -81,6 +92,7 @@ func (sw *StreamWriter) Reset(w io.Writer) {
 	sw.depth = 0
 	sw.err = nil
 	sw.closed = false
+	sw.opts = DefaultOptions
 }
 
 // SetOptions updates the writer's options.
@@ -469,6 +481,9 @@ func PutStreamReader(sr *StreamReader) {
 }
 
 // Reset resets the StreamReader to read from a new io.Reader.
+//
+// As with StreamWriter.Reset, this restores DefaultOptions so a pooled
+// reader does not inherit a previous caller's custom limits.
 func (sr *StreamReader) Reset(r io.Reader) {
 	if sr.r == nil {
 		sr.r = bufio.NewReaderSize(r, 4096)
@@ -477,6 +492,7 @@ func (sr *StreamReader) Reset(r io.Reader) {
 	}
 	sr.depth = 0
 	sr.err = nil
+	sr.opts = DefaultOptions
 }
 
 // SetOptions updates the reader's options.

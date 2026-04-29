@@ -121,6 +121,13 @@ func DecodeTag(data []byte) (fieldNum int, wireType byte, n int) {
 		fn |= uint64(b&0x7F) << shift
 		n++
 		if b < 0x80 {
+			// Canonical-encoding check: a multi-byte field-number varint
+			// whose terminating byte is zero could have been encoded in
+			// one fewer byte. (i==1 is the first varint byte; i>1 means
+			// at least two bytes have been consumed.)
+			if i > 1 && b == 0 {
+				return 0, 0, 0
+			}
 			if fn > uint64(wire.MaxFieldNumber) {
 				return 0, 0, 0 // Field number too large
 			}
@@ -232,6 +239,14 @@ func (r *Reader) ReadTag() (fieldNum int, wireType byte) {
 
 		fn |= uint64(b&0x7F) << shift
 		if b < 0x80 {
+			// Canonical-encoding check: a multi-byte field-number
+			// varint whose terminating byte is zero could have been
+			// encoded in one fewer byte (i==0 is single-byte path, so
+			// i>0 means we've read at least two bytes).
+			if i > 0 && b == 0 {
+				r.setError(wire.ErrVarintNonCanonical)
+				return 0, 0
+			}
 			if fn > uint64(wire.MaxFieldNumber) {
 				r.setError(ErrOverflow)
 				return 0, 0

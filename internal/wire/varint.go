@@ -18,6 +18,12 @@ var (
 
 	// ErrVarintTooLong indicates the varint encoding exceeds maximum length.
 	ErrVarintTooLong = errors.New("cramberry: varint exceeds maximum length")
+
+	// ErrVarintNonCanonical indicates the varint is encoded in more bytes
+	// than necessary (e.g. 0x80 0x00 for value 0). Canonical encoding is
+	// required so two byte sequences cannot decode to the same value —
+	// otherwise hashes over received bytes diverge across validators.
+	ErrVarintNonCanonical = errors.New("cramberry: non-canonical varint")
 )
 
 // AppendUvarint appends the varint encoding of v to buf and returns the extended buffer.
@@ -95,7 +101,13 @@ func DecodeUvarint(data []byte) (uint64, int, error) {
 		v |= uint64(b&0x7f) << shift
 
 		if b < 0x80 {
-			// This is the last byte
+			// Canonical-encoding check: a multi-byte varint whose final
+			// byte is zero could have been encoded in one fewer byte, so
+			// the value is not canonical. (Single-byte varints are
+			// handled by the fast path above and never reach here.)
+			if i > 0 && b == 0 {
+				return 0, 0, ErrVarintNonCanonical
+			}
 			return v, i + 1, nil
 		}
 

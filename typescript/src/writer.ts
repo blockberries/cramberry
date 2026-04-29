@@ -94,9 +94,21 @@ export class Writer {
   }
 
   /**
-   * Writes an unsigned varint (LEB128).
+   * Writes an unsigned varint (LEB128) up to 32 bits.
+   *
+   * Throws if `value` exceeds `0xFFFFFFFF` — JavaScript's `>>>= 7`
+   * coerces its operand to a 32-bit integer, so a silent overflow
+   * here would produce wire bytes the Go and Rust runtimes would
+   * decode to a different value (and consensus splits). Use
+   * `writeVarint64` for length prefixes and counts that may exceed
+   * 4 GiB / 2^32.
    */
   writeVarint(value: number): void {
+    if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) {
+      throw new RangeError(
+        `writeVarint: value ${value} out of u32 range — use writeVarint64 for >2^32`
+      );
+    }
     this.ensureCapacity(5); // Max 5 bytes for 32-bit
     while (value > 0x7f) {
       this.buffer[this.pos++] = (value & 0x7f) | 0x80;
@@ -233,18 +245,25 @@ export class Writer {
 
   /**
    * Writes a length-prefixed string.
+   *
+   * The length prefix uses `writeVarint64` (BigInt) so byte lengths
+   * above 2^32 — possible for very large strings on V8 — encode
+   * losslessly. For lengths < 2^7 the BigInt path produces the same
+   * single byte as the u32 path, so this is byte-identical to Go for
+   * all reasonable inputs.
    */
   writeString(value: string): void {
     const bytes = textEncoder.encode(value);
-    this.writeVarint(bytes.length);
+    this.writeVarint64(BigInt(bytes.length));
     this.writeBytes(bytes);
   }
 
   /**
-   * Writes length-prefixed bytes.
+   * Writes length-prefixed bytes. See `writeString` for the
+   * 64-bit-length-prefix rationale.
    */
   writeLengthPrefixedBytes(data: Uint8Array): void {
-    this.writeVarint(data.length);
+    this.writeVarint64(BigInt(data.length));
     this.writeBytes(data);
   }
 

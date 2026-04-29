@@ -376,3 +376,44 @@ func FuzzSvarintRoundTrip(f *testing.F) {
 		}
 	})
 }
+
+// TestDecodeUvarint_RejectsNonCanonical exercises the canonical-encoding
+// guard. Two distinct byte sequences must never decode to the same value
+// — that would make hashes-over-bytes diverge across runtimes for the
+// same logical input.
+func TestDecodeUvarint_RejectsNonCanonical(t *testing.T) {
+	cases := []struct {
+		name  string
+		input []byte
+	}{
+		{"two-byte zero", []byte{0x80, 0x00}},
+		{"two-byte one", []byte{0x81, 0x00}},
+		{"three-byte 127", []byte{0xFF, 0x80, 0x00}},
+		{"ten-byte zero", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x00}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := DecodeUvarint(tc.input)
+			if err != ErrVarintNonCanonical {
+				t.Fatalf("expected ErrVarintNonCanonical, got %v", err)
+			}
+		})
+	}
+}
+
+func TestDecodeUvarint_AcceptsCanonical(t *testing.T) {
+	values := []uint64{0, 1, 127, 128, 16383, 16384, 1 << 21, 1 << 28, 1 << 35, 1 << 42, ^uint64(0)}
+	for _, v := range values {
+		encoded := AppendUvarint(nil, v)
+		got, n, err := DecodeUvarint(encoded)
+		if err != nil {
+			t.Errorf("canonical round-trip failed for %d: %v", v, err)
+		}
+		if got != v {
+			t.Errorf("round-trip mismatch: got %d, want %d", got, v)
+		}
+		if n != len(encoded) {
+			t.Errorf("bytes consumed mismatch: %d vs %d", n, len(encoded))
+		}
+	}
+}

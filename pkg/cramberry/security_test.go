@@ -732,3 +732,38 @@ func TestSecurityEdgeCases(t *testing.T) {
 		}
 	})
 }
+
+// TestLengthPrefixAmplificationRefused: a tiny payload claiming a huge
+// slice/map up front used to force a multi-megabyte pre-allocation
+// before reading any element. Now the decoder bounds the count by
+// remaining bytes, so a few-byte malicious header is rejected.
+func TestLengthPrefixAmplificationRefused(t *testing.T) {
+	t.Run("slice header bigger than remaining bytes", func(t *testing.T) {
+		// Length 1_000_000 in varint = 0xc0 0x84 0x3d (3 bytes), then EOF.
+		data := []byte{0xc0, 0x84, 0x3d}
+		var s []int32
+		err := Unmarshal(data, &s)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+
+	t.Run("map header bigger than remaining bytes", func(t *testing.T) {
+		// Length 1_000_000 in varint = 0xc0 0x84 0x3d, no body.
+		data := []byte{0xc0, 0x84, 0x3d}
+		var m map[string]int32
+		err := Unmarshal(data, &m)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+
+	t.Run("packed slice header bigger than remaining bytes", func(t *testing.T) {
+		data := []byte{0xc0, 0x84, 0x3d}
+		var s []int64
+		err := Unmarshal(data, &s)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+}

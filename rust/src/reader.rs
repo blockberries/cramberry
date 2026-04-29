@@ -67,6 +67,11 @@ impl<'a> Reader<'a> {
     /// Reads an unsigned varint (LEB128).
     /// For 32-bit values, this uses the same 10-byte limit as 64-bit for consistency,
     /// but the result is capped to 32 bits.
+    ///
+    /// Rejects non-canonical encodings (a multi-byte varint whose
+    /// terminating byte is zero — that varint could have been one byte
+    /// shorter). Two byte sequences must never decode to the same
+    /// value, otherwise hashes-over-bytes diverge across runtimes.
     pub fn read_varint(&mut self) -> Result<u32> {
         let mut result: u32 = 0;
         let mut shift = 0;
@@ -84,6 +89,9 @@ impl<'a> Reader<'a> {
 
             result |= ((b & 0x7f) as u32) << shift;
             if b & 0x80 == 0 {
+                if i > 0 && b == 0 {
+                    return Err(Error::VarintOverflow);
+                }
                 return Ok(result);
             }
             shift += 7;
@@ -94,6 +102,7 @@ impl<'a> Reader<'a> {
 
     /// Reads an unsigned 64-bit varint (LEB128).
     /// Uses a maximum of 10 bytes, consistent with protobuf and Go implementation.
+    /// Rejects non-canonical encodings — see `read_varint`.
     pub fn read_varint64(&mut self) -> Result<u64> {
         let mut result: u64 = 0;
         let mut shift = 0;
@@ -118,6 +127,9 @@ impl<'a> Reader<'a> {
 
             result |= ((b & 0x7f) as u64) << shift;
             if b & 0x80 == 0 {
+                if i > 0 && b == 0 {
+                    return Err(Error::VarintOverflow);
+                }
                 return Ok(result);
             }
             shift += 7;

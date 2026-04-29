@@ -128,6 +128,16 @@ func decodeSlice(r *Reader, v reflect.Value) error {
 		return nil
 	}
 
+	// Length-prefix amplification defense: each element needs at least
+	// one wire byte (smallest varint, smallest fixed-size primitive is
+	// 1 byte too). A header that claims more elements than there are
+	// remaining bytes is necessarily malformed and the up-front
+	// MakeSlice would otherwise let an attacker turn a few bytes into
+	// gigabytes of allocation.
+	if n > r.Len() {
+		return NewDecodeError("slice length exceeds remaining bytes", ErrMaxArrayLength)
+	}
+
 	// Create the slice
 	slice := reflect.MakeSlice(v.Type(), n, n)
 
@@ -152,6 +162,12 @@ func decodePackedSlice(r *Reader, v reflect.Value) error {
 	if n == 0 {
 		v.Set(reflect.MakeSlice(v.Type(), 0, 0))
 		return nil
+	}
+
+	// Same amplification defense as decodeSlice. Packed primitive
+	// elements all encode in at least one byte.
+	if n > r.Len() {
+		return NewDecodeError("slice length exceeds remaining bytes", ErrMaxArrayLength)
 	}
 
 	slice := reflect.MakeSlice(v.Type(), n, n)
@@ -282,6 +298,15 @@ func decodeMap(r *Reader, v reflect.Value) error {
 	n := r.ReadMapHeader()
 	if r.Err() != nil {
 		return r.Err()
+	}
+
+	// Length-prefix amplification defense: each map entry needs at
+	// least two wire bytes (one for key, one for value). A header that
+	// claims more entries than the remaining bytes can encode is
+	// necessarily malformed; without the bound, a 4-byte varint could
+	// force tens of MB of bucket pre-allocation.
+	if n > r.Len() {
+		return NewDecodeError("map size exceeds remaining bytes", ErrMaxMapSize)
 	}
 
 	// Create the map if it's nil

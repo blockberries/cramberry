@@ -27,23 +27,32 @@ func Write(path string, perm os.FileMode, write func(io.Writer) error) (retErr e
 		return fmt.Errorf("atomicfile: create temp: %w", err)
 	}
 	tmp := f.Name()
-	// Best-effort cleanup: removed on any return path that didn't rename.
+	// Idempotent close + best-effort cleanup. The deferred close handles
+	// the panic-in-write path that previously leaked the file descriptor:
+	// the Remove cleanup ran but f.Close did not.
+	closed := false
+	closeFn := func() error {
+		if closed {
+			return nil
+		}
+		closed = true
+		return f.Close()
+	}
 	committed := false
 	defer func() {
+		_ = closeFn()
 		if !committed {
 			_ = os.Remove(tmp)
 		}
 	}()
 
 	if err := write(f); err != nil {
-		_ = f.Close()
 		return err
 	}
 	if err := f.Sync(); err != nil {
-		_ = f.Close()
 		return fmt.Errorf("atomicfile: sync: %w", err)
 	}
-	if err := f.Close(); err != nil {
+	if err := closeFn(); err != nil {
 		return fmt.Errorf("atomicfile: close: %w", err)
 	}
 	if err := os.Chmod(tmp, perm); err != nil {
