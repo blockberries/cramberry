@@ -3,6 +3,42 @@
 use crate::error::Result;
 use crate::types::{zigzag_encode_32, zigzag_encode_64, FieldTag, WireType, END_MARKER};
 
+/// Canonical 32-bit quiet NaN: sign 0, exponent all 1s, only the quiet bit set.
+const CANONICAL_NAN_32: u32 = 0x7FC0_0000;
+
+/// Canonical 64-bit quiet NaN: sign 0, exponent all 1s, only the quiet bit set.
+const CANONICAL_NAN_64: u64 = 0x7FF8_0000_0000_0000;
+
+/// Returns the canonical bit representation of an f32:
+///
+///   - any NaN value collapses to `CANONICAL_NAN_32`,
+///   - `-0.0` becomes `+0.0`,
+///   - all other values pass through unchanged.
+pub(crate) fn canonicalize_f32_bits(v: f32) -> u32 {
+    let bits = v.to_bits();
+    if bits & 0x7F80_0000 == 0x7F80_0000 && bits & 0x007F_FFFF != 0 {
+        return CANONICAL_NAN_32;
+    }
+    if bits == 0x8000_0000 {
+        return 0;
+    }
+    bits
+}
+
+/// Returns the canonical bit representation of an f64. See `canonicalize_f32_bits`.
+pub(crate) fn canonicalize_f64_bits(v: f64) -> u64 {
+    let bits = v.to_bits();
+    if bits & 0x7FF0_0000_0000_0000 == 0x7FF0_0000_0000_0000
+        && bits & 0x000F_FFFF_FFFF_FFFF != 0
+    {
+        return CANONICAL_NAN_64;
+    }
+    if bits == 0x8000_0000_0000_0000 {
+        return 0;
+    }
+    bits
+}
+
 const INITIAL_CAPACITY: usize = 256;
 
 /// Writer encodes Cramberry data into a binary buffer.
@@ -130,14 +166,23 @@ impl Writer {
     }
 
     /// Writes a 32-bit float (IEEE 754, little-endian).
+    ///
+    /// NaN bit patterns are canonicalized to `0x7FC00000` (quiet NaN, no
+    /// payload) and `-0.0` is normalized to `+0.0` so that two values that
+    /// compare equal always produce identical wire bytes.
     pub fn write_float32(&mut self, value: f32) -> Result<()> {
-        self.buffer.extend_from_slice(&value.to_le_bytes());
+        let bits = canonicalize_f32_bits(value);
+        self.buffer.extend_from_slice(&bits.to_le_bytes());
         Ok(())
     }
 
     /// Writes a 64-bit float (IEEE 754, little-endian).
+    ///
+    /// NaN bit patterns are canonicalized to `0x7FF8000000000000` (quiet NaN,
+    /// no payload) and `-0.0` is normalized to `+0.0`.
     pub fn write_float64(&mut self, value: f64) -> Result<()> {
-        self.buffer.extend_from_slice(&value.to_le_bytes());
+        let bits = canonicalize_f64_bits(value);
+        self.buffer.extend_from_slice(&bits.to_le_bytes());
         Ok(())
     }
 
@@ -275,5 +320,44 @@ mod tests {
         let mut writer = Writer::new();
         writer.write_string("hello").unwrap();
         assert_eq!(writer.as_bytes(), &[5, b'h', b'e', b'l', b'l', b'o']);
+    }
+
+    #[test]
+    fn test_write_float32_canonicalizes_nan() {
+        // A signalling NaN with a non-canonical payload.
+        let nan = f32::from_bits(0x7FA0_0000);
+        let mut writer = Writer::new();
+        writer.write_float32(nan).unwrap();
+        // Expect the canonical quiet-NaN bytes 0x7FC00000 (little-endian).
+        assert_eq!(writer.as_bytes(), &[0x00, 0x00, 0xC0, 0x7F]);
+    }
+
+    #[test]
+    fn test_write_float32_canonicalizes_negative_zero() {
+        let mut writer = Writer::new();
+        writer.write_float32(-0.0_f32).unwrap();
+        assert_eq!(writer.as_bytes(), &[0x00, 0x00, 0x00, 0x00]);
+    }
+
+    #[test]
+    fn test_write_float64_canonicalizes_nan() {
+        let nan = f64::from_bits(0x7FF4_0000_0000_0000);
+        let mut writer = Writer::new();
+        writer.write_float64(nan).unwrap();
+        // 0x7FF8000000000000 little-endian
+        assert_eq!(
+            writer.as_bytes(),
+            &[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF8, 0x7F]
+        );
+    }
+
+    #[test]
+    fn test_write_float64_canonicalizes_negative_zero() {
+        let mut writer = Writer::new();
+        writer.write_float64(-0.0_f64).unwrap();
+        assert_eq!(
+            writer.as_bytes(),
+            &[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        );
     }
 }

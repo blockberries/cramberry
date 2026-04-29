@@ -239,4 +239,58 @@ describe('Writer', () => {
       expect(subReader.readVarint()).toBe(42);
     });
   });
+
+  describe('float canonicalization', () => {
+    it('canonicalizes f32 NaN to 0x7FC00000', () => {
+      // Construct a NaN with a non-canonical payload via bit-level alias.
+      const buf = new ArrayBuffer(4);
+      const dv = new DataView(buf);
+      dv.setUint32(0, 0x7fa00000, true);
+      const nan = dv.getFloat32(0, true);
+      const writer = new Writer();
+      writer.writeFloat32(nan);
+      expect(Array.from(writer.bytes())).toEqual([0x00, 0x00, 0xc0, 0x7f]);
+    });
+
+    it('canonicalizes f32 -0 to +0', () => {
+      const writer = new Writer();
+      writer.writeFloat32(-0);
+      expect(Array.from(writer.bytes())).toEqual([0x00, 0x00, 0x00, 0x00]);
+    });
+
+    it('canonicalizes f64 NaN to 0x7FF8000000000000', () => {
+      const buf = new ArrayBuffer(8);
+      const dv = new DataView(buf);
+      dv.setUint32(0, 0x00000000, true);
+      dv.setUint32(4, 0x7ff40000, true);
+      const nan = dv.getFloat64(0, true);
+      const writer = new Writer();
+      writer.writeFloat64(nan);
+      expect(Array.from(writer.bytes())).toEqual([
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf8, 0x7f,
+      ]);
+    });
+
+    it('canonicalizes f64 -0 to +0', () => {
+      const writer = new Writer();
+      writer.writeFloat64(-0);
+      expect(Array.from(writer.bytes())).toEqual([
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      ]);
+    });
+
+    it('passes f32 finite values unchanged', () => {
+      const writer = new Writer();
+      writer.writeFloat32(1.5);
+      expect(Array.from(writer.bytes())).toEqual([0x00, 0x00, 0xc0, 0x3f]);
+    });
+
+    it('passes f64 +Inf unchanged', () => {
+      const writer = new Writer();
+      writer.writeFloat64(Infinity);
+      expect(Array.from(writer.bytes())).toEqual([
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0, 0x7f,
+      ]);
+    });
+  });
 });

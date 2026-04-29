@@ -167,20 +167,49 @@ export class Writer {
   }
 
   /**
-   * Writes a 32-bit float (IEEE 754).
+   * Writes a 32-bit float (IEEE 754, little-endian).
+   *
+   * NaN bit patterns are canonicalized to 0x7FC00000 (quiet NaN, no payload)
+   * and -0.0 is normalized to +0.0 so that two values that compare equal
+   * always produce identical wire bytes.
    */
   writeFloat32(value: number): void {
     this.ensureCapacity(4);
-    this.view.setFloat32(this.pos, value, true); // Little-endian
+    this.view.setFloat32(this.pos, value, true);
+    let bits = this.view.getUint32(this.pos, true);
+    // Exponent all 1s + non-zero significand → NaN. Replace with canonical.
+    if ((bits & 0x7f800000) === 0x7f800000 && (bits & 0x007fffff) !== 0) {
+      bits = 0x7fc00000;
+    } else if (bits === 0x80000000) {
+      bits = 0; // -0 → +0
+    }
+    this.view.setUint32(this.pos, bits, true);
     this.pos += 4;
   }
 
   /**
-   * Writes a 64-bit float (IEEE 754).
+   * Writes a 64-bit float (IEEE 754, little-endian).
+   *
+   * NaN bit patterns are canonicalized to 0x7FF8000000000000 (quiet NaN, no
+   * payload) and -0.0 is normalized to +0.0.
    */
   writeFloat64(value: number): void {
     this.ensureCapacity(8);
-    this.view.setFloat64(this.pos, value, true); // Little-endian
+    this.view.setFloat64(this.pos, value, true);
+    // Read low and high halves separately (no native u64 in DataView).
+    const lo = this.view.getUint32(this.pos, true);
+    const hi = this.view.getUint32(this.pos + 4, true);
+    // Exponent all 1s lives in hi (bits 52-62 of the 64-bit value);
+    // significand is non-zero if any bit of (hi & 0xFFFFF) | lo is set.
+    if ((hi & 0x7ff00000) === 0x7ff00000 && ((hi & 0x000fffff) !== 0 || lo !== 0)) {
+      // Canonical quiet NaN: 0x7FF8000000000000.
+      this.view.setUint32(this.pos, 0, true);
+      this.view.setUint32(this.pos + 4, 0x7ff80000, true);
+    } else if (hi === 0x80000000 && lo === 0) {
+      // -0 → +0
+      this.view.setUint32(this.pos, 0, true);
+      this.view.setUint32(this.pos + 4, 0, true);
+    }
     this.pos += 8;
   }
 
