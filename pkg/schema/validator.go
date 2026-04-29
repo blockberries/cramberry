@@ -117,6 +117,13 @@ func (v *Validator) Validate() []ValidationError {
 		v.validateInterface(iface)
 	}
 
+	// Detect message-by-value recursion. The encoder is fine with cycles
+	// through pointer fields (those terminate naturally), but a struct that
+	// contains itself by value is an infinite type. Go rejects it at compile
+	// time with "invalid recursive type"; without this check the cramberry
+	// validator silently passes a schema that produces non-compiling output.
+	v.checkMessageRecursion()
+
 	// Sort errors by position
 	sort.Slice(v.errors, func(i, j int) bool {
 		if v.errors[i].Position.Line != v.errors[j].Position.Line {
@@ -527,4 +534,95 @@ func ValidateWithImports(schema *Schema, imports map[string]*Schema) []Validatio
 		validator.AddImport(path, "", s)
 	}
 	return validator.Validate()
+}
+
+// checkMessageRecursion reports any message that contains itself by value
+// (transitively) through a non-pointer, non-array, non-map field. Pointer,
+// repeated, and map fields all introduce indirection, so the resulting Go
+// type is finite-sized and acceptable.
+func (v *Validator) checkMessageRecursion() {
+	// Build adjacency: message → set of message types it contains by value.
+	adj := make(map[string][]string, len(v.schema.Messages))
+	for _, msg := range v.schema.Messages {
+		for _, f := range msg.Fields {
+			// Repeated fields are encoded as length-prefixed arrays — finite size.
+			if f.Repeated {
+				continue
+			}
+			t := f.Type
+			// Pointer fields terminate the cycle: *T has fixed size.
+			if _, isPtr := t.(*PointerType); isPtr {
+				continue
+			}
+			// Map values are length-prefixed; map fields don't propagate recursion.
+			if _, isMap := t.(*MapType); isMap {
+				continue
+			}
+			// Array of fixed size with NamedType element would propagate, but
+			// the schema language doesn't currently support fixed-size arrays
+			// of messages, so we don't model them here.
+			named, ok := t.(*NamedType)
+			if !ok || named.Package != "" {
+				// Cross-package types live in a different schema; assume safe.
+				continue
+			}
+			adj[msg.Name] = append(adj[msg.Name], named.Name)
+		}
+	}
+
+	// DFS for cycles. Track three states: unvisited, on-stack (gray), done (black).
+	const (
+		gray  = 1
+		black = 2
+	)
+	state := make(map[string]int, len(v.schema.Messages))
+	var msgByName map[string]*Message
+	msgByName = make(map[string]*Message, len(v.schema.Messages))
+	for _, m := range v.schema.Messages {
+		msgByName[m.Name] = m
+	}
+
+	var dfs func(name string, path []string) bool
+	dfs = func(name string, path []string) bool {
+		switch state[name] {
+		case gray:
+			// Cycle: report at the first message in the path that touched this node.
+			cycle := append(path, name)
+			if msg, ok := msgByName[name]; ok {
+				v.addError(msg.Position,
+					"message %q is recursive by value (cycle: %s); use a pointer field to break the cycle",
+					name, joinCycle(cycle))
+			}
+			return true
+		case black:
+			return false
+		}
+		state[name] = gray
+		for _, child := range adj[name] {
+			if dfs(child, append(path, name)) {
+				state[name] = black
+				return true
+			}
+		}
+		state[name] = black
+		return false
+	}
+
+	// Iterate messages in declaration order so error reports are stable.
+	for _, msg := range v.schema.Messages {
+		if state[msg.Name] == 0 {
+			dfs(msg.Name, nil)
+		}
+	}
+}
+
+func joinCycle(path []string) string {
+	if len(path) == 0 {
+		return ""
+	}
+	out := path[0]
+	for _, p := range path[1:] {
+		out += " → " + p
+	}
+	return out
 }

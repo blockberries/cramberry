@@ -140,10 +140,11 @@ func (c *tsContext) tsTypeInternal(t schema.TypeRef, _ bool) string {
 	case *schema.MapType:
 		key := c.tsTypeInternal(typ.Key, false)
 		val := c.tsTypeInternal(typ.Value, false)
-		// TypeScript maps use Record or Map
-		if key == "string" {
-			return fmt.Sprintf("Record<%s, %s>", key, val)
-		}
+		// Always emit `Map<K, V>`. The runtime decoder produces a `Map`
+		// (readMap returns `new Map()`), so typing the field as `Record`
+		// caused a tsc strict-mode error on every map field. The encoder
+		// helper writeMap accepts both Map and Record at runtime, so users
+		// who want the `Record` ergonomics can still pass one in.
 		return fmt.Sprintf("Map<%s, %s>", key, val)
 	case *schema.PointerType:
 		elem := c.tsTypeInternal(typ.Element, false)

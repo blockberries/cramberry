@@ -54,7 +54,7 @@ const TestData = {
       { name: 'first', value: 1 },
       { name: 'second', value: 2 },
     ],
-    stringIntMap: { one: 1, two: 2, three: 3 },
+    stringIntMap: new Map([['one', 1], ['two', 2], ['three', 3]]),
     intStringMap: new Map([[1, 'one'], [2, 'two'], [3, 'three']]),
   } as ComplexTypes,
 

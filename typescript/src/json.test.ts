@@ -192,8 +192,17 @@ describe('parseNumberFromJSON', () => {
     expect(parseNumberFromJSON(-456)).toBe(-456);
   });
 
-  it('floors numeric values', () => {
-    expect(parseNumberFromJSON(123.7)).toBe(123);
+  it('rejects non-integer numeric values', () => {
+    // Previously truncated 123.7 → 123 silently. Now rejects to match
+    // Go's strconv.ParseInt, which would fail on equivalent input.
+    expect(() => parseNumberFromJSON(123.7)).toThrow();
+  });
+
+  it('rejects malformed strings', () => {
+    expect(() => parseNumberFromJSON('123.5')).toThrow();
+    expect(() => parseNumberFromJSON('12abc')).toThrow();
+    expect(() => parseNumberFromJSON('')).toThrow();
+    expect(() => parseNumberFromJSON(' 12')).toThrow();
   });
 });
 

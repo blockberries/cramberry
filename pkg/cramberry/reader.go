@@ -649,7 +649,16 @@ func (r *Reader) ReadStringZeroCopy() ZeroCopyString {
 		s = unsafe.String(&r.data[r.pos], n)
 	}
 	r.pos += n
-	// Skip UTF-8 validation for zero-copy (caller's responsibility)
+	// Honor the reader's ValidateUTF8 option even on the zero-copy path.
+	// The validation reads the same bytes we'd return; it doesn't allocate
+	// or copy. Without this, malformed UTF-8 silently slipped through any
+	// generated decoder that opted into the zero-copy variant, while the
+	// allocating ReadString validated correctly — a divergence that broke
+	// the "same options, same answer" contract.
+	if r.opts.ValidateUTF8 && !isValidUTF8(s) {
+		r.setError(ErrInvalidUTF8)
+		return ZeroCopyString{}
+	}
 	return ZeroCopyString{
 		s:          s,
 		generation: r.generation,

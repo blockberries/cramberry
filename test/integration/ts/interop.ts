@@ -370,7 +370,7 @@ status: Status;
 optionalNested: NestedMessage | null;
 requiredNested: NestedMessage;
 nestedList: NestedMessage[];
-stringIntMap: Record<string, number>;
+stringIntMap: Map<string, number>;
 intStringMap: Map<number, string>;
 }
 

@@ -180,13 +180,30 @@ export function parseBigIntFromJSON(value: string | number): bigint {
 }
 
 /**
- * Parses a number from a JSON string or number.
+ * Parses a strict integer from a JSON string or number.
+ *
+ * Rejects malformed inputs:
+ *   - "123.5" / "12abc" / "" / " 12" → throws Error.
+ *   - non-integer numbers like 12.5 → throws Error.
+ * This matches Go's strconv.ParseInt which rejects all of the above.
+ * The previous implementation used `parseInt(value, 10)`, which silently
+ * truncated "123.5" to 123 and "12abc" to 12.
  */
 export function parseNumberFromJSON(value: string | number): number {
   if (typeof value === 'string') {
-    return parseInt(value, 10);
+    if (!/^-?\d+$/.test(value)) {
+      throw new Error(`invalid integer: ${JSON.stringify(value)}`);
+    }
+    const n = Number(value);
+    if (!Number.isFinite(n) || !Number.isSafeInteger(n)) {
+      throw new Error(`integer out of safe range: ${value}`);
+    }
+    return n;
   }
-  return Math.floor(value);
+  if (!Number.isFinite(value) || !Number.isInteger(value)) {
+    throw new Error(`expected integer, got ${value}`);
+  }
+  return value;
 }
 
 const __sortKeyEncoder = new TextEncoder();

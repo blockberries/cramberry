@@ -172,9 +172,11 @@ func TestTypeScriptGeneratorComplexTypes(t *testing.T) {
 		t.Error("expected Uint8Array for bytes")
 	}
 
-	// Check map type
-	if !strings.Contains(output, "scores: Record<string, number>;") {
-		t.Errorf("expected Record type for map, got: %s", output)
+	// Check map type. We emit `Map<K, V>` for all map fields, even
+	// string-keyed ones, because the runtime decoder produces a Map and
+	// typing the field as `Record` caused tsc strict-mode errors.
+	if !strings.Contains(output, "scores: Map<string, number>;") {
+		t.Errorf("expected Map type for map, got: %s", output)
 	}
 
 	// Check nullable type

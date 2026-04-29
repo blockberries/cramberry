@@ -976,3 +976,75 @@ message OtherType {
 		t.Error("expected error: unqualified type from different package should be rejected")
 	}
 }
+
+func TestValidator_RejectsDirectSelfRecursion(t *testing.T) {
+	s := &Schema{
+		Messages: []*Message{
+			{
+				Name: "Node",
+				Fields: []*Field{
+					{Name: "parent", Number: 1, Type: &NamedType{Name: "Node"}},
+				},
+			},
+		},
+	}
+	v := NewValidator(s)
+	errs := v.Validate()
+	if len(errs) == 0 {
+		t.Fatal("expected an error for self-recursive message; got none")
+	}
+}
+
+func TestValidator_RejectsIndirectRecursion(t *testing.T) {
+	s := &Schema{
+		Messages: []*Message{
+			{Name: "A", Fields: []*Field{{Name: "b", Number: 1, Type: &NamedType{Name: "B"}}}},
+			{Name: "B", Fields: []*Field{{Name: "a", Number: 1, Type: &NamedType{Name: "A"}}}},
+		},
+	}
+	v := NewValidator(s)
+	errs := v.Validate()
+	if len(errs) == 0 {
+		t.Fatal("expected an error for A→B→A cycle; got none")
+	}
+}
+
+func TestValidator_AllowsRecursionThroughPointer(t *testing.T) {
+	s := &Schema{
+		Messages: []*Message{
+			{
+				Name: "Tree",
+				Fields: []*Field{
+					{Name: "left", Number: 1, Type: &PointerType{Element: &NamedType{Name: "Tree"}}},
+				},
+			},
+		},
+	}
+	v := NewValidator(s)
+	errs := v.Validate()
+	for _, e := range errs {
+		if e.Severity == SeverityError {
+			t.Errorf("recursion through pointer should be allowed; got error: %s", e.Message)
+		}
+	}
+}
+
+func TestValidator_AllowsRecursionThroughRepeatedField(t *testing.T) {
+	s := &Schema{
+		Messages: []*Message{
+			{
+				Name: "Tree",
+				Fields: []*Field{
+					{Name: "children", Number: 1, Type: &NamedType{Name: "Tree"}, Repeated: true},
+				},
+			},
+		},
+	}
+	v := NewValidator(s)
+	errs := v.Validate()
+	for _, e := range errs {
+		if e.Severity == SeverityError {
+			t.Errorf("recursion through repeated field should be allowed; got error: %s", e.Message)
+		}
+	}
+}
