@@ -787,3 +787,55 @@ func TestGoGeneratorSchemaPointerField(t *testing.T) {
 		t.Errorf("expected nil check for pointer field encoding, got: %s", output)
 	}
 }
+
+// TestGoGeneratorCrossPackageEnumWireType verifies that an enum imported
+// from another schema is encoded with WireSVarint, not the WireBytes
+// fallback that the generator used to default to for any cross-package
+// NamedType. Without this test, a Go-encoded value would be unreadable by
+// any decoder that expects an SVarint at the field's wire type.
+func TestGoGeneratorCrossPackageEnumWireType(t *testing.T) {
+	importedEnumSchema := &schema.Schema{
+		Package: &schema.Package{Name: "shared"},
+		Enums: []*schema.Enum{
+			{
+				Name: "Status",
+				Values: []*schema.EnumValue{
+					{Name: "Unknown", Number: 0},
+					{Name: "Active", Number: 1},
+				},
+			},
+		},
+	}
+
+	mainSchema := &schema.Schema{
+		Package: &schema.Package{Name: "myapp"},
+		Imports: []*schema.Import{{Path: "shared.cram", Alias: "shared"}},
+		Messages: []*schema.Message{
+			{
+				Name: "User",
+				Fields: []*schema.Field{
+					{Name: "id", Number: 1, Type: &schema.ScalarType{Name: "uint64"}},
+					{Name: "status", Number: 2, Type: &schema.NamedType{Package: "shared", Name: "Status"}},
+				},
+			},
+		},
+	}
+
+	gen := NewGoGenerator()
+	opts := DefaultOptions()
+	opts.ImportedSchemas = map[string]*schema.Schema{"shared": importedEnumSchema}
+
+	var buf bytes.Buffer
+	if err := gen.Generate(&buf, mainSchema, opts); err != nil {
+		t.Fatalf("generate error: %v", err)
+	}
+	output := buf.String()
+
+	// The status field tag must use WireSVarint, not WireBytes.
+	if !strings.Contains(output, "WriteTag(2, cramberry.WireSVarint)") {
+		t.Errorf("expected status field encoded with WireSVarint, got:\n%s", output)
+	}
+	if strings.Contains(output, "WriteTag(2, cramberry.WireBytes)") {
+		t.Errorf("status field unexpectedly encoded with WireBytes:\n%s", output)
+	}
+}

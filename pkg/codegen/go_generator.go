@@ -116,15 +116,8 @@ func (c *goContext) wireTypeV2ForType(t schema.TypeRef, repeated bool) string {
 		}
 	case *schema.NamedType:
 		// Named types (enums, messages) - enums are svarint, messages are bytes.
-		// Only check local enums when the type has no package qualifier.
-		// Cross-package types are assumed to be messages; cross-package enum
-		// detection requires access to imported schemas which is not yet supported.
-		if typ.Package == "" {
-			for _, e := range c.Schema.Enums {
-				if e.Name == typ.Name {
-					return "cramberry.WireSVarint"
-				}
-			}
+		if c.isNamedEnum(typ) {
+			return "cramberry.WireSVarint"
 		}
 		return "cramberry.WireBytes"
 	case *schema.ArrayType, *schema.MapType:
@@ -573,6 +566,40 @@ func (c *goContext) goPackage() string {
 	return "generated"
 }
 
+// resolveNamedEnum returns the schema.Enum for the given NamedType if it
+// refers to an enum (rather than a message), looking in both the local
+// schema and any imported schemas. The boolean is true when the named type
+// is an enum.
+//
+// Without this lookup, cross-package enum fields fall back to WireBytes
+// (the default for messages) and produce a malformed wire format.
+func (c *goContext) resolveNamedEnum(typ *schema.NamedType) (*schema.Enum, bool) {
+	if typ.Package == "" {
+		for _, e := range c.Schema.Enums {
+			if e.Name == typ.Name {
+				return e, true
+			}
+		}
+		return nil, false
+	}
+	if c.Options.ImportedSchemas != nil {
+		if imported, ok := c.Options.ImportedSchemas[typ.Package]; ok && imported != nil {
+			for _, e := range imported.Enums {
+				if e.Name == typ.Name {
+					return e, true
+				}
+			}
+		}
+	}
+	return nil, false
+}
+
+// isNamedEnum reports whether the given NamedType refers to an enum.
+func (c *goContext) isNamedEnum(typ *schema.NamedType) bool {
+	_, ok := c.resolveNamedEnum(typ)
+	return ok
+}
+
 // isSamePackage checks if an import alias refers to a schema in the same package.
 // This is used to determine whether to qualify type names.
 func (c *goContext) isSamePackage(importAlias string) bool {
@@ -952,13 +979,9 @@ func (c *goContext) jsonEncodeValue(t schema.TypeRef, varName string, repeated b
 	case *schema.ScalarType:
 		return c.jsonEncodeScalar(typ, varName)
 	case *schema.NamedType:
-		// Check if it's an enum
-		for _, e := range c.Schema.Enums {
-			if e.Name == typ.Name && typ.Package == "" {
-				return c.jsonEncodeEnum(varName)
-			}
+		if c.isNamedEnum(typ) {
+			return c.jsonEncodeEnum(varName)
 		}
-		// It's a message
 		return c.jsonEncodeMessage(varName)
 	case *schema.MapType:
 		return c.jsonEncodeMap(typ, varName)
@@ -1114,13 +1137,9 @@ func (c *goContext) jsonDecodeValue(t schema.TypeRef, targetVar string, repeated
 	case *schema.ScalarType:
 		return c.jsonDecodeScalar(typ, targetVar)
 	case *schema.NamedType:
-		// Check if it's an enum
-		for _, e := range c.Schema.Enums {
-			if e.Name == typ.Name && typ.Package == "" {
-				return c.jsonDecodeEnum(e, targetVar)
-			}
+		if e, ok := c.resolveNamedEnum(typ); ok {
+			return c.jsonDecodeEnum(e, targetVar)
 		}
-		// It's a message
 		return c.jsonDecodeMessage(typ, targetVar)
 	case *schema.MapType:
 		return c.jsonDecodeMap(typ, targetVar)
