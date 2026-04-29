@@ -347,60 +347,98 @@ func (c *tsContext) tsWriteValue(t schema.TypeRef, value string, repeated bool) 
 	}
 }
 
-// tsReadField generates the code to read a field value.
+// tsReadField generates the code to read a field value at the per-field
+// switch in a generated decoder. Field-level NamedType (message) values
+// are length-prefixed on the wire (see encodeStruct's field-wrapping
+// layer), so we read the length first and decode the body via a sub-reader.
+//
+// Inside readArray / readMap callbacks the SAME schema NamedType is
+// emitted INLINE (no length prefix per element) — the encoder mirrors
+// that asymmetry, and a wrong choice here is what produced the
+// "BufferUnderflowError in readArray callback" earlier. Use
+// tsReadValueInline for the callback path.
 func (c *tsContext) tsReadField(f *schema.Field) string {
-	return c.tsReadValue(f.Type, f.Repeated)
-}
-
-func (c *tsContext) tsReadValue(t schema.TypeRef, repeated bool) string {
-	if repeated {
-		elemType := t
-		if arr, ok := t.(*schema.ArrayType); ok {
+	if f.Repeated {
+		// Repeated fields use the slice-callback variant for elements.
+		elemType := f.Type
+		if arr, ok := f.Type.(*schema.ArrayType); ok {
 			elemType = arr.Element
 		}
-		return fmt.Sprintf("readArray(reader, (r) => %s)", c.tsReadValue(elemType, false))
+		return fmt.Sprintf("readArray(reader, (r) => %s)", c.tsReadValueInline("r", elemType))
 	}
-
-	switch typ := t.(type) {
-	case *schema.ScalarType:
-		switch typ.Name {
-		case "bool":
-			return "reader.readBool()"
-		case "int8", "int16", "int32", "int":
-			return "reader.readSVarint()"
-		case "uint8", "uint16", "uint32", "uint":
-			return "reader.readVarint()"
-		case "int64":
-			return "reader.readSVarint64()"
-		case "uint64":
-			return "reader.readVarint64()"
-		case "float32":
-			return "reader.readFloat32()"
-		case "float64":
-			return "reader.readFloat64()"
-		case "string":
-			return "reader.readString()"
-		case "bytes":
-			return "reader.readLengthPrefixedBytes()"
-		default:
-			return "reader.readString()"
+	if mt, ok := f.Type.(*schema.MapType); ok {
+		keyRead := c.tsReadValueInline("r", mt.Key)
+		valRead := c.tsReadValueInline("r", mt.Value)
+		return fmt.Sprintf("readMap(reader, (r) => %s, (r) => %s)", keyRead, valRead)
+	}
+	// Walk through PointerType: an optional/pointer field has the same
+	// on-wire shape as the underlying type (the optionality is conveyed by
+	// presence/absence of the field tag, not by the body).
+	t := f.Type
+	for {
+		ptr, ok := t.(*schema.PointerType)
+		if !ok {
+			break
 		}
+		t = ptr.Element
+	}
+	switch typ := t.(type) {
 	case *schema.NamedType:
 		if c.isNamedEnum(typ) {
 			return "reader.readSVarint()"
 		}
-		// Mirror the encoder: nested message bodies are length-prefixed.
+		// Field-level: length-prefixed.
 		return fmt.Sprintf("(() => { const __data = reader.readLengthPrefixedBytes(); return decode%s(new Reader(__data)); })()", ToPascalCase(typ.Name))
+	}
+	return c.tsReadValueInline("reader", t)
+}
+
+// tsReadValueInline emits a read expression for a value using the named
+// reader, treating composite values as INLINE (no length prefix). Used
+// inside readArray / readMap callbacks: the surrounding helper has already
+// taken care of the outer length prefix, and individual elements / map
+// entries are written inline by the matching encoder helpers.
+func (c *tsContext) tsReadValueInline(readerName string, t schema.TypeRef) string {
+	switch typ := t.(type) {
+	case *schema.ScalarType:
+		switch typ.Name {
+		case "bool":
+			return fmt.Sprintf("%s.readBool()", readerName)
+		case "int8", "int16", "int32", "int":
+			return fmt.Sprintf("%s.readSVarint()", readerName)
+		case "uint8", "uint16", "uint32", "uint":
+			return fmt.Sprintf("%s.readVarint()", readerName)
+		case "int64":
+			return fmt.Sprintf("%s.readSVarint64()", readerName)
+		case "uint64":
+			return fmt.Sprintf("%s.readVarint64()", readerName)
+		case "float32":
+			return fmt.Sprintf("%s.readFloat32()", readerName)
+		case "float64":
+			return fmt.Sprintf("%s.readFloat64()", readerName)
+		case "string":
+			return fmt.Sprintf("%s.readString()", readerName)
+		case "bytes":
+			return fmt.Sprintf("%s.readLengthPrefixedBytes()", readerName)
+		default:
+			return fmt.Sprintf("%s.readString()", readerName)
+		}
+	case *schema.NamedType:
+		if c.isNamedEnum(typ) {
+			return fmt.Sprintf("%s.readSVarint()", readerName)
+		}
+		// Inline: the element has no length prefix of its own.
+		return fmt.Sprintf("decode%s(%s)", ToPascalCase(typ.Name), readerName)
 	case *schema.ArrayType:
-		return c.tsReadValue(typ.Element, true)
+		return fmt.Sprintf("readArray(%s, (r) => %s)", readerName, c.tsReadValueInline("r", typ.Element))
 	case *schema.MapType:
-		keyRead := c.tsReadValue(typ.Key, false)
-		valRead := c.tsReadValue(typ.Value, false)
-		return fmt.Sprintf("readMap(reader, (r) => %s, (r) => %s)", keyRead, valRead)
+		keyRead := c.tsReadValueInline("r", typ.Key)
+		valRead := c.tsReadValueInline("r", typ.Value)
+		return fmt.Sprintf("readMap(%s, (r) => %s, (r) => %s)", readerName, keyRead, valRead)
 	case *schema.PointerType:
-		return c.tsReadValue(typ.Element, false)
+		return c.tsReadValueInline(readerName, typ.Element)
 	default:
-		return "reader.readString()"
+		return fmt.Sprintf("%s.readString()", readerName)
 	}
 }
 
@@ -862,10 +900,10 @@ export function decode{{tsMessageType $msg}}(reader: Reader): {{tsMessageType $m
   const result: Partial<{{tsMessageType $msg}}> = {};
 
   while (true) {
-    const { fieldNum, wireType } = reader.readTag();
-    if (fieldNum === 0) break; // End marker
+    const { fieldNumber, wireType } = reader.readTag();
+    if (fieldNumber === 0) break; // End marker
 
-    switch (fieldNum) {
+    switch (fieldNumber) {
 {{- range $msg.Fields}}
       case {{.Number}}:
         result.{{tsFieldName .}} = {{tsReadField .}};

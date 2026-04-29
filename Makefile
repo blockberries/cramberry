@@ -1,7 +1,7 @@
 .PHONY: all build test bench lint fmt vet generate clean install coverage help
 .PHONY: examples example-basic example-streaming example-polymorphic
 .PHONY: schema-generate schema-extract
-.PHONY: ts-build ts-test rust-build rust-test runtimes runtimes-test
+.PHONY: ts-build ts-test rust-build rust-test runtimes runtimes-test ts-integration-test rust-integration-test integration-test
 
 # Go parameters
 GO := go
@@ -156,21 +156,31 @@ ts-build: ## Build TypeScript runtime
 	@echo "Building TypeScript runtime..."
 	@cd typescript && npm install && npm run build
 
-ts-test: ## Run TypeScript tests
-	@echo "Running TypeScript tests..."
+ts-test: ## Run TypeScript unit tests
+	@echo "Running TypeScript unit tests..."
 	@cd typescript && npm test
+
+ts-integration-test: ## Run TypeScript integration tests against Go-produced golden bytes
+	@echo "Running TypeScript integration tests..."
+	@cd test/integration/ts && npm test
 
 rust-build: ## Build Rust runtime
 	@echo "Building Rust runtime..."
 	@cd rust && cargo build
 
-rust-test: ## Run Rust tests
-	@echo "Running Rust tests..."
+rust-test: ## Run Rust unit tests
+	@echo "Running Rust unit tests..."
 	@cd rust && cargo test
+
+rust-integration-test: ## Run Rust integration tests against Go-produced golden bytes
+	@echo "Running Rust integration tests..."
+	@cd test/integration/rust && cargo test
+
+integration-test: ts-integration-test rust-integration-test ## Run cross-language integration tests
 
 runtimes: ts-build rust-build ## Build all cross-language runtimes
 
-runtimes-test: ts-test rust-test ## Test all cross-language runtimes
+runtimes-test: ts-test rust-test integration-test ## Test all runtimes (unit + cross-language integration)
 
 ## Help
 

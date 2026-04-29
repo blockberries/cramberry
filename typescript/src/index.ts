@@ -32,16 +32,14 @@ export {
   MaxVarint64,
   MinInt64,
   MaxInt64,
-  // V2 compact tag format
+  // Tag format constants
   END_MARKER,
   TAG_EXTENDED_BIT,
   TAG_WIRE_TYPE_MASK,
   TAG_WIRE_TYPE_SHIFT,
   TAG_FIELD_NUM_SHIFT,
   MAX_COMPACT_FIELD_NUM,
-  encodeTag,
-  decodeTag,
-  // Legacy (deprecated)
+  MAX_FIELD_NUMBER,
   encodeTag,
   decodeTag,
   zigzagEncode,

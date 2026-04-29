@@ -17,9 +17,11 @@ import {
   ComplexTypes,
   EdgeCases,
   AllFieldNumbers,
+  encodeComplexTypes,
+  decodeComplexTypes,
 } from './interop';
 
-const GOLDEN_DIR = path.join(__dirname, '..', '..', 'golden');
+const GOLDEN_DIR = path.join(__dirname, '..', '..', '..', 'testdata', 'golden');
 
 // Test data matching Go's TestData
 const TestData = {
@@ -469,6 +471,56 @@ describe('TypeScript Interoperability Tests', () => {
       expect(decoded.field127).toBe(TestData.allFieldNumbers.field127);
       expect(decoded.field128).toBe(TestData.allFieldNumbers.field128);
       expect(decoded.field1000).toBe(TestData.allFieldNumbers.field1000);
+    });
+  });
+
+  describe('ComplexTypes', () => {
+    // ComplexTypes exercises the wire-format paths that the simpler
+    // messages don't: an enum field, an optional/required nested message,
+    // a repeated nested message, and two maps with different key types.
+    // Uses the codegen-emitted encode/decode functions so any drift
+    // between the runtime and the generator surfaces here.
+    it('round-trips through codegen', () => {
+      const writer = new Writer();
+      encodeComplexTypes(writer, TestData.complexTypes);
+      const encoded = writer.bytes();
+
+      const reader = new Reader(encoded);
+      const decoded = decodeComplexTypes(reader);
+
+      expect(decoded.status).toBe(TestData.complexTypes.status);
+      expect(decoded.optionalNested?.name).toBe('optional');
+      expect(decoded.requiredNested.name).toBe('required');
+      expect(decoded.nestedList.length).toBe(2);
+      expect(decoded.nestedList[0].name).toBe('first');
+      // stringIntMap may decode as a Map or Record depending on type; both
+      // shapes round-trip the values.
+      const sm = decoded.stringIntMap as unknown;
+      const smGet = (k: string) =>
+        sm instanceof Map ? sm.get(k) : (sm as Record<string, number>)[k];
+      expect(smGet('one')).toBe(1);
+      expect(smGet('two')).toBe(2);
+      expect(smGet('three')).toBe(3);
+    });
+
+    it('matches Go-produced golden bytes', () => {
+      const golden = loadGolden('complex_types');
+      if (!golden) {
+        console.log('Golden file not found, skipping');
+        return;
+      }
+      // Decode the Go golden through the TS decoder; values must match.
+      const reader = new Reader(golden);
+      const decoded = decodeComplexTypes(reader);
+      expect(decoded.status).toBe(TestData.complexTypes.status);
+      expect(decoded.requiredNested.name).toBe('required');
+      expect(decoded.nestedList.length).toBe(2);
+
+      // Round-trip back to bytes and assert byte-identical output —
+      // proves TS encoder, decoder, and Go's output all agree.
+      const w = new Writer();
+      encodeComplexTypes(w, decoded);
+      expect(toHex(w.bytes())).toBe(toHex(golden));
     });
   });
 
