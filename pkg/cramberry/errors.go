@@ -167,6 +167,22 @@ func NewFieldDecodeError(typeName, fieldName string, fieldNum int, offset int, m
 	}
 }
 
+// wrapFieldDecodeError attaches type/field/field-number context to a
+// decode error that was produced by an inner helper without it.
+//
+// If err is already a *DecodeError that has type/field context, it is
+// returned unchanged — the deepest known frame wins, since it has the
+// most specific information.
+func wrapFieldDecodeError(err error, typeName, fieldName string, fieldNum, offset int) error {
+	if err == nil {
+		return nil
+	}
+	if de, ok := err.(*DecodeError); ok && de.Type != "" {
+		return de
+	}
+	return NewFieldDecodeError(typeName, fieldName, fieldNum, offset, err.Error(), err)
+}
+
 // EncodeError provides detailed context for encoding failures.
 type EncodeError struct {
 	// Type is the name of the type being encoded.

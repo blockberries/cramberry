@@ -379,7 +379,10 @@ func encodeMap(w *Writer, v reflect.Value) error {
 // re-entered. Counting in both places double-counted depth and tripped
 // the limit at half the documented depth.
 func encodeStruct(w *Writer, v reflect.Value) error {
-	info := getStructInfo(v.Type())
+	info, err := getStructInfo(v.Type())
+	if err != nil {
+		return err
+	}
 
 	omitEmpty := w.Options().OmitEmpty
 	for _, field := range info.fields {
@@ -529,12 +532,33 @@ var wireTypeCache sync.Map
 // packableCache caches whether element types support packed encoding.
 var packableCache sync.Map
 
+// cachedStructInfo holds either a parsed structInfo or the error that
+// occurred while parsing — caching both so a bad struct tag fails the
+// same way (with the same error) on every call without re-walking the
+// reflect.Type each time.
+type cachedStructInfo struct {
+	info *structInfo
+	err  error
+}
+
 // getStructInfo returns cached struct metadata.
-func getStructInfo(t reflect.Type) *structInfo {
+//
+// A struct with a malformed `cramberry:"..."` tag returns an error
+// (rather than panicking, as it used to). Callers that import a
+// third-party type with a bad tag get a normal Marshal/Unmarshal error
+// instead of a process crash.
+func getStructInfo(t reflect.Type) (*structInfo, error) {
 	if cached, ok := structInfoCache.Load(t); ok {
-		return cached.(*structInfo)
+		c := cached.(cachedStructInfo)
+		return c.info, c.err
 	}
 
+	info, err := parseStructInfo(t)
+	structInfoCache.Store(t, cachedStructInfo{info: info, err: err})
+	return info, err
+}
+
+func parseStructInfo(t reflect.Type) (*structInfo, error) {
 	info := &structInfo{
 		fields: make([]fieldInfo, 0, t.NumField()),
 	}
@@ -562,15 +586,19 @@ func getStructInfo(t reflect.Type) *structInfo {
 			continue // Skip this field
 		}
 		if tag != "" {
-			fi = parseFieldTag(tag, fi, fieldNum, f.Name)
+			parsed, err := parseFieldTag(tag, fi, fieldNum, f.Name)
+			if err != nil {
+				return nil, fmt.Errorf("cramberry: %s.%s: %w", t.Name(), f.Name, err)
+			}
+			fi = parsed
 		} else {
 			fi.num = fieldNum
 		}
 
 		// Validate field number uniqueness
 		if existingField, ok := seenFieldNums[fi.num]; ok {
-			panic(fmt.Sprintf("cramberry: duplicate field number %d in %s (fields %q and %q)",
-				fi.num, t.Name(), existingField, f.Name))
+			return nil, fmt.Errorf("cramberry: duplicate field number %d in %s (fields %q and %q)",
+				fi.num, t.Name(), existingField, f.Name)
 		}
 		seenFieldNums[fi.num] = f.Name
 
@@ -589,26 +617,18 @@ func getStructInfo(t reflect.Type) *structInfo {
 		info.fieldByNum[info.fields[i].num] = &info.fields[i]
 	}
 
-	structInfoCache.Store(t, info)
-	return info
+	return info, nil
 }
 
 // parseFieldTag parses a cramberry struct tag.
 // Format: "num,option,option,..."
 // Options: omitempty, required
-//
-// Tag-parse errors panic. They cannot be a runtime concern: tags are static
-// metadata, so an unparseable tag is a programming bug that must be visible.
-// Silent fallback (the previous behavior) hid two real footguns: any
-// non-digit produced a default-numbered field that could collide with a
-// real field number, and unknown options like a typo'd "omit_empty" were
-// dropped without warning.
-func parseFieldTag(tag string, fi fieldInfo, defaultNum int, fieldName string) fieldInfo {
+func parseFieldTag(tag string, fi fieldInfo, defaultNum int, fieldName string) (fieldInfo, error) {
 	parts := strings.Split(tag, ",")
 	if parts[0] != "" {
 		n, err := strconv.Atoi(parts[0])
 		if err != nil || n <= 0 {
-			panic(fmt.Sprintf("cramberry: invalid field number %q in tag for field %q", parts[0], fieldName))
+			return fi, fmt.Errorf("invalid field number %q in tag for field %q", parts[0], fieldName)
 		}
 		fi.num = n
 	} else {
@@ -624,11 +644,11 @@ func parseFieldTag(tag string, fi fieldInfo, defaultNum int, fieldName string) f
 		case "required":
 			fi.required = true
 		default:
-			panic(fmt.Sprintf("cramberry: unknown tag option %q on field %q", opt, fieldName))
+			return fi, fmt.Errorf("unknown tag option %q on field %q", opt, fieldName)
 		}
 	}
 
-	return fi
+	return fi, nil
 }
 
 // maxZeroValueDepth is the maximum recursion depth for isZeroValue.

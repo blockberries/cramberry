@@ -339,7 +339,10 @@ func decodeMap(r *Reader, v reflect.Value) error {
 func decodeStruct(r *Reader, v reflect.Value) error {
 	// Depth tracking owned by BeginMessage at the field-wrapping layer
 	// (see the per-field loop below).
-	info := getStructInfo(v.Type())
+	info, err := getStructInfo(v.Type())
+	if err != nil {
+		return err
+	}
 
 	// Track which fields were set (for required field checking)
 	fieldsSeen := make(map[int]bool)
@@ -380,12 +383,12 @@ func decodeStruct(r *Reader, v reflect.Value) error {
 				return r.Err()
 			}
 			if err := decodeValue(r, fv); err != nil {
-				return err
+				return wrapFieldDecodeError(err, v.Type().Name(), fi.name, fi.num, r.Pos())
 			}
 			r.EndMessage(endPos)
 		} else {
 			if err := decodeValue(r, fv); err != nil {
-				return err
+				return wrapFieldDecodeError(err, v.Type().Name(), fi.name, fi.num, r.Pos())
 			}
 		}
 	}
@@ -542,8 +545,15 @@ func sizeMap(v reflect.Value, opts Options) int {
 }
 
 // sizeStruct calculates the encoded size of a struct.
+//
+// Returns 0 if the struct has a malformed cramberry tag — Size's
+// signature only returns int, so the caller doesn't see the underlying
+// error here, but the subsequent Marshal call will surface it.
 func sizeStruct(v reflect.Value, opts Options) int {
-	info := getStructInfo(v.Type())
+	info, err := getStructInfo(v.Type())
+	if err != nil {
+		return 0
+	}
 
 	size := 0
 	for _, field := range info.fields {

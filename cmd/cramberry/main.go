@@ -66,18 +66,47 @@ func main() {
 	switch os.Args[1] {
 	case "generate", "gen", "g":
 		cmdGenerate(os.Args[2:])
-	case "validate", "val", "v":
+	case "validate", "val":
 		cmdValidate(os.Args[2:])
 	case "format", "fmt", "f":
 		cmdFormat(os.Args[2:])
 	case "schema", "extract", "s":
 		cmdSchema(os.Args[2:])
-	case "version":
+	case "version", "--version", "-V":
 		cmdVersion()
 	case "help", "-h", "--help":
-		printUsage()
+		// `cramberry help <subcommand>` should print the subcommand's
+		// usage; bare `help` prints the top-level usage. Without this
+		// the user sees the same top-level dump for both forms.
+		if len(os.Args) >= 3 {
+			printSubcommandHelp(os.Args[2])
+		} else {
+			printUsage()
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", os.Args[1])
+		printUsage()
+		os.Exit(1)
+	}
+}
+
+// printSubcommandHelp dispatches `help <subcmd>` by re-invoking the
+// subcommand with `-h`, which makes the standard `flag` package print
+// the FlagSet's Usage and exit.
+func printSubcommandHelp(name string) {
+	switch name {
+	case "generate", "gen", "g":
+		cmdGenerate([]string{"-h"})
+	case "validate", "val":
+		cmdValidate([]string{"-h"})
+	case "format", "fmt", "f":
+		cmdFormat([]string{"-h"})
+	case "schema", "extract", "s":
+		cmdSchema([]string{"-h"})
+	case "version":
+		cmdVersion()
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", name)
 		printUsage()
 		os.Exit(1)
 	}
@@ -197,7 +226,7 @@ Options:`)
 
 	// Create output directory
 	if err := os.MkdirAll(*outDir, 0o755); err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating output directory: %v\n", err)
+		fmt.Fprintf(os.Stderr, "cramberry generate: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -206,12 +235,20 @@ Options:`)
 	hasErrors := false
 
 	for _, inputFile := range fs.Args() {
-		s, errors := loader.LoadFile(inputFile)
-		if len(errors) > 0 {
-			hasErrors = true
-			for _, err := range errors {
-				fmt.Fprintln(os.Stderr, err)
+		s, diagnostics := loader.LoadFile(inputFile)
+		// Treat only Severity=Error as fatal. Warnings are printed but
+		// don't block generation — `cramberry validate` already serves
+		// as the strict gate. This brings `generate` in line with
+		// `validate`'s own classification of warnings vs errors.
+		fatal := false
+		for _, d := range diagnostics {
+			fmt.Fprintln(os.Stderr, d)
+			if isFatalDiagnostic(d) {
+				fatal = true
 			}
+		}
+		if fatal {
+			hasErrors = true
 			continue
 		}
 
@@ -228,7 +265,7 @@ Options:`)
 		if err := atomicfile.Write(outputFile, 0o644, func(w io.Writer) error {
 			return gen.Generate(w, s, opts)
 		}); err != nil {
-			fmt.Fprintf(os.Stderr, "Error generating code: %v\n", err)
+			fmt.Fprintf(os.Stderr, "cramberry generate: %s: %v\n", inputFile, err)
 			hasErrors = true
 			continue
 		}
@@ -238,6 +275,17 @@ Options:`)
 	if hasErrors {
 		os.Exit(1)
 	}
+}
+
+// isFatalDiagnostic returns true for parser/validator diagnostics that
+// represent errors (not warnings/info). The schema package's
+// ValidationError carries an explicit severity; anything else (parse
+// errors, wrapped IO errors) is treated as fatal.
+func isFatalDiagnostic(err error) bool {
+	if v, ok := err.(*schema.ValidationError); ok {
+		return v.Severity == schema.SeverityError
+	}
+	return true
 }
 
 func cmdValidate(args []string) {
@@ -317,13 +365,17 @@ Options:`)
 		os.Exit(1)
 	}
 
-	_ = diff // TODO: implement diff output
+	if *write && *diff {
+		fmt.Fprintln(os.Stderr, "Error: -w and -d are mutually exclusive")
+		os.Exit(1)
+	}
 
 	hasErrors := false
+	formatChanged := false
 	for _, inputFile := range fs.Args() {
 		content, err := os.ReadFile(inputFile)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading %s: %v\n", inputFile, err)
+			fmt.Fprintf(os.Stderr, "cramberry format: %v\n", err)
 			hasErrors = true
 			continue
 		}
@@ -339,22 +391,38 @@ Options:`)
 
 		formatted := schema.FormatSchema(s)
 
-		if *write {
-			// Atomic write via temp + rename: a crash mid-write must not
-			// leave the user's source file truncated.
+		switch {
+		case *diff:
+			// Unified-style diff between the on-disk file and the
+			// formatter's output. Prints nothing for already-formatted
+			// files; sets exit code 1 if any file would change so this
+			// command can be used as a CI check.
+			if string(content) != formatted {
+				formatChanged = true
+				printUnifiedDiff(inputFile, string(content), formatted)
+			}
+		case *write:
+			// Atomic write via temp + rename: a crash mid-write must
+			// not leave the user's source file truncated.
 			err := atomicfile.Write(inputFile, 0o644, func(w io.Writer) error {
 				_, werr := w.Write([]byte(formatted))
 				return werr
 			})
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error writing %s: %v\n", inputFile, err)
+				fmt.Fprintf(os.Stderr, "cramberry format: write %s: %v\n", inputFile, err)
 				hasErrors = true
 				continue
 			}
 			fmt.Printf("Formatted: %s\n", inputFile)
-		} else {
+		default:
 			fmt.Print(formatted)
 		}
+	}
+
+	if formatChanged {
+		// Same convention as gofmt -d: any formatting drift exits 1 so
+		// the command can gate a CI step.
+		os.Exit(1)
 	}
 
 	if hasErrors {
@@ -423,4 +491,31 @@ Options:`)
 
 func cmdVersion() {
 	fmt.Printf("cramberry version %s\n", cramberry.VersionInfo())
+}
+
+// printUnifiedDiff emits a minimal unified-diff-shaped output between the
+// on-disk content and the formatted output. It's intentionally simple
+// (whole-file context, no run-length compression of unchanged regions);
+// the goal is a human-readable "this is what would change" signal, not
+// a fully-conforming diff(1) replacement.
+func printUnifiedDiff(path, original, formatted string) {
+	fmt.Printf("--- %s (current)\n", path)
+	fmt.Printf("+++ %s (formatted)\n", path)
+	origLines := strings.Split(original, "\n")
+	newLines := strings.Split(formatted, "\n")
+	// Pad to equal length so iteration is symmetric.
+	for len(origLines) < len(newLines) {
+		origLines = append(origLines, "")
+	}
+	for len(newLines) < len(origLines) {
+		newLines = append(newLines, "")
+	}
+	for i := range origLines {
+		if origLines[i] == newLines[i] {
+			fmt.Printf(" %s\n", origLines[i])
+			continue
+		}
+		fmt.Printf("-%s\n", origLines[i])
+		fmt.Printf("+%s\n", newLines[i])
+	}
 }

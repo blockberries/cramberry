@@ -11,15 +11,13 @@ import (
 	"github.com/blockberries/cramberry/pkg/cramberry"
 )
 
-
-
 type Status int32
 
 const (
-	StatusUnknown Status = 0
-	StatusActive Status = 1
+	StatusUnknown  Status = 0
+	StatusActive   Status = 1
 	StatusInactive Status = 2
-	StatusPending Status = 3
+	StatusPending  Status = 3
 )
 
 // String returns the string representation of the enum value.
@@ -64,21 +62,20 @@ func (e *Status) DecodeFrom(r *cramberry.Reader) {
 	*e = Status(r.ReadInt32())
 }
 
-
 type ScalarTypes struct {
-BoolVal bool `cramberry:"1" json:"bool_val"`
-Int8Val int8 `cramberry:"2" json:"int8_val"`
-Int16Val int16 `cramberry:"3" json:"int16_val"`
-Int32Val int32 `cramberry:"4" json:"int32_val"`
-Int64Val int64 `cramberry:"5" json:"int64_val"`
-Uint8Val uint8 `cramberry:"6" json:"uint8_val"`
-Uint16Val uint16 `cramberry:"7" json:"uint16_val"`
-Uint32Val uint32 `cramberry:"8" json:"uint32_val"`
-Uint64Val uint64 `cramberry:"9" json:"uint64_val"`
-Float32Val float32 `cramberry:"10" json:"float32_val"`
-Float64Val float64 `cramberry:"11" json:"float64_val"`
-StringVal string `cramberry:"12" json:"string_val"`
-BytesVal []byte `cramberry:"13" json:"bytes_val"`
+	BoolVal    bool    `cramberry:"1" json:"bool_val"`
+	Int8Val    int8    `cramberry:"2" json:"int8_val"`
+	Int16Val   int16   `cramberry:"3" json:"int16_val"`
+	Int32Val   int32   `cramberry:"4" json:"int32_val"`
+	Int64Val   int64   `cramberry:"5" json:"int64_val"`
+	Uint8Val   uint8   `cramberry:"6" json:"uint8_val"`
+	Uint16Val  uint16  `cramberry:"7" json:"uint16_val"`
+	Uint32Val  uint32  `cramberry:"8" json:"uint32_val"`
+	Uint64Val  uint64  `cramberry:"9" json:"uint64_val"`
+	Float32Val float32 `cramberry:"10" json:"float32_val"`
+	Float64Val float64 `cramberry:"11" json:"float64_val"`
+	StringVal  string  `cramberry:"12" json:"string_val"`
+	BytesVal   []byte  `cramberry:"13" json:"bytes_val"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -307,19 +304,19 @@ func (m *ScalarTypes) FromJSON(s string) error {
 
 	// Check for unknown fields (strict mode)
 	allowedFields := map[string]bool{
-		"bool_val": true,
-		"int8_val": true,
-		"int16_val": true,
-		"int32_val": true,
-		"int64_val": true,
-		"uint8_val": true,
-		"uint16_val": true,
-		"uint32_val": true,
-		"uint64_val": true,
+		"bool_val":    true,
+		"int8_val":    true,
+		"int16_val":   true,
+		"int32_val":   true,
+		"int64_val":   true,
+		"uint8_val":   true,
+		"uint16_val":  true,
+		"uint32_val":  true,
+		"uint64_val":  true,
 		"float32_val": true,
 		"float64_val": true,
-		"string_val": true,
-		"bytes_val": true,
+		"string_val":  true,
+		"bytes_val":   true,
 	}
 	for key := range raw {
 		if !allowedFields[key] {
@@ -500,14 +497,13 @@ func (m *ScalarTypes) FromJSON(s string) error {
 		}
 	}
 
-
 	return nil
 }
 
 type RepeatedTypes struct {
-Strings []string `cramberry:"1" json:"strings"`
-Ints []int64 `cramberry:"2" json:"ints"`
-Bools []bool `cramberry:"3" json:"bools"`
+	Strings []string `cramberry:"1" json:"strings"`
+	Ints    []int64  `cramberry:"2" json:"ints"`
+	Bools   []bool   `cramberry:"3" json:"bools"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -568,31 +564,31 @@ func (m *RepeatedTypes) DecodeFrom(r *cramberry.Reader) {
 		switch fieldNum {
 		case 1:
 			n := r.ReadArrayHeader()
-		if r.Err() != nil {
-			return
-		}
-		m.Strings = make([]string, n)
-		for i := 0; i < n; i++ {
-			m.Strings[i] = r.ReadString()
-		}
+			if r.Err() != nil {
+				return
+			}
+			m.Strings = make([]string, n)
+			for i := 0; i < n; i++ {
+				m.Strings[i] = r.ReadString()
+			}
 		case 2:
 			n := r.ReadArrayHeader()
-		if r.Err() != nil {
-			return
-		}
-		m.Ints = make([]int64, n)
-		for i := 0; i < n; i++ {
-			m.Ints[i] = r.ReadInt64()
-		}
+			if r.Err() != nil {
+				return
+			}
+			m.Ints = make([]int64, n)
+			for i := 0; i < n; i++ {
+				m.Ints[i] = r.ReadInt64()
+			}
 		case 3:
 			n := r.ReadArrayHeader()
-		if r.Err() != nil {
-			return
-		}
-		m.Bools = make([]bool, n)
-		for i := 0; i < n; i++ {
-			m.Bools[i] = r.ReadBool()
-		}
+			if r.Err() != nil {
+				return
+			}
+			m.Bools = make([]bool, n)
+			for i := 0; i < n; i++ {
+				m.Bools[i] = r.ReadBool()
+			}
 		default:
 			// Skip unknown field for forward compatibility
 			r.SkipValue(wireType)
@@ -641,9 +637,9 @@ func (m *RepeatedTypes) ToJSON() (string, error) {
 			buf.WriteString(",")
 		}
 		if v {
-				buf.WriteString("true")
+			buf.WriteString("true")
 		} else {
-				buf.WriteString("false")
+			buf.WriteString("false")
 		}
 	}
 	buf.WriteString("]")
@@ -664,8 +660,8 @@ func (m *RepeatedTypes) FromJSON(s string) error {
 	// Check for unknown fields (strict mode)
 	allowedFields := map[string]bool{
 		"strings": true,
-		"ints": true,
-		"bools": true,
+		"ints":    true,
+		"bools":   true,
 	}
 	for key := range raw {
 		if !allowedFields[key] {
@@ -682,11 +678,11 @@ func (m *RepeatedTypes) FromJSON(s string) error {
 		m.Strings = make([]string, len(arrRaw))
 		for i, elemRaw := range arrRaw {
 			rawValue = elemRaw
-				var strVal string
-				if err := json.Unmarshal(rawValue, &strVal); err != nil {
-						return fmt.Errorf("field %s: %w", "m.Strings[i]", err)
-				}
-				m.Strings[i] = strVal
+			var strVal string
+			if err := json.Unmarshal(rawValue, &strVal); err != nil {
+				return fmt.Errorf("field %s: %w", "m.Strings[i]", err)
+			}
+			m.Strings[i] = strVal
 		}
 	}
 
@@ -698,19 +694,19 @@ func (m *RepeatedTypes) FromJSON(s string) error {
 		m.Ints = make([]int64, len(arrRaw))
 		for i, elemRaw := range arrRaw {
 			rawValue = elemRaw
-				var strVal string
-				var numVal float64
-				if err := json.Unmarshal(rawValue, &strVal); err == nil {
-						if v, err := cramberry.ParseInt64FromString(strVal); err != nil {
-								return fmt.Errorf("field %s: %w", "m.Ints[i]", err)
-						} else {
-								m.Ints[i] = int64(v)
-						}
-				} else if err := json.Unmarshal(rawValue, &numVal); err == nil {
-						m.Ints[i] = int64(numVal)
+			var strVal string
+			var numVal float64
+			if err := json.Unmarshal(rawValue, &strVal); err == nil {
+				if v, err := cramberry.ParseInt64FromString(strVal); err != nil {
+					return fmt.Errorf("field %s: %w", "m.Ints[i]", err)
 				} else {
-						return fmt.Errorf("field %s: expected string or number", "m.Ints[i]")
+					m.Ints[i] = int64(v)
 				}
+			} else if err := json.Unmarshal(rawValue, &numVal); err == nil {
+				m.Ints[i] = int64(numVal)
+			} else {
+				return fmt.Errorf("field %s: expected string or number", "m.Ints[i]")
+			}
 		}
 	}
 
@@ -722,23 +718,22 @@ func (m *RepeatedTypes) FromJSON(s string) error {
 		m.Bools = make([]bool, len(arrRaw))
 		for i, elemRaw := range arrRaw {
 			rawValue = elemRaw
-				var boolVal bool
-				if err := json.Unmarshal(rawValue, &boolVal); err != nil {
-						return fmt.Errorf("field %s: %w", "m.Bools[i]", err)
-				}
-				m.Bools[i] = boolVal
+			var boolVal bool
+			if err := json.Unmarshal(rawValue, &boolVal); err != nil {
+				return fmt.Errorf("field %s: %w", "m.Bools[i]", err)
+			}
+			m.Bools[i] = boolVal
 		}
 	}
-
 
 	return nil
 }
 
 type MapTypes struct {
-StringMap map[string]string `cramberry:"1" json:"string_map"`
-IntMap map[string]int64 `cramberry:"2" json:"int_map"`
-IntKeyed map[int32]string `cramberry:"3" json:"int_keyed"`
-UintKeyed map[uint64]string `cramberry:"4" json:"uint_keyed"`
+	StringMap map[string]string `cramberry:"1" json:"string_map"`
+	IntMap    map[string]int64  `cramberry:"2" json:"int_map"`
+	IntKeyed  map[int32]string  `cramberry:"3" json:"int_keyed"`
+	UintKeyed map[uint64]string `cramberry:"4" json:"uint_keyed"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -760,50 +755,50 @@ func (m *MapTypes) EncodeTo(w *cramberry.Writer) {
 	if m.StringMap != nil {
 		w.WriteTag(1, cramberry.WireBytes)
 		{
-		__keys := cramberry.SortedMapKeys(m.StringMap)
-		w.WriteUvarint(uint64(len(__keys)))
-		for _, k := range __keys {
-			v := m.StringMap[k]
-			w.WriteString(k)
-			w.WriteString(v)
+			__keys := cramberry.SortedMapKeys(m.StringMap)
+			w.WriteUvarint(uint64(len(__keys)))
+			for _, k := range __keys {
+				v := m.StringMap[k]
+				w.WriteString(k)
+				w.WriteString(v)
+			}
 		}
-	}
 	}
 	if m.IntMap != nil {
 		w.WriteTag(2, cramberry.WireBytes)
 		{
-		__keys := cramberry.SortedMapKeys(m.IntMap)
-		w.WriteUvarint(uint64(len(__keys)))
-		for _, k := range __keys {
-			v := m.IntMap[k]
-			w.WriteString(k)
-			w.WriteInt64(v)
+			__keys := cramberry.SortedMapKeys(m.IntMap)
+			w.WriteUvarint(uint64(len(__keys)))
+			for _, k := range __keys {
+				v := m.IntMap[k]
+				w.WriteString(k)
+				w.WriteInt64(v)
+			}
 		}
-	}
 	}
 	if m.IntKeyed != nil {
 		w.WriteTag(3, cramberry.WireBytes)
 		{
-		__keys := cramberry.SortedMapKeys(m.IntKeyed)
-		w.WriteUvarint(uint64(len(__keys)))
-		for _, k := range __keys {
-			v := m.IntKeyed[k]
-			w.WriteInt32(k)
-			w.WriteString(v)
+			__keys := cramberry.SortedMapKeys(m.IntKeyed)
+			w.WriteUvarint(uint64(len(__keys)))
+			for _, k := range __keys {
+				v := m.IntKeyed[k]
+				w.WriteInt32(k)
+				w.WriteString(v)
+			}
 		}
-	}
 	}
 	if m.UintKeyed != nil {
 		w.WriteTag(4, cramberry.WireBytes)
 		{
-		__keys := cramberry.SortedMapKeys(m.UintKeyed)
-		w.WriteUvarint(uint64(len(__keys)))
-		for _, k := range __keys {
-			v := m.UintKeyed[k]
-			w.WriteUint64(k)
-			w.WriteString(v)
+			__keys := cramberry.SortedMapKeys(m.UintKeyed)
+			w.WriteUvarint(uint64(len(__keys)))
+			for _, k := range __keys {
+				v := m.UintKeyed[k]
+				w.WriteUint64(k)
+				w.WriteString(v)
+			}
 		}
-	}
 	}
 	w.WriteEndMarker()
 }
@@ -826,56 +821,56 @@ func (m *MapTypes) DecodeFrom(r *cramberry.Reader) {
 		switch fieldNum {
 		case 1:
 			n := r.ReadMapHeader()
-		if r.Err() != nil {
-			return
-		}
-		m.StringMap = make(map[string]string, n)
-		for i := 0; i < n; i++ {
-			var k string
-			k = r.ReadString()
-			var v string
-			v = r.ReadString()
-			m.StringMap[k] = v
-		}
+			if r.Err() != nil {
+				return
+			}
+			m.StringMap = make(map[string]string, n)
+			for i := 0; i < n; i++ {
+				var k string
+				k = r.ReadString()
+				var v string
+				v = r.ReadString()
+				m.StringMap[k] = v
+			}
 		case 2:
 			n := r.ReadMapHeader()
-		if r.Err() != nil {
-			return
-		}
-		m.IntMap = make(map[string]int64, n)
-		for i := 0; i < n; i++ {
-			var k string
-			k = r.ReadString()
-			var v int64
-			v = r.ReadInt64()
-			m.IntMap[k] = v
-		}
+			if r.Err() != nil {
+				return
+			}
+			m.IntMap = make(map[string]int64, n)
+			for i := 0; i < n; i++ {
+				var k string
+				k = r.ReadString()
+				var v int64
+				v = r.ReadInt64()
+				m.IntMap[k] = v
+			}
 		case 3:
 			n := r.ReadMapHeader()
-		if r.Err() != nil {
-			return
-		}
-		m.IntKeyed = make(map[int32]string, n)
-		for i := 0; i < n; i++ {
-			var k int32
-			k = r.ReadInt32()
-			var v string
-			v = r.ReadString()
-			m.IntKeyed[k] = v
-		}
+			if r.Err() != nil {
+				return
+			}
+			m.IntKeyed = make(map[int32]string, n)
+			for i := 0; i < n; i++ {
+				var k int32
+				k = r.ReadInt32()
+				var v string
+				v = r.ReadString()
+				m.IntKeyed[k] = v
+			}
 		case 4:
 			n := r.ReadMapHeader()
-		if r.Err() != nil {
-			return
-		}
-		m.UintKeyed = make(map[uint64]string, n)
-		for i := 0; i < n; i++ {
-			var k uint64
-			k = r.ReadUint64()
-			var v string
-			v = r.ReadString()
-			m.UintKeyed[k] = v
-		}
+			if r.Err() != nil {
+				return
+			}
+			m.UintKeyed = make(map[uint64]string, n)
+			for i := 0; i < n; i++ {
+				var k uint64
+				k = r.ReadUint64()
+				var v string
+				v = r.ReadString()
+				m.UintKeyed[k] = v
+			}
 		default:
 			// Skip unknown field for forward compatibility
 			r.SkipValue(wireType)
@@ -954,7 +949,9 @@ func (m *MapTypes) ToJSON() (string, error) {
 			buf.WriteString(cramberry.EscapeJSONString(keyStr))
 			buf.WriteString(":")
 			kInt, kErr := cramberry.ParseInt64FromString(keyStr)
-			if kErr != nil { return "", kErr }
+			if kErr != nil {
+				return "", kErr
+			}
 			actualKey := int32(kInt)
 			v := m.IntKeyed[actualKey]
 			buf.WriteString(cramberry.EscapeJSONString(v))
@@ -978,7 +975,9 @@ func (m *MapTypes) ToJSON() (string, error) {
 			buf.WriteString(cramberry.EscapeJSONString(keyStr))
 			buf.WriteString(":")
 			kUint, kErr := cramberry.ParseUint64FromString(keyStr)
-			if kErr != nil { return "", kErr }
+			if kErr != nil {
+				return "", kErr
+			}
 			actualKey := uint64(kUint)
 			v := m.UintKeyed[actualKey]
 			buf.WriteString(cramberry.EscapeJSONString(v))
@@ -1002,8 +1001,8 @@ func (m *MapTypes) FromJSON(s string) error {
 	// Check for unknown fields (strict mode)
 	allowedFields := map[string]bool{
 		"string_map": true,
-		"int_map": true,
-		"int_keyed": true,
+		"int_map":    true,
+		"int_keyed":  true,
 		"uint_keyed": true,
 	}
 	for key := range raw {
@@ -1022,11 +1021,11 @@ func (m *MapTypes) FromJSON(s string) error {
 		for keyStr, valRaw := range mapRaw {
 			k := keyStr
 			rawValue = valRaw
-				var strVal string
-				if err := json.Unmarshal(rawValue, &strVal); err != nil {
-						return fmt.Errorf("field %s: %w", "m.StringMap[k]", err)
-				}
-				m.StringMap[k] = strVal
+			var strVal string
+			if err := json.Unmarshal(rawValue, &strVal); err != nil {
+				return fmt.Errorf("field %s: %w", "m.StringMap[k]", err)
+			}
+			m.StringMap[k] = strVal
 		}
 	}
 
@@ -1039,19 +1038,19 @@ func (m *MapTypes) FromJSON(s string) error {
 		for keyStr, valRaw := range mapRaw {
 			k := keyStr
 			rawValue = valRaw
-				var strVal string
-				var numVal float64
-				if err := json.Unmarshal(rawValue, &strVal); err == nil {
-						if v, err := cramberry.ParseInt64FromString(strVal); err != nil {
-								return fmt.Errorf("field %s: %w", "m.IntMap[k]", err)
-						} else {
-								m.IntMap[k] = int64(v)
-						}
-				} else if err := json.Unmarshal(rawValue, &numVal); err == nil {
-						m.IntMap[k] = int64(numVal)
+			var strVal string
+			var numVal float64
+			if err := json.Unmarshal(rawValue, &strVal); err == nil {
+				if v, err := cramberry.ParseInt64FromString(strVal); err != nil {
+					return fmt.Errorf("field %s: %w", "m.IntMap[k]", err)
 				} else {
-						return fmt.Errorf("field %s: expected string or number", "m.IntMap[k]")
+					m.IntMap[k] = int64(v)
 				}
+			} else if err := json.Unmarshal(rawValue, &numVal); err == nil {
+				m.IntMap[k] = int64(numVal)
+			} else {
+				return fmt.Errorf("field %s: expected string or number", "m.IntMap[k]")
+			}
 		}
 	}
 
@@ -1068,11 +1067,11 @@ func (m *MapTypes) FromJSON(s string) error {
 			}
 			k := int32(kInt)
 			rawValue = valRaw
-				var strVal string
-				if err := json.Unmarshal(rawValue, &strVal); err != nil {
-						return fmt.Errorf("field %s: %w", "m.IntKeyed[k]", err)
-				}
-				m.IntKeyed[k] = strVal
+			var strVal string
+			if err := json.Unmarshal(rawValue, &strVal); err != nil {
+				return fmt.Errorf("field %s: %w", "m.IntKeyed[k]", err)
+			}
+			m.IntKeyed[k] = strVal
 		}
 	}
 
@@ -1089,22 +1088,21 @@ func (m *MapTypes) FromJSON(s string) error {
 			}
 			k := uint64(kUint)
 			rawValue = valRaw
-				var strVal string
-				if err := json.Unmarshal(rawValue, &strVal); err != nil {
-						return fmt.Errorf("field %s: %w", "m.UintKeyed[k]", err)
-				}
-				m.UintKeyed[k] = strVal
+			var strVal string
+			if err := json.Unmarshal(rawValue, &strVal); err != nil {
+				return fmt.Errorf("field %s: %w", "m.UintKeyed[k]", err)
+			}
+			m.UintKeyed[k] = strVal
 		}
 	}
-
 
 	return nil
 }
 
 type Address struct {
-Street string `cramberry:"1" json:"street"`
-City string `cramberry:"2" json:"city"`
-Zip string `cramberry:"3" json:"zip"`
+	Street string `cramberry:"1" json:"street"`
+	City   string `cramberry:"2" json:"city"`
+	Zip    string `cramberry:"3" json:"zip"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -1204,8 +1202,8 @@ func (m *Address) FromJSON(s string) error {
 	// Check for unknown fields (strict mode)
 	allowedFields := map[string]bool{
 		"street": true,
-		"city": true,
-		"zip": true,
+		"city":   true,
+		"zip":    true,
 	}
 	for key := range raw {
 		if !allowedFields[key] {
@@ -1238,15 +1236,14 @@ func (m *Address) FromJSON(s string) error {
 		m.Zip = strVal
 	}
 
-
 	return nil
 }
 
 type Person struct {
-Name string `cramberry:"1" json:"name"`
-Age int32 `cramberry:"2" json:"age"`
-Address Address `cramberry:"3" json:"address"`
-Emails []string `cramberry:"4" json:"emails"`
+	Name    string   `cramberry:"1" json:"name"`
+	Age     int32    `cramberry:"2" json:"age"`
+	Address Address  `cramberry:"3" json:"address"`
+	Emails  []string `cramberry:"4" json:"emails"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -1309,13 +1306,13 @@ func (m *Person) DecodeFrom(r *cramberry.Reader) {
 			m.Address.DecodeFrom(r)
 		case 4:
 			n := r.ReadArrayHeader()
-		if r.Err() != nil {
-			return
-		}
-		m.Emails = make([]string, n)
-		for i := 0; i < n; i++ {
-			m.Emails[i] = r.ReadString()
-		}
+			if r.Err() != nil {
+				return
+			}
+			m.Emails = make([]string, n)
+			for i := 0; i < n; i++ {
+				m.Emails[i] = r.ReadString()
+			}
 		default:
 			// Skip unknown field for forward compatibility
 			r.SkipValue(wireType)
@@ -1376,10 +1373,10 @@ func (m *Person) FromJSON(s string) error {
 
 	// Check for unknown fields (strict mode)
 	allowedFields := map[string]bool{
-		"name": true,
-		"age": true,
+		"name":    true,
+		"age":     true,
 		"address": true,
-		"emails": true,
+		"emails":  true,
 	}
 	for key := range raw {
 		if !allowedFields[key] {
@@ -1428,22 +1425,21 @@ func (m *Person) FromJSON(s string) error {
 		m.Emails = make([]string, len(arrRaw))
 		for i, elemRaw := range arrRaw {
 			rawValue = elemRaw
-				var strVal string
-				if err := json.Unmarshal(rawValue, &strVal); err != nil {
-						return fmt.Errorf("field %s: %w", "m.Emails[i]", err)
-				}
-				m.Emails[i] = strVal
+			var strVal string
+			if err := json.Unmarshal(rawValue, &strVal); err != nil {
+				return fmt.Errorf("field %s: %w", "m.Emails[i]", err)
+			}
+			m.Emails[i] = strVal
 		}
 	}
-
 
 	return nil
 }
 
 type RequiredFields struct {
-Id *int64 `cramberry:"1,required" json:"id"`
-Name *string `cramberry:"2,required" json:"name"`
-OptionalField string `cramberry:"3" json:"optional_field"`
+	Id            *int64  `cramberry:"1,required" json:"id"`
+	Name          *string `cramberry:"2,required" json:"name"`
+	OptionalField string  `cramberry:"3" json:"optional_field"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -1495,12 +1491,12 @@ func (m *RequiredFields) DecodeFrom(r *cramberry.Reader) {
 		switch fieldNum {
 		case 1:
 			var tmp int64
-		tmp = r.ReadInt64()
-		m.Id = &tmp
+			tmp = r.ReadInt64()
+			m.Id = &tmp
 		case 2:
 			var tmp string
-		tmp = r.ReadString()
-		m.Name = &tmp
+			tmp = r.ReadString()
+			m.Name = &tmp
 		case 3:
 			m.OptionalField = r.ReadString()
 		default:
@@ -1565,8 +1561,8 @@ func (m *RequiredFields) FromJSON(s string) error {
 
 	// Check for unknown fields (strict mode)
 	allowedFields := map[string]bool{
-		"id": true,
-		"name": true,
+		"id":             true,
+		"name":           true,
 		"optional_field": true,
 	}
 	for key := range raw {
@@ -1621,8 +1617,8 @@ func (m *RequiredFields) FromJSON(s string) error {
 }
 
 type OptionalPointer struct {
-Value *string `cramberry:"1" json:"value"`
-Number *int64 `cramberry:"2" json:"number"`
+	Value  *string `cramberry:"1" json:"value"`
+	Number *int64  `cramberry:"2" json:"number"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -1670,16 +1666,16 @@ func (m *OptionalPointer) DecodeFrom(r *cramberry.Reader) {
 		switch fieldNum {
 		case 1:
 			{
-			var v string
-			v = r.ReadString()
-			m.Value = &v
-		}
+				var v string
+				v = r.ReadString()
+				m.Value = &v
+			}
 		case 2:
 			{
-			var v int64
-			v = r.ReadInt64()
-			m.Number = &v
-		}
+				var v int64
+				v = r.ReadInt64()
+				m.Number = &v
+			}
 		default:
 			// Skip unknown field for forward compatibility
 			r.SkipValue(wireType)
@@ -1699,7 +1695,7 @@ func (m *OptionalPointer) ToJSON() (string, error) {
 	buf.WriteString("{")
 	buf.WriteString(`"value":`)
 	if m.Value != nil {
-			buf.WriteString(cramberry.EscapeJSONString(*m.Value))
+		buf.WriteString(cramberry.EscapeJSONString(*m.Value))
 	} else {
 		buf.WriteString("null")
 	}
@@ -1707,7 +1703,7 @@ func (m *OptionalPointer) ToJSON() (string, error) {
 	buf.WriteString(",")
 	buf.WriteString(`"number":`)
 	if m.Number != nil {
-			buf.WriteString(`"`)
+		buf.WriteString(`"`)
 		buf.WriteString(cramberry.FormatInt64ToString(int64(*m.Number)))
 		buf.WriteString(`"`)
 	} else {
@@ -1729,7 +1725,7 @@ func (m *OptionalPointer) FromJSON(s string) error {
 
 	// Check for unknown fields (strict mode)
 	allowedFields := map[string]bool{
-		"value": true,
+		"value":  true,
 		"number": true,
 	}
 	for key := range raw {
@@ -1744,11 +1740,11 @@ func (m *OptionalPointer) FromJSON(s string) error {
 		if err := json.Unmarshal(rawValue, &isNull); err == nil && isNull {
 			m.Value = nil
 		} else {
-				var strVal string
-				if err := json.Unmarshal(rawValue, &strVal); err != nil {
-						return fmt.Errorf("field %s: %w", "*m.Value", err)
-				}
-				*m.Value = strVal
+			var strVal string
+			if err := json.Unmarshal(rawValue, &strVal); err != nil {
+				return fmt.Errorf("field %s: %w", "*m.Value", err)
+			}
+			*m.Value = strVal
 		}
 	}
 
@@ -1757,29 +1753,28 @@ func (m *OptionalPointer) FromJSON(s string) error {
 		if err := json.Unmarshal(rawValue, &isNull); err == nil && isNull {
 			m.Number = nil
 		} else {
-				var strVal string
-				var numVal float64
-				if err := json.Unmarshal(rawValue, &strVal); err == nil {
-						if v, err := cramberry.ParseInt64FromString(strVal); err != nil {
-								return fmt.Errorf("field %s: %w", "*m.Number", err)
-						} else {
-								*m.Number = int64(v)
-						}
-				} else if err := json.Unmarshal(rawValue, &numVal); err == nil {
-						*m.Number = int64(numVal)
+			var strVal string
+			var numVal float64
+			if err := json.Unmarshal(rawValue, &strVal); err == nil {
+				if v, err := cramberry.ParseInt64FromString(strVal); err != nil {
+					return fmt.Errorf("field %s: %w", "*m.Number", err)
 				} else {
-						return fmt.Errorf("field %s: expected string or number", "*m.Number")
+					*m.Number = int64(v)
 				}
+			} else if err := json.Unmarshal(rawValue, &numVal); err == nil {
+				*m.Number = int64(numVal)
+			} else {
+				return fmt.Errorf("field %s: expected string or number", "*m.Number")
+			}
 		}
 	}
-
 
 	return nil
 }
 
 type EnumTest struct {
-Status Status `cramberry:"1" json:"status"`
-Statuses []Status `cramberry:"2" json:"statuses"`
+	Status   Status   `cramberry:"1" json:"status"`
+	Statuses []Status `cramberry:"2" json:"statuses"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -1830,13 +1825,13 @@ func (m *EnumTest) DecodeFrom(r *cramberry.Reader) {
 			m.Status.DecodeFrom(r)
 		case 2:
 			n := r.ReadArrayHeader()
-		if r.Err() != nil {
-			return
-		}
-		m.Statuses = make([]Status, n)
-		for i := 0; i < n; i++ {
-			m.Statuses[i].DecodeFrom(r)
-		}
+			if r.Err() != nil {
+				return
+			}
+			m.Statuses = make([]Status, n)
+			for i := 0; i < n; i++ {
+				m.Statuses[i].DecodeFrom(r)
+			}
 		default:
 			// Skip unknown field for forward compatibility
 			r.SkipValue(wireType)
@@ -1887,7 +1882,7 @@ func (m *EnumTest) FromJSON(s string) error {
 
 	// Check for unknown fields (strict mode)
 	allowedFields := map[string]bool{
-		"status": true,
+		"status":   true,
 		"statuses": true,
 	}
 	for key := range raw {
@@ -1924,25 +1919,24 @@ func (m *EnumTest) FromJSON(s string) error {
 		m.Statuses = make([]Status, len(arrRaw))
 		for i, elemRaw := range arrRaw {
 			rawValue = elemRaw
-				var strVal string
-				if err := json.Unmarshal(rawValue, &strVal); err != nil {
-						return fmt.Errorf("field %s: %w", "m.Statuses[i]", err)
-				}
-				switch strVal {
-				case "UNKNOWN":
-						m.Statuses[i] = StatusUnknown
-				case "ACTIVE":
-						m.Statuses[i] = StatusActive
-				case "INACTIVE":
-						m.Statuses[i] = StatusInactive
-				case "PENDING":
-						m.Statuses[i] = StatusPending
-				default:
-						return fmt.Errorf("field %s: unknown enum value: %s", "m.Statuses[i]", strVal)
-				}
+			var strVal string
+			if err := json.Unmarshal(rawValue, &strVal); err != nil {
+				return fmt.Errorf("field %s: %w", "m.Statuses[i]", err)
+			}
+			switch strVal {
+			case "UNKNOWN":
+				m.Statuses[i] = StatusUnknown
+			case "ACTIVE":
+				m.Statuses[i] = StatusActive
+			case "INACTIVE":
+				m.Statuses[i] = StatusInactive
+			case "PENDING":
+				m.Statuses[i] = StatusPending
+			default:
+				return fmt.Errorf("field %s: unknown enum value: %s", "m.Statuses[i]", strVal)
+			}
 		}
 	}
-
 
 	return nil
 }
@@ -2016,8 +2010,7 @@ func (m *EmptyMessage) FromJSON(s string) error {
 	}
 
 	// Check for unknown fields (strict mode)
-	allowedFields := map[string]bool{
-	}
+	allowedFields := map[string]bool{}
 	for key := range raw {
 		if !allowedFields[key] {
 			return fmt.Errorf("FromJSON: unknown field %q", key)
@@ -2030,10 +2023,10 @@ func (m *EmptyMessage) FromJSON(s string) error {
 }
 
 type AllZeroValues struct {
-ZeroInt int64 `cramberry:"1" json:"zero_int"`
-ZeroString string `cramberry:"2" json:"zero_string"`
-ZeroBool bool `cramberry:"3" json:"zero_bool"`
-EmptyArray []string `cramberry:"4" json:"empty_array"`
+	ZeroInt    int64    `cramberry:"1" json:"zero_int"`
+	ZeroString string   `cramberry:"2" json:"zero_string"`
+	ZeroBool   bool     `cramberry:"3" json:"zero_bool"`
+	EmptyArray []string `cramberry:"4" json:"empty_array"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -2098,13 +2091,13 @@ func (m *AllZeroValues) DecodeFrom(r *cramberry.Reader) {
 			m.ZeroBool = r.ReadBool()
 		case 4:
 			n := r.ReadArrayHeader()
-		if r.Err() != nil {
-			return
-		}
-		m.EmptyArray = make([]string, n)
-		for i := 0; i < n; i++ {
-			m.EmptyArray[i] = r.ReadString()
-		}
+			if r.Err() != nil {
+				return
+			}
+			m.EmptyArray = make([]string, n)
+			for i := 0; i < n; i++ {
+				m.EmptyArray[i] = r.ReadString()
+			}
 		default:
 			// Skip unknown field for forward compatibility
 			r.SkipValue(wireType)
@@ -2165,9 +2158,9 @@ func (m *AllZeroValues) FromJSON(s string) error {
 
 	// Check for unknown fields (strict mode)
 	allowedFields := map[string]bool{
-		"zero_int": true,
+		"zero_int":    true,
 		"zero_string": true,
-		"zero_bool": true,
+		"zero_bool":   true,
 		"empty_array": true,
 	}
 	for key := range raw {
@@ -2217,16 +2210,13 @@ func (m *AllZeroValues) FromJSON(s string) error {
 		m.EmptyArray = make([]string, len(arrRaw))
 		for i, elemRaw := range arrRaw {
 			rawValue = elemRaw
-				var strVal string
-				if err := json.Unmarshal(rawValue, &strVal); err != nil {
-						return fmt.Errorf("field %s: %w", "m.EmptyArray[i]", err)
-				}
-				m.EmptyArray[i] = strVal
+			var strVal string
+			if err := json.Unmarshal(rawValue, &strVal); err != nil {
+				return fmt.Errorf("field %s: %w", "m.EmptyArray[i]", err)
+			}
+			m.EmptyArray[i] = strVal
 		}
 	}
 
-
 	return nil
 }
-
-

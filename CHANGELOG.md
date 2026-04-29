@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (UX & DX)
+
+- **`-lang ts` and `-lang rs` now work**. The README's primary usage
+  example showed `cramberry generate -lang ts ...`, which used to fail
+  with `unsupported language: ts`. The generator registry now accepts
+  the short aliases (`ts`, `rs`, `golang`, `js`) alongside the
+  canonical names.
+- **`cramberry --version` / `-V`** are now recognised at the top
+  level, alongside the existing `version` subcommand.
+- **`cramberry help <subcommand>`** now prints the subcommand's own
+  usage rather than the top-level help.
+- **`cramberry format -d`** actually emits a unified-style diff
+  instead of silently printing the formatted output (the flag was
+  parsed and discarded — `_ = diff // TODO`). Exits 1 if any file
+  would change, so the command can gate a CI step.
+- **`cramberry generate` no longer rejects warnings**. Previously the
+  loader's diagnostic slice was treated as fatal regardless of
+  severity; a schema that `cramberry validate` accepted (warnings
+  only) would still fail to generate. Errors and warnings are now
+  classified the same way both subcommands.
+- **CLI errors are prefixed with the subcommand name** and the
+  affected file path: `cramberry generate: schemas/foo.cram: ...`
+  instead of the bare `Error generating code: ...` that hid which
+  command and which file produced the message.
+- **Schema parser surfaces the underlying parse-int error** on
+  field-number / type-ID / enum-value / array-size literals
+  (`invalid field number: integer literal "..." out of int range`)
+  instead of swallowing it.
+- **Decode errors gain field context**. A varint failure deep in a
+  nested struct field now reports `Type.Field` and the byte offset
+  rather than just `cramberry: invalid varint at offset 27`.
+- **Bad `cramberry:"..."` struct tags are returned errors, not
+  panics**. Importing a third-party type with a malformed tag
+  previously crashed the host process the first time `Marshal` was
+  called on it; now `Marshal` returns an error.
+
+### Changed (Makefile / dev tooling)
+
+- `.PHONY` now lists every phony target (`test-short`, `tidy`,
+  `deps`, `verify`, `check`, `ci`, `pre-commit`, `generate-test`,
+  the new `ts-fmt`/`ts-lint`/`rust-fmt`/`rust-lint`/`lint-all`/
+  `fmt-all`). Without this a file or directory named `check` or
+  `ci` could shadow the target.
+- `make lint` now errors out if `golangci-lint` is missing
+  (CLAUDE.md mandates a clean lint after every change; a silent
+  skip let regressions slip past). The install hint is unchanged.
+- `make ci` is now a strict superset of `make check`: it runs the
+  Go-only checks plus the cross-language integration tests.
+- `make all` no longer mutates files. It uses `fmt-check` (the new
+  `gofmt -l` based target that fails on unformatted files) instead
+  of `fmt`, so running the default target on a clean tree leaves
+  the working copy clean.
+- New targets: `pre-commit` (mutating fmt + checks), `ts-fmt`,
+  `ts-lint`, `rust-fmt`, `rust-lint`, `lint-all`, `fmt-all`.
+- `make help` honours `NO_COLOR` and detects TTY before emitting
+  ANSI escape codes.
+
+### Refactored (DRY)
+
+- `resolveNamedEnum` / `isNamedEnum` consolidated into
+  `pkg/codegen/generator.go::ResolveNamedEnum` / `IsNamedEnum`. The
+  three generators previously had byte-identical 20-line
+  implementations of the same lookup; now they call the shared
+  helpers, eliminating drift risk between languages.
+- `pool.go` `GetBuffer` / `PutBuffer` removed (zero callers, and the
+  size-class lookup was wrong — a returned buffer's capacity could
+  be smaller than the requested size hint).
+
 ### Fixed (correctness — fifth review pass)
 
 - **`Reader.ReadTag` no longer treats truncated input as a clean

@@ -54,29 +54,11 @@ type tsContext struct {
 // another package falls back to WireBytes (the default for messages) and
 // produces a malformed wire format.
 func (c *tsContext) resolveNamedEnum(typ *schema.NamedType) (*schema.Enum, bool) {
-	if typ.Package == "" {
-		for _, e := range c.Schema.Enums {
-			if e.Name == typ.Name {
-				return e, true
-			}
-		}
-		return nil, false
-	}
-	if c.Options.ImportedSchemas != nil {
-		if imported, ok := c.Options.ImportedSchemas[typ.Package]; ok && imported != nil {
-			for _, e := range imported.Enums {
-				if e.Name == typ.Name {
-					return e, true
-				}
-			}
-		}
-	}
-	return nil, false
+	return ResolveNamedEnum(c.Schema, c.Options.ImportedSchemas, typ)
 }
 
 func (c *tsContext) isNamedEnum(typ *schema.NamedType) bool {
-	_, ok := c.resolveNamedEnum(typ)
-	return ok
+	return IsNamedEnum(c.Schema, c.Options.ImportedSchemas, typ)
 }
 
 func (c *tsContext) funcMap() template.FuncMap {

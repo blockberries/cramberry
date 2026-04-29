@@ -653,30 +653,12 @@ func (c *goContext) goPackage() string {
 // Without this lookup, cross-package enum fields fall back to WireBytes
 // (the default for messages) and produce a malformed wire format.
 func (c *goContext) resolveNamedEnum(typ *schema.NamedType) (*schema.Enum, bool) {
-	if typ.Package == "" {
-		for _, e := range c.Schema.Enums {
-			if e.Name == typ.Name {
-				return e, true
-			}
-		}
-		return nil, false
-	}
-	if c.Options.ImportedSchemas != nil {
-		if imported, ok := c.Options.ImportedSchemas[typ.Package]; ok && imported != nil {
-			for _, e := range imported.Enums {
-				if e.Name == typ.Name {
-					return e, true
-				}
-			}
-		}
-	}
-	return nil, false
+	return ResolveNamedEnum(c.Schema, c.Options.ImportedSchemas, typ)
 }
 
 // isNamedEnum reports whether the given NamedType refers to an enum.
 func (c *goContext) isNamedEnum(typ *schema.NamedType) bool {
-	_, ok := c.resolveNamedEnum(typ)
-	return ok
+	return IsNamedEnum(c.Schema, c.Options.ImportedSchemas, typ)
 }
 
 // isSamePackage checks if an import alias refers to a schema in the same package.

@@ -21,44 +21,40 @@ func TestParseFieldTag_AcceptsValidTag(t *testing.T) {
 	}
 }
 
-func TestParseFieldTag_PanicsOnInvalidNumber(t *testing.T) {
+func TestParseFieldTag_ErrorsOnInvalidNumber(t *testing.T) {
 	type badNum struct {
 		A int `cramberry:"abc"`
 	}
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic on non-numeric field tag, got none")
-		} else if msg, ok := r.(string); ok && !strings.Contains(msg, "invalid field number") {
-			t.Errorf("panic message = %q, want substring 'invalid field number'", msg)
-		}
-	}()
-	_, _ = Marshal(&badNum{A: 1})
+	_, err := Marshal(&badNum{A: 1})
+	if err == nil {
+		t.Fatal("expected error on non-numeric field tag, got none")
+	}
+	if !strings.Contains(err.Error(), "invalid field number") {
+		t.Errorf("error = %v, want substring 'invalid field number'", err)
+	}
 }
 
-func TestParseFieldTag_PanicsOnNonPositiveNumber(t *testing.T) {
+func TestParseFieldTag_ErrorsOnNonPositiveNumber(t *testing.T) {
 	type badNum struct {
 		A int `cramberry:"-3"`
 	}
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic on negative field tag, got none")
-		}
-	}()
-	_, _ = Marshal(&badNum{A: 1})
+	_, err := Marshal(&badNum{A: 1})
+	if err == nil {
+		t.Fatal("expected error on negative field tag, got none")
+	}
 }
 
-func TestParseFieldTag_PanicsOnUnknownOption(t *testing.T) {
+func TestParseFieldTag_ErrorsOnUnknownOption(t *testing.T) {
 	type typoOpt struct {
 		A int `cramberry:"3,omit_empty"` // user typo'd "omitempty"
 	}
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic on unknown tag option, got none")
-		} else if msg, ok := r.(string); ok && !strings.Contains(msg, "unknown tag option") {
-			t.Errorf("panic message = %q, want substring 'unknown tag option'", msg)
-		}
-	}()
-	_, _ = Marshal(&typoOpt{A: 1})
+	_, err := Marshal(&typoOpt{A: 1})
+	if err == nil {
+		t.Fatal("expected error on unknown tag option, got none")
+	}
+	if !strings.Contains(err.Error(), "unknown tag option") {
+		t.Errorf("error = %v, want substring 'unknown tag option'", err)
+	}
 }
 
 // --- Item 13: isZeroValue ignores unexported fields ---------------------

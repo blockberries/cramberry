@@ -93,10 +93,32 @@ func Register(gen Generator) {
 	registry[gen.Language()] = gen
 }
 
-// Get returns the generator for a language.
+// languageAliases maps the short / colloquial names a user might type
+// to the canonical Language constants. This is keyed off the README's
+// usage example, which shows `-lang ts` even though the canonical name
+// is `typescript`.
+var languageAliases = map[string]Language{
+	"go":         LanguageGo,
+	"golang":     LanguageGo,
+	"ts":         LanguageTypeScript,
+	"typescript": LanguageTypeScript,
+	"js":         LanguageTypeScript, // close enough for a typo
+	"rs":         LanguageRust,
+	"rust":       LanguageRust,
+}
+
+// Get returns the generator for a language. Accepts both the canonical
+// names (`go`, `typescript`, `rust`) and the short aliases (`ts`, `rs`,
+// `golang`, `js`).
 func Get(lang Language) (Generator, bool) {
-	gen, ok := registry[lang]
-	return gen, ok
+	if gen, ok := registry[lang]; ok {
+		return gen, true
+	}
+	if canonical, ok := languageAliases[string(lang)]; ok {
+		gen, ok := registry[canonical]
+		return gen, ok
+	}
+	return nil, false
 }
 
 // Languages returns all registered languages, sorted by name for stable
@@ -108,6 +130,41 @@ func Languages() []Language {
 	}
 	sort.Slice(langs, func(i, j int) bool { return langs[i] < langs[j] })
 	return langs
+}
+
+// ResolveNamedEnum returns the schema.Enum for a NamedType if it refers
+// to an enum, looking in both the local schema and any imported
+// schemas. Without the cross-package lookup, an imported enum field
+// falls back to WireBytes (the default for messages) and produces a
+// malformed wire format.
+//
+// Shared across all three generators — Go, TypeScript, and Rust — so
+// the lookup behavior cannot drift between them.
+func ResolveNamedEnum(local *schema.Schema, imports map[string]*schema.Schema, typ *schema.NamedType) (*schema.Enum, bool) {
+	if typ.Package == "" {
+		for _, e := range local.Enums {
+			if e.Name == typ.Name {
+				return e, true
+			}
+		}
+		return nil, false
+	}
+	if imports != nil {
+		if imported, ok := imports[typ.Package]; ok && imported != nil {
+			for _, e := range imported.Enums {
+				if e.Name == typ.Name {
+					return e, true
+				}
+			}
+		}
+	}
+	return nil, false
+}
+
+// IsNamedEnum is a convenience wrapper around ResolveNamedEnum.
+func IsNamedEnum(local *schema.Schema, imports map[string]*schema.Schema, typ *schema.NamedType) bool {
+	_, ok := ResolveNamedEnum(local, imports, typ)
+	return ok
 }
 
 // Helper functions for code generation

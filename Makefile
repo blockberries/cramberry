@@ -1,7 +1,10 @@
-.PHONY: all build test bench lint fmt vet generate clean install coverage help
+.PHONY: all build test test-short bench lint fmt fmt-check vet generate clean install coverage help
+.PHONY: tidy deps verify check ci pre-commit generate-test
 .PHONY: examples example-basic example-streaming example-polymorphic
 .PHONY: schema-generate schema-extract
-.PHONY: ts-build ts-test rust-build rust-test runtimes runtimes-test ts-integration-test rust-integration-test integration-test
+.PHONY: ts-build ts-test ts-fmt ts-lint rust-build rust-test rust-fmt rust-lint
+.PHONY: runtimes runtimes-test ts-integration-test rust-integration-test integration-test
+.PHONY: lint-all fmt-all
 
 # Go parameters
 GO := go
@@ -27,8 +30,9 @@ LDFLAGS := -X github.com/blockberries/cramberry/pkg/cramberry.Version=$(VERSION)
            -X github.com/blockberries/cramberry/pkg/cramberry.GitCommit=$(COMMIT) \
            -X github.com/blockberries/cramberry/pkg/cramberry.BuildDate=$(BUILD_DATE)
 
-# Default target
-all: fmt vet lint test build
+# Default target — checks-only (no mutations) so running it on a clean
+# tree doesn't dirty the working copy.
+all: fmt-check vet lint test build ## Run fmt-check, vet, lint, test, build (no mutations)
 
 ## Build targets
 
@@ -56,20 +60,29 @@ coverage: test ## Generate coverage report
 
 ## Code quality targets
 
-fmt: ## Format code
+fmt: ## Format code (mutates files)
 	$(GO) fmt $(PKG)
 	@echo "Code formatted"
+
+fmt-check: ## Verify code is formatted (CI-safe; doesn't mutate)
+	@out=$$(gofmt -l $(shell find . -type f -name '*.go' -not -path './internal/bench/gen/*' -not -path './test/integration/gen/*')) ; \
+	if [ -n "$$out" ]; then \
+		echo "Files not gofmt'd:"; echo "$$out"; exit 1; \
+	fi
 
 vet: ## Run go vet
 	$(GO) vet $(PKG)
 
-lint: ## Run golangci-lint
-	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run $(PKG); \
-	else \
-		echo "golangci-lint not installed, skipping..."; \
+# `make lint` requires golangci-lint to be installed and fails if it's
+# missing. CLAUDE.md mandates a clean lint after every change, so a
+# silently-skipped lint would let regressions slip through.
+lint: ## Run golangci-lint (errors if not installed)
+	@command -v golangci-lint >/dev/null 2>&1 || { \
+		echo "golangci-lint is required but not installed."; \
 		echo "Install with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
-	fi
+		exit 1; \
+	}
+	golangci-lint run $(PKG)
 
 ## Generation targets
 
@@ -109,15 +122,13 @@ verify: ## Verify dependencies
 
 ## Development helpers
 
-check: fmt vet lint test ## Run all checks (format, vet, lint, test)
+check: fmt-check vet lint test ## Run Go-only checks (fmt-check, vet, lint, test)
 
-ci: ## Run CI pipeline locally
-	@echo "Running CI pipeline..."
-	$(MAKE) fmt
-	$(MAKE) vet
-	$(MAKE) test
-	$(MAKE) build
+ci: check build integration-test ## Run the full CI pipeline (Go checks + cross-language integration)
 	@echo "CI pipeline complete"
+
+pre-commit: fmt vet lint test ## Format + run all Go checks before committing
+	@echo "Pre-commit checks passed"
 
 ## Example targets
 
@@ -182,6 +193,29 @@ runtimes: ts-build rust-build ## Build all cross-language runtimes
 
 runtimes-test: ts-test rust-test integration-test ## Test all runtimes (unit + cross-language integration)
 
+# TypeScript / Rust formatting + linting. These are best-effort: the
+# tools are run only if installed locally, so contributors without them
+# don't get a blocking failure.
+
+ts-fmt: ## Format TypeScript sources (npx prettier)
+	@cd typescript && npx --no -- prettier --write 'src/**/*.ts' || \
+		echo "prettier not available; skipping ts-fmt"
+
+ts-lint: ## Lint TypeScript sources (npx eslint)
+	@cd typescript && npx --no -- eslint 'src/**/*.ts' || \
+		echo "eslint not available; skipping ts-lint"
+
+rust-fmt: ## Format Rust sources (cargo fmt)
+	@cd rust && cargo fmt --all
+	@cd test/integration/rust && cargo fmt --all
+
+rust-lint: ## Lint Rust sources (cargo clippy)
+	@cd rust && cargo clippy --all-targets -- -D warnings
+
+lint-all: lint rust-lint ts-lint ## Run linters across Go, Rust, and TS
+
+fmt-all: fmt rust-fmt ts-fmt ## Format Go, Rust, and TS sources
+
 ## Help
 
 help: ## Show this help
@@ -190,4 +224,10 @@ help: ## Show this help
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Targets:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+	@if [ -t 1 ] && [ -z "$$NO_COLOR" ]; then \
+		grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
+			awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'; \
+	else \
+		grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
+			awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'; \
+	fi

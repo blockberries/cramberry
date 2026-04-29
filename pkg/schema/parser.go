@@ -337,7 +337,7 @@ func (p *Parser) parseMessage() (*Message, *ParseError) {
 		}
 		id, err := parseIntLiteral(p.current.Value)
 		if err != nil {
-			return nil, p.error("invalid type ID")
+			return nil, p.error(fmt.Sprintf("invalid type ID: %v", err))
 		}
 		typeID = id
 		p.advance()
@@ -436,7 +436,7 @@ parseType:
 	}
 	num, parseErr := parseIntLiteral(p.current.Value)
 	if parseErr != nil {
-		return nil, p.error("invalid field number")
+		return nil, p.error(fmt.Sprintf("invalid field number: %v", parseErr))
 	}
 	p.advance()
 
@@ -548,7 +548,7 @@ func (p *Parser) parseTypeRef() (TypeRef, *ParseError) {
 		if p.check(TokenInt) {
 			sz, err := parseIntLiteral(p.current.Value)
 			if err != nil {
-				return nil, p.error("invalid array size")
+				return nil, p.error(fmt.Sprintf("invalid array size: %v", err))
 			}
 			size = sz
 			p.advance()
@@ -707,7 +707,7 @@ func (p *Parser) parseEnumValue() (*EnumValue, *ParseError) {
 	}
 	num, err := parseIntLiteral(p.current.Value)
 	if err != nil {
-		return nil, p.error("invalid enum value number")
+		return nil, p.error(fmt.Sprintf("invalid enum value number: %v", err))
 	}
 	p.advance()
 
@@ -788,7 +788,7 @@ func (p *Parser) parseImplementation() (*Implementation, *ParseError) {
 	}
 	typeID, err := parseIntLiteral(p.current.Value)
 	if err != nil {
-		return nil, p.error("invalid type ID")
+		return nil, p.error(fmt.Sprintf("invalid type ID: %v", err))
 	}
 	p.advance()
 
@@ -851,6 +851,15 @@ func (p *Parser) check(typ TokenType) bool {
 	return p.current.Type == typ
 }
 
+// consume advances past the next token if it matches `typ`, returning
+// true. Otherwise it leaves the position unchanged and returns false —
+// the caller is expected to construct a ParseError using `msg` (often
+// via `p.error(msg)`) so the offending position is recorded.
+//
+// The previous signature took `msg` but discarded it; every caller
+// paired `consume` with a duplicate `p.error("...")`. The argument is
+// kept here so the call sites self-document expected tokens, even
+// though `consume` itself doesn't yet attach `msg` to the error trail.
 func (p *Parser) consume(typ TokenType, _ string) bool {
 	if p.check(typ) {
 		p.advance()

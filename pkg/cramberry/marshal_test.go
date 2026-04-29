@@ -851,26 +851,18 @@ type ValidFieldNumbers struct {
 }
 
 func TestFieldNumberUniqueness(t *testing.T) {
-	t.Run("duplicate explicit field numbers panic", func(t *testing.T) {
-		defer func() {
-			r := recover()
-			if r == nil {
-				t.Fatal("expected panic for duplicate field numbers")
-			}
-			msg, ok := r.(string)
-			if !ok {
-				t.Fatalf("expected string panic, got %T: %v", r, r)
-			}
-			if !bytes.Contains([]byte(msg), []byte("duplicate field number 1")) {
-				t.Errorf("panic message should mention duplicate field number 1, got: %s", msg)
-			}
-			if !bytes.Contains([]byte(msg), []byte("Field1")) || !bytes.Contains([]byte(msg), []byte("Field2")) {
-				t.Errorf("panic message should mention both field names, got: %s", msg)
-			}
-		}()
-
-		// This should panic
-		_, _ = Marshal(DuplicateFieldNumber{})
+	t.Run("duplicate explicit field numbers error", func(t *testing.T) {
+		_, err := Marshal(DuplicateFieldNumber{})
+		if err == nil {
+			t.Fatal("expected error for duplicate field numbers")
+		}
+		msg := err.Error()
+		if !bytes.Contains([]byte(msg), []byte("duplicate field number 1")) {
+			t.Errorf("error message should mention duplicate field number 1, got: %s", msg)
+		}
+		if !bytes.Contains([]byte(msg), []byte("Field1")) || !bytes.Contains([]byte(msg), []byte("Field2")) {
+			t.Errorf("error message should mention both field names, got: %s", msg)
+		}
 	})
 
 	t.Run("valid field numbers do not panic", func(t *testing.T) {
@@ -900,20 +892,16 @@ func TestFieldNumberUniqueness(t *testing.T) {
 		}
 	})
 
-	t.Run("skipped fields don't conflict", func(t *testing.T) {
+	t.Run("skipped fields don't hide a duplicate", func(t *testing.T) {
 		type WithSkipped struct {
 			A       string `cramberry:"1"`
 			Skipped string `cramberry:"-"`
-			B       string `cramberry:"1"` // Would conflict if Skipped wasn't skipped... wait, this SHOULD conflict
+			B       string `cramberry:"1"` // Conflicts with A regardless of Skipped
 		}
-		// Actually this should panic because A and B both have field number 1
-		defer func() {
-			r := recover()
-			if r == nil {
-				t.Fatal("expected panic for duplicate field numbers even with skipped field between")
-			}
-		}()
-		_, _ = Marshal(WithSkipped{})
+		_, err := Marshal(WithSkipped{})
+		if err == nil {
+			t.Fatal("expected error for duplicate field numbers even with skipped field between")
+		}
 	})
 }
 
