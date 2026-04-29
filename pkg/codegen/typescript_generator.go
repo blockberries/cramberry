@@ -750,9 +750,44 @@ function readArray<T>(reader: Reader, readElem: (r: Reader) => T): T[] {
   return result;
 }
 
+// compareMapKeys provides the canonical map-key ordering used on the wire.
+// String keys compare by UTF-8 byte order (matching Go's sort.Strings).
+// Numeric keys compare numerically with NaN sorted last and -0 == +0.
+// BigInt keys compare numerically. Boolean keys order false before true.
+const __mapKeyEncoder = new TextEncoder();
+function compareMapKeys(a: unknown, b: unknown): number {
+  if (typeof a === 'string' && typeof b === 'string') {
+    const ab = __mapKeyEncoder.encode(a);
+    const bb = __mapKeyEncoder.encode(b);
+    const n = Math.min(ab.length, bb.length);
+    for (let i = 0; i < n; i++) if (ab[i] !== bb[i]) return ab[i] - bb[i];
+    return ab.length - bb.length;
+  }
+  if (typeof a === 'number' && typeof b === 'number') {
+    const aNaN = Number.isNaN(a), bNaN = Number.isNaN(b);
+    if (aNaN && bNaN) return 0; // payloads are not observable in JS
+    if (aNaN) return 1;
+    if (bNaN) return -1;
+    return a < b ? -1 : a > b ? 1 : 0; // -0 and +0 compare equal here
+  }
+  if (typeof a === 'bigint' && typeof b === 'bigint') {
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+  if (typeof a === 'boolean' && typeof b === 'boolean') {
+    return a === b ? 0 : a ? 1 : -1;
+  }
+  // Mixed types: fall back to string comparison so the ordering is at least
+  // total, even if the schema validator should have rejected this.
+  return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
+}
+
 function writeMap<K, V>(writer: Writer, map: Map<K, V> | Record<string, V>, writeKey: (w: Writer, k: K) => void, writeVal: (w: Writer, v: V) => void): void {
   const subWriter = new Writer();
   const entries = map instanceof Map ? Array.from(map.entries()) : Object.entries(map);
+  // Sort by key for deterministic output. Map iteration order is
+  // implementation-defined and varies per insertion order; the wire format
+  // requires a canonical order matching the Go reflection marshaller.
+  entries.sort((a, b) => compareMapKeys(a[0], b[0]));
   subWriter.writeVarint(entries.length);
   for (const [k, v] of entries) {
     writeKey(subWriter, k as K);

@@ -757,19 +757,27 @@ func (m *MapTypes) MarshalCramberry() ([]byte, error) {
 func (m *MapTypes) EncodeTo(w *cramberry.Writer) {
 	if m.StringMap != nil {
 		w.WriteTag(1, cramberry.WireBytes)
-		w.WriteUvarint(uint64(len(m.StringMap)))
-		for k, v := range m.StringMap {
+		{
+		__keys := cramberry.SortedMapKeys(m.StringMap)
+		w.WriteUvarint(uint64(len(__keys)))
+		for _, k := range __keys {
+			v := m.StringMap[k]
 			w.WriteString(k)
 			w.WriteString(v)
 		}
 	}
+	}
 	if m.IntMap != nil {
 		w.WriteTag(2, cramberry.WireBytes)
-		w.WriteUvarint(uint64(len(m.IntMap)))
-		for k, v := range m.IntMap {
+		{
+		__keys := cramberry.SortedMapKeys(m.IntMap)
+		w.WriteUvarint(uint64(len(__keys)))
+		for _, k := range __keys {
+			v := m.IntMap[k]
 			w.WriteString(k)
 			w.WriteInt64(v)
 		}
+	}
 	}
 	w.WriteEndMarker()
 }

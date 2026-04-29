@@ -231,11 +231,19 @@ func (c *goContext) encodeValueV2(t schema.TypeRef, varName string, isPointer bo
 			%s
 		}`, varName, varName, c.encodeValueV2(typ.Element, "v", false))
 	case *schema.MapType:
-		return fmt.Sprintf(`w.WriteUvarint(uint64(len(%s)))
-		for k, v := range %s {
+		// Sort keys for deterministic output. Map iteration order in Go is
+		// randomized; the reflection marshaller sorts under DefaultOptions
+		// and codegen must produce wire-equivalent output.
+		sortHelper := mapKeySortHelper(typ.Key)
+		return fmt.Sprintf(`{
+		__keys := cramberry.%s(%s)
+		w.WriteUvarint(uint64(len(__keys)))
+		for _, k := range __keys {
+			v := %s[k]
 			%s
 			%s
-		}`, varName, varName, c.encodeValueV2(typ.Key, "k", false), c.encodeValueV2(typ.Value, "v", false))
+		}
+	}`, sortHelper, varName, varName, c.encodeValueV2(typ.Key, "k", false), c.encodeValueV2(typ.Value, "v", false))
 	case *schema.PointerType:
 		// For pointer types, encode the underlying element
 		// The nil check should already be handled at the field level
@@ -243,6 +251,28 @@ func (c *goContext) encodeValueV2(t schema.TypeRef, varName string, isPointer bo
 	default:
 		// This should not be reached for valid schema types
 		return fmt.Sprintf("/* unsupported type for encode: %T */", t)
+	}
+}
+
+// mapKeySortHelper returns the name of the cramberry runtime helper that
+// produces sorted keys for the given map-key type, in the canonical order
+// expected by the wire format.
+func mapKeySortHelper(keyType schema.TypeRef) string {
+	scalar, ok := keyType.(*schema.ScalarType)
+	if !ok {
+		// Schema validation should have rejected this; fall back to the
+		// ordered-keys helper so codegen still compiles in tests.
+		return "SortedMapKeys"
+	}
+	switch scalar.Name {
+	case "float32":
+		return "SortedMapKeysFloat32"
+	case "float64":
+		return "SortedMapKeysFloat64"
+	case "bool":
+		return "SortedMapKeysBool"
+	default:
+		return "SortedMapKeys"
 	}
 }
 

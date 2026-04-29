@@ -113,7 +113,7 @@ impl FieldTag {
 
 /// Result of decoding a V2 compact tag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CompactTagResult {
+pub struct TagResult {
     pub field_number: u32,
     pub wire_type: WireType,
     pub bytes_read: usize,
@@ -121,7 +121,7 @@ pub struct CompactTagResult {
 
 /// Decodes a V2 compact tag from a byte slice.
 /// Returns None if the buffer is empty or the wire type is invalid.
-pub fn decode_tag(data: &[u8]) -> Option<CompactTagResult> {
+pub fn decode_tag(data: &[u8]) -> Option<TagResult> {
     if data.is_empty() {
         return None;
     }
@@ -130,7 +130,7 @@ pub fn decode_tag(data: &[u8]) -> Option<CompactTagResult> {
 
     // End marker check
     if tag == END_MARKER {
-        return Some(CompactTagResult {
+        return Some(TagResult {
             field_number: 0,
             wire_type: WireType::Varint, // Placeholder
             bytes_read: 1,
@@ -143,7 +143,7 @@ pub fn decode_tag(data: &[u8]) -> Option<CompactTagResult> {
     if (tag & TAG_EXTENDED_BIT) == 0 {
         // Compact format: single byte
         let field_number = (tag >> TAG_FIELD_NUM_SHIFT) as u32;
-        Some(CompactTagResult {
+        Some(TagResult {
             field_number,
             wire_type,
             bytes_read: 1,
@@ -168,7 +168,7 @@ pub fn decode_tag(data: &[u8]) -> Option<CompactTagResult> {
                 return None; // Varint overflow
             }
         }
-        Some(CompactTagResult {
+        Some(TagResult {
             field_number,
             wire_type,
             bytes_read: i,

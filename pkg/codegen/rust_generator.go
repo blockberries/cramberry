@@ -353,15 +353,21 @@ func (c *rustContext) rustWriteValue(t schema.TypeRef, value string, repeated bo
 	case *schema.MapType:
 		keyWrite := c.rustWriteValueForSubWriter(typ.Key, "k")
 		valWrite := c.rustWriteValueForSubWriter(typ.Value, "v")
+		// Sort keys for deterministic output. HashMap iteration in Rust uses
+		// a randomized hasher; the wire format requires the same canonical
+		// order as the Go reflection marshaller.
 		return fmt.Sprintf(`{
+        use cramberry::CompareKeys;
+        let mut __entries: Vec<_> = %s.iter().collect();
+        __entries.sort_by(|a, b| a.0.cramberry_cmp(b.0));
         let mut sub_writer = Writer::new();
-        sub_writer.write_varint(%s.len() as u32)?;
-        for (k, v) in &%s {
+        sub_writer.write_varint(__entries.len() as u32)?;
+        for (k, v) in __entries {
             %s?;
             %s?;
         }
         writer.write_length_prefixed_bytes(sub_writer.as_bytes())
-    }`, value, value, keyWrite, valWrite)
+    }`, value, keyWrite, valWrite)
 	case *schema.PointerType:
 		innerWrite := c.rustWriteValue(typ.Element, "inner", false)
 		return fmt.Sprintf(`if let Some(inner) = &%s {

@@ -391,9 +391,12 @@ pub fn encode_complex_types(writer: &mut Writer, msg: &ComplexTypes) -> Result<(
     // Field 5: string_int_map
     writer.write_tag(5, WireType::Bytes)?;
     {
+        use cramberry::CompareKeys;
+        let mut entries: Vec<_> = msg.string_int_map.iter().collect();
+        entries.sort_by(|a, b| a.0.cramberry_cmp(b.0));
         let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.string_int_map.len() as u32)?;
-        for (k, v) in &msg.string_int_map {
+        sub_writer.write_varint(entries.len() as u32)?;
+        for (k, v) in entries {
             sub_writer.write_string(k)?;
             sub_writer.write_svarint(*v)?;
         }
@@ -403,9 +406,12 @@ pub fn encode_complex_types(writer: &mut Writer, msg: &ComplexTypes) -> Result<(
     // Field 6: int_string_map
     writer.write_tag(6, WireType::Bytes)?;
     {
+        use cramberry::CompareKeys;
+        let mut entries: Vec<_> = msg.int_string_map.iter().collect();
+        entries.sort_by(|a, b| a.0.cramberry_cmp(b.0));
         let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.int_string_map.len() as u32)?;
-        for (k, v) in &msg.int_string_map {
+        sub_writer.write_varint(entries.len() as u32)?;
+        for (k, v) in entries {
             sub_writer.write_svarint(*k)?;
             sub_writer.write_string(v)?;
         }

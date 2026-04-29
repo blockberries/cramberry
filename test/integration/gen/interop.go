@@ -368,18 +368,20 @@ func (m *ComplexTypes) EncodeTo(w *cramberry.Writer) {
 	}
 	if m.StringIntMap != nil {
 		w.WriteTag(5, cramberry.WireBytes)
-		w.WriteUvarint(uint64(len(m.StringIntMap)))
-		for k, v := range m.StringIntMap {
+		keys := cramberry.SortedMapKeys(m.StringIntMap)
+		w.WriteUvarint(uint64(len(keys)))
+		for _, k := range keys {
 			w.WriteString(k)
-			w.WriteInt32(v)
+			w.WriteInt32(m.StringIntMap[k])
 		}
 	}
 	if m.IntStringMap != nil {
 		w.WriteTag(6, cramberry.WireBytes)
-		w.WriteUvarint(uint64(len(m.IntStringMap)))
-		for k, v := range m.IntStringMap {
+		keys := cramberry.SortedMapKeys(m.IntStringMap)
+		w.WriteUvarint(uint64(len(keys)))
+		for _, k := range keys {
 			w.WriteInt32(k)
-			w.WriteString(v)
+			w.WriteString(m.IntStringMap[k])
 		}
 	}
 	w.WriteEndMarker()

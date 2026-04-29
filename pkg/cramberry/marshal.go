@@ -636,7 +636,7 @@ func sortMapKeys(keys []reflect.Value) []reflect.Value {
 		})
 	case reflect.Float32, reflect.Float64:
 		sort.Slice(keys, func(i, j int) bool {
-			return compareFloatKeys(keys[i].Float(), keys[j].Float())
+			return CompareFloatKeys(keys[i].Float(), keys[j].Float())
 		})
 	case reflect.Bool:
 		sort.Slice(keys, func(i, j int) bool {
@@ -651,19 +651,23 @@ func sortMapKeys(keys []reflect.Value) []reflect.Value {
 	return keys
 }
 
-// compareFloatKeys compares two float64 values with a total ordering that handles
+// CompareFloatKeys compares two float64 values with a total ordering that handles
 // NaN and -0.0 correctly for deterministic sorting:
-// - All NaN values sort to the end (after +Inf)
-// - -0.0 and +0.0 are considered equal (both treated as 0.0)
-// - Different NaN bit patterns are compared by their raw bits for full determinism
-func compareFloatKeys(a, b float64) bool {
+//   - All NaN values sort to the end (after +Inf).
+//   - -0.0 and +0.0 are considered equal (both treated as 0.0).
+//   - Different NaN bit patterns are compared by their raw bits for full
+//     determinism.
+//
+// Exported for use by generated code, which must sort map keys with the same
+// total order as the reflection marshaller.
+func CompareFloatKeys(a, b float64) bool {
 	aNaN := math.IsNaN(a)
 	bNaN := math.IsNaN(b)
 
 	// NaN values sort after everything else
 	if aNaN && bNaN {
-		// Both NaN: compare by raw bit pattern for full determinism
-		// This handles different NaN payloads deterministically
+		// Both NaN: compare by raw bit pattern for full determinism.
+		// This handles different NaN payloads deterministically.
 		return math.Float64bits(a) < math.Float64bits(b)
 	}
 	if aNaN {
@@ -674,7 +678,24 @@ func compareFloatKeys(a, b float64) bool {
 	}
 
 	// Handle negative zero: treat -0.0 as equal to +0.0
-	// by comparing the actual values (both compare as 0.0)
+	// by comparing the actual values (both compare as 0.0).
+	return a < b
+}
+
+// CompareFloat32Keys is the float32 analogue of CompareFloatKeys.
+func CompareFloat32Keys(a, b float32) bool {
+	aNaN := math.IsNaN(float64(a))
+	bNaN := math.IsNaN(float64(b))
+
+	if aNaN && bNaN {
+		return math.Float32bits(a) < math.Float32bits(b)
+	}
+	if aNaN {
+		return false
+	}
+	if bNaN {
+		return true
+	}
 	return a < b
 }
 
