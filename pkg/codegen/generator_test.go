@@ -896,4 +896,3 @@ func TestJSONCommaUsesPositionNotTag(t *testing.T) {
 		t.Errorf("second field missing leading comma; between:\n%s", between)
 	}
 }
-

@@ -45,7 +45,7 @@ func SortedMapKeysFloat32[V any](m map[float32]V) []float32 {
 	return keys
 }
 
-// SortedMapKeysFloat64 is the float64 analogue of SortedMapKeysFloat32.
+// SortedMapKeysFloat64 is the float64 analog of SortedMapKeysFloat32.
 func SortedMapKeysFloat64[V any](m map[float64]V) []float64 {
 	keys := make([]float64, 0, len(m))
 	for k := range m {

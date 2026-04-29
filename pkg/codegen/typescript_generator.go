@@ -382,8 +382,7 @@ func (c *tsContext) tsReadField(f *schema.Field) string {
 		}
 		t = ptr.Element
 	}
-	switch typ := t.(type) {
-	case *schema.NamedType:
+	if typ, ok := t.(*schema.NamedType); ok {
 		if c.isNamedEnum(typ) {
 			return "reader.readSVarint()"
 		}

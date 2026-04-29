@@ -14,7 +14,7 @@ type goodStructForTag struct {
 }
 
 func TestParseFieldTag_AcceptsValidTag(t *testing.T) {
-	// Smoke test: marshalling a well-tagged struct must not panic.
+	// Smoke test: marshaling a well-tagged struct must not panic.
 	v := &goodStructForTag{A: 1, B: "x"}
 	if _, err := Marshal(v); err != nil {
 		t.Fatalf("Marshal of valid struct returned error: %v", err)

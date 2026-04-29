@@ -748,7 +748,7 @@ func CompareFloatKeys(a, b float64) bool {
 	return a < b
 }
 
-// CompareFloat32Keys is the float32 analogue of CompareFloatKeys.
+// CompareFloat32Keys is the float32 analog of CompareFloatKeys.
 func CompareFloat32Keys(a, b float32) bool {
 	aNaN := math.IsNaN(float64(a))
 	bNaN := math.IsNaN(float64(b))

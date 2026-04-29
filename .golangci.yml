@@ -1,100 +1,100 @@
+version: "2"
 run:
-  timeout: 5m
   tests: true
-
 linters:
   enable:
-    - errcheck
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
-    - gofmt
-    - goimports
+    - copyloopvar
+    - gocritic
     - misspell
+    - revive
     - unconvert
     - unparam
-    - gocritic
-    - revive
-    - copyloopvar
-
-linters-settings:
-  gofmt:
-    simplify: true
-
-  goimports:
-    local-prefixes: github.com/blockberries/cramberry
-
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - performance
-    disabled-checks:
-      - hugeParam  # Allow large struct parameters for API clarity
-      - commentedOutCode  # Allow explanatory comments that look like code
-      - ifElseChain  # if-else chains are often clearer than switch
-      - assignOp  # Explicit assignment is clearer
-      - sprintfQuotedString  # Current format is intentional
-      - elseif  # Explicit else is sometimes clearer
-      - appendAssign  # This pattern is intentional for copy
-
-  revive:
+  settings:
+    gocritic:
+      disabled-checks:
+        - hugeParam
+        - commentedOutCode
+        - ifElseChain
+        - assignOp
+        - sprintfQuotedString
+        - elseif
+        - appendAssign
+      enabled-tags:
+        - diagnostic
+        - performance
+    misspell:
+      locale: US
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: if-return
+        - name: increment-decrement
+        - name: var-naming
+        - name: var-declaration
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unused-parameter
+        - name: unreachable-code
+        - name: redefines-builtin-id
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
-      - name: blank-imports
-      - name: context-as-argument
-      - name: context-keys-type
-      - name: dot-imports
-      - name: error-return
-      - name: error-strings
-      - name: error-naming
-      - name: exported
-      - name: if-return
-      - name: increment-decrement
-      - name: var-naming
-      - name: var-declaration
-      - name: package-comments
-      - name: range
-      - name: receiver-naming
-      - name: time-naming
-      - name: unexported-return
-      - name: indent-error-flow
-      - name: errorf
-      - name: empty-block
-      - name: superfluous-else
-      - name: unused-parameter
-      - name: unreachable-code
-      - name: redefines-builtin-id
-
-  misspell:
-    locale: US
-
+      - linters:
+          - lll
+        path: _gen\.go
+      - linters:
+          - errcheck
+          - revive
+          - unparam
+          - unused
+        path: _test\.go
+      - linters:
+          - errcheck
+          - revive
+        path: benchmark_test\.go
+      - linters:
+          - revive
+        path: pkg/extract/
+        text: stutters
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
-  exclude-rules:
-    # Ignore long lines in generated files
-    - path: _gen\.go
-      linters:
-        - lll
-
-    # Ignore test helper functions
-    - path: _test\.go
-      linters:
-        - unparam
-        - unused
-        - errcheck
-        - revive
-
-    # Ignore errcheck and naming in benchmark tests
-    - path: benchmark_test\.go
-      linters:
-        - errcheck
-        - revive
-
-    # Ignore exported stutter in extract package (API compatibility)
-    - path: pkg/extract/
-      text: "stutters"
-      linters:
-        - revive
-
   max-issues-per-linter: 0
   max-same-issues: 0
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      local-prefixes:
+        - github.com/blockberries/cramberry
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

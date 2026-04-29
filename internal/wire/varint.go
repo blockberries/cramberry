@@ -154,4 +154,3 @@ func SvarintSize(v int64) int {
 	uv := uint64(v<<1) ^ uint64(v>>63)
 	return UvarintSize(uv)
 }
-

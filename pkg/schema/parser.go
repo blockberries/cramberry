@@ -104,8 +104,6 @@ func (p *Parser) Parse() (*Schema, []ParseError) {
 			}
 		case p.check(TokenComment), p.check(TokenDocComment):
 			p.advance()
-		case p.check(TokenEOF):
-			break
 		default:
 			p.errors = append(p.errors, ParseError{
 				Position: p.current.Position,
@@ -855,9 +853,10 @@ func (p *Parser) synchronize() {
 
 	for !p.check(TokenEOF) {
 		// Track brace depth
-		if p.current.Type == TokenLBrace {
+		switch p.current.Type {
+		case TokenLBrace:
 			braceDepth++
-		} else if p.current.Type == TokenRBrace {
+		case TokenRBrace:
 			if braceDepth > 0 {
 				braceDepth--
 			}

@@ -585,8 +585,7 @@ func (v *Validator) checkMessageRecursion() {
 		black = 2
 	)
 	state := make(map[string]int, len(v.schema.Messages))
-	var msgByName map[string]*Message
-	msgByName = make(map[string]*Message, len(v.schema.Messages))
+	msgByName := make(map[string]*Message, len(v.schema.Messages))
 	for _, m := range v.schema.Messages {
 		msgByName[m.Name] = m
 	}

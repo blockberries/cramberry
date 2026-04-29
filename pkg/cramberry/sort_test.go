@@ -1,6 +1,7 @@
 package cramberry
 
 import (
+	"bytes"
 	"math"
 	"testing"
 )
@@ -11,8 +12,8 @@ func TestSortedMapKeys_Strings_AreUTF8Bytes(t *testing.T) {
 	// test catches a regression to that bug.
 	m := map[string]int{
 		"你": 1, // 你
-		"a":      2,
-		"z":      3,
+		"a": 2,
+		"z": 3,
 	}
 	got := SortedMapKeys(m)
 	want := []string{"a", "z", "你"}
@@ -83,7 +84,7 @@ func TestCodegenMapDeterminism(t *testing.T) {
 	first := encode()
 	for i := 0; i < 50; i++ {
 		got := encode()
-		if string(got) != string(first) {
+		if !bytes.Equal(got, first) {
 			t.Fatalf("iteration %d: bytes differ from first encode", i)
 		}
 	}

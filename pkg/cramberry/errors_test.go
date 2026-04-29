@@ -285,7 +285,6 @@ func TestWrapError(t *testing.T) {
 	}
 }
 
-
 func TestIsFatal(t *testing.T) {
 	fatalErrors := []error{
 		ErrNotPointer,
