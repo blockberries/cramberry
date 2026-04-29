@@ -5,6 +5,7 @@ import (
 	"go/types"
 	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -260,15 +261,34 @@ func constantToInt64(cnst *types.Const) (int64, bool) {
 }
 
 func (c *TypeCollector) detectImplementations() {
-	for _, iface := range c.interfaces {
-		// Get the interface type
+	// Iterate maps via a sorted snapshot of their keys so that
+	// `iface.Implementations` and `typ.Implements` end up in a stable order
+	// across runs. Go map iteration is randomized, and we serialize this
+	// directly into `.cram` files that get committed — non-determinism here
+	// caused churn diffs and broke any byte-level comparison of the
+	// extractor output.
+
+	ifaceKeys := make([]string, 0, len(c.interfaces))
+	for k := range c.interfaces {
+		ifaceKeys = append(ifaceKeys, k)
+	}
+	sort.Strings(ifaceKeys)
+
+	typeKeys := make([]string, 0, len(c.types))
+	for k := range c.types {
+		typeKeys = append(typeKeys, k)
+	}
+	sort.Strings(typeKeys)
+
+	for _, ik := range ifaceKeys {
+		iface := c.interfaces[ik]
 		ifaceType := c.findInterfaceType(iface.PkgPath, iface.Name)
 		if ifaceType == nil {
 			continue
 		}
 
-		// Check each collected type for implementation
-		for _, typ := range c.types {
+		for _, tk := range typeKeys {
+			typ := c.types[tk]
 			if c.implements(typ.GoType, ifaceType) {
 				iface.Implementations = append(iface.Implementations, typ)
 				typ.Implements = append(typ.Implements, iface.PkgPath+"."+iface.Name)

@@ -447,3 +447,26 @@ func TestTypeIDAutoAssignment(t *testing.T) {
 		}
 	}
 }
+
+// TestExtractDeterministicOutput runs the extractor 10 times against the
+// same package and asserts every run produces byte-identical output. The
+// extractor traverses Go maps internally; without sorting, Go's randomized
+// map iteration leaks into the .cram file and produces churn diffs across
+// runs. This test catches a regression to that bug.
+func TestExtractDeterministicOutput(t *testing.T) {
+	const target = "github.com/blockberries/cramberry/pkg/extract/testdata"
+
+	first, err := ExtractToString([]string{target}, DefaultConfig())
+	if err != nil {
+		t.Fatalf("ExtractToString() error = %v", err)
+	}
+	for i := 0; i < 10; i++ {
+		got, err := ExtractToString([]string{target}, DefaultConfig())
+		if err != nil {
+			t.Fatalf("iteration %d: ExtractToString() error = %v", i, err)
+		}
+		if got != first {
+			t.Fatalf("iteration %d: output differs from first run", i)
+		}
+	}
+}
