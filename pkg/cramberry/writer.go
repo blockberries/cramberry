@@ -64,9 +64,20 @@ func GetWriter() *Writer {
 }
 
 // PutWriter returns a Writer to the pool.
-// The Writer must not be used after calling this.
+//
+// The caller MUST NOT use the Writer (or any slice obtained from
+// `Bytes()`) after calling this — including reading the slice from a
+// different goroutine. If `Bytes()` was called (so `frozen == true`),
+// the buffer is still aliased by the caller's []byte; pooling it would
+// let a future GetWriter reuse the same underlying array, racing the
+// caller's read against another goroutine's write. In that case we
+// drop the writer instead of pooling it; use `BytesCopy()` if you want
+// to safely return the writer to the pool.
 func PutWriter(w *Writer) {
 	if w == nil {
+		return
+	}
+	if w.frozen {
 		return
 	}
 	// Don't pool large buffers to avoid memory bloat

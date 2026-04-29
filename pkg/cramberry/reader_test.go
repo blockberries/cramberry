@@ -16,8 +16,8 @@ func TestReaderBasic(t *testing.T) {
 	if r.Pos() != 0 {
 		t.Errorf("Pos() = %d, want 0", r.Pos())
 	}
-	if !bytes.Equal(r.Data(), data) {
-		t.Error("Data() mismatch")
+	if !bytes.Equal(r.Remaining(), data) {
+		t.Error("Remaining() mismatch")
 	}
 	if r.EOF() {
 		t.Error("EOF() should be false initially")

@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (consensus-critical, seventh review pass)
+
+- **Forward-compat: pointer-to-primitive fields used to corrupt the
+  message tail when skipped by an older decoder.** A `*int32`,
+  `*float64`, `*bool` (etc.) field emitted `tag(WireBytes) | <raw
+  varint or fixed body>` — no length prefix — so an old decoder
+  calling `SkipValue(WireBytes)` read the first body byte as the
+  length, mis-framed the rest of the message, and corrupted every
+  following field. `needsBodyLengthPrefix` now returns true for these
+  pointer-to-scalar shapes so the field body is wrapped exactly the
+  way `SkipValue(WireBytes)` expects.
+- **Forward-compat: `complex128` fields had the same bug.** They
+  emitted `tag(WireBytes) | <16 raw bytes>`; the first byte (a
+  float64 mantissa byte) was almost always a varint continuation
+  byte. Now wrapped with a length prefix.
+- **NaN map keys are rejected at encode time.** Distinct NaN bit
+  patterns canonicalize to the same wire bytes (information loss),
+  AND `MapIndex(nan)` always returns the zero `reflect.Value`
+  (because Go map lookups use `==` and NaN ≠ NaN), so values silently
+  became zero on encode. Three NaN-keyed entries with values 1, 2, 3
+  used to round-trip to three NaN-keyed entries with values 0, 0, 0.
+  The encoder now returns an explicit error, matching the JSON
+  encoder which already refused NaN.
+
+### Fixed (memory safety)
+
+- **`PutWriter` on a frozen Writer no longer pools the buffer.**
+  Calling `Bytes()` froze the writer (so subsequent writes would
+  error), but `PutWriter` happily reset and pooled the buffer
+  anyway. A user pattern of `b := w.Bytes(); PutWriter(w);
+  go consume(b)` could then race the caller's read against another
+  goroutine's writes via a future `GetWriter()`. The contract is
+  now: call `BytesCopy()` if you want to safely return the writer to
+  the pool.
+
+### Removed
+
+- `Reader.Data()` — zero production callers, and it returned the
+  underlying buffer in mutable form, letting users invalidate the
+  zero-copy string/bytes contract without ever tripping the
+  generation check. The one test caller was switched to
+  `Reader.Remaining()`.
+
 ### Changed (UX & DX)
 
 - **`-lang ts` and `-lang rs` now work**. The README's primary usage

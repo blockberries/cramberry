@@ -568,3 +568,63 @@ func TestForwardCompatLargeUnknownFields(t *testing.T) {
 		t.Errorf("ID = %d, want 42", v1.ID)
 	}
 }
+
+// TestForwardCompatSkipUnknownPointerToScalar covers a subtle bug where
+// `*intN`, `*floatN`, `*bool` etc. used to emit a `WireBytes` tag with a
+// raw varint / fixed body — no length prefix — so an old decoder
+// calling SkipValue(WireBytes) read the first body byte as the length,
+// mis-framed the rest of the message, and corrupted every following
+// field.
+func TestForwardCompatSkipUnknownPointerToScalar(t *testing.T) {
+	type SchemaA struct {
+		Foo *int32 `cramberry:"5"`
+		Bar int32  `cramberry:"6"`
+	}
+	type SchemaB struct {
+		// Field 5 absent — SchemaB doesn't know about it.
+		Bar int32 `cramberry:"6"`
+	}
+
+	v := int32(64) // varint-encoded 0x80 0x01 — the byte attackers used to mis-read as length
+	a := SchemaA{Foo: &v, Bar: 99}
+	data, err := Marshal(a)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	var b SchemaB
+	if err := Unmarshal(data, &b); err != nil {
+		t.Fatalf("Unmarshal across schemas: %v", err)
+	}
+	if b.Bar != 99 {
+		t.Fatalf("Bar = %d, want 99", b.Bar)
+	}
+}
+
+// TestForwardCompatSkipUnknownComplex128 covers the same shape of bug
+// for complex128, which used to emit `tag(WireBytes) | <16 raw bytes>`
+// — the first of which was almost always interpreted as a varint
+// continuation byte by the unknown-field skip path.
+func TestForwardCompatSkipUnknownComplex128(t *testing.T) {
+	type SchemaA struct {
+		C   complex128 `cramberry:"3"`
+		Bar int32      `cramberry:"4"`
+	}
+	type SchemaB struct {
+		Bar int32 `cramberry:"4"`
+	}
+
+	a := SchemaA{C: 1 + 2i, Bar: 99}
+	data, err := Marshal(a)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	var b SchemaB
+	if err := Unmarshal(data, &b); err != nil {
+		t.Fatalf("Unmarshal across schemas: %v", err)
+	}
+	if b.Bar != 99 {
+		t.Fatalf("Bar = %d, want 99", b.Bar)
+	}
+}

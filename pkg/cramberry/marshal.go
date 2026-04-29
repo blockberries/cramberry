@@ -350,6 +350,22 @@ func encodeMap(w *Writer, v reflect.Value) error {
 	}
 
 	keys := v.MapKeys()
+
+	// Reject NaN keys: distinct NaN bit patterns canonicalize to the
+	// same wire bytes (information loss), and `MapIndex(nan)` always
+	// returns the zero Value because Go's map lookup uses ==-equality
+	// and NaN != NaN — so every value in a NaN-keyed map silently
+	// becomes the zero value on encode. The canon JSON path
+	// (FormatFloat32/64) already refuses NaN; the binary path now
+	// matches.
+	if keyKind := v.Type().Key().Kind(); keyKind == reflect.Float32 || keyKind == reflect.Float64 {
+		for _, k := range keys {
+			if math.IsNaN(k.Float()) {
+				return NewEncodeError("cannot encode NaN as map key in "+v.Type().String(), nil)
+			}
+		}
+	}
+
 	n := len(keys)
 	w.WriteMapHeader(n)
 	if w.Err() != nil {
@@ -450,6 +466,18 @@ func encodeStruct(w *Writer, v reflect.Value) error {
 // [N]byte), map, interface, and pointers to any of those — write inline
 // bodies (count + elements, fields + end marker, or typeID + value), so we
 // wrap them at the field boundary.
+//
+// Pointers to non-composite values (e.g. `*int32`, `*float64`) and
+// `complex128` are also length-prefixed even though their *body* is a
+// raw varint or 16 fixed bytes. The reason is the wire-type chosen for
+// these on the encode side: `computeWireType` returns `WireBytes` for
+// all pointers and for `complex128`. A `WireBytes` tag is the
+// canonical "length-prefixed payload" — `SkipValue(WireBytes)` reads
+// the length-varint and skips that many bytes. Without the wrapping
+// here, an old decoder that doesn't know the field would read the
+// first body byte as the length, mis-frame the rest of the message,
+// and corrupt every following field. (Verified via a forward-compat
+// test that previously failed for `*int32` set to 64.)
 func needsBodyLengthPrefix(v reflect.Value) bool {
 	t := v.Type()
 	for t.Kind() == reflect.Ptr {
@@ -463,6 +491,20 @@ func needsBodyLengthPrefix(v reflect.Value) bool {
 		// length-prefixed. Anything else is count-then-elements and needs
 		// the surrounding length prefix.
 		return t.Elem().Kind() != reflect.Uint8
+	case reflect.Complex128:
+		return true
+	case reflect.Bool,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64,
+		reflect.Complex64, reflect.String:
+		// These reach this function only via pointer-to-scalar (the
+		// outer Ptr was stripped above). The encoder picks WireBytes
+		// for any pointer wire-type, so the body needs wrapping.
+		// String / []byte / [N]byte values themselves are never
+		// pointer-wrapped at this layer; their non-pointer paths
+		// don't reach here.
+		return v.Kind() == reflect.Ptr
 	}
 	return false
 }

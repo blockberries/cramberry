@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/blockberries/cramberry/internal/wire"
@@ -402,57 +403,54 @@ func TestSecurityDepthLimiting(t *testing.T) {
 // =============================================================================
 
 func TestSecurityNaNMapKeys(t *testing.T) {
-	t.Run("NaNKeyDeterminism", func(t *testing.T) {
-		// Map with NaN keys should produce deterministic output
-		nan := math.NaN()
-
+	t.Run("NaNKeyRejected", func(t *testing.T) {
+		// Distinct NaN bit patterns canonicalize to the same wire
+		// bytes (information loss), and Go's map[NaN] always returns
+		// the zero value because NaN != NaN — so values silently
+		// became zeros on encode. The encoder now rejects NaN keys
+		// outright so users find out at encode time, not at decode.
 		m := map[float64]string{
-			nan:  "nan1",
-			1.0:  "one",
-			-1.0: "negative_one",
-			0.0:  "zero",
+			math.NaN(): "nan1",
+			1.0:        "one",
 		}
-
-		// Encode multiple times
-		results := make([][]byte, 10)
-		for i := 0; i < 10; i++ {
-			data, err := Marshal(m)
-			if err != nil {
-				t.Fatalf("marshal failed: %v", err)
-			}
-			results[i] = data
-		}
-
-		// All results should be identical for determinism
-		for i := 1; i < len(results); i++ {
-			if !bytes.Equal(results[0], results[i]) {
-				t.Errorf("encoding %d differs from encoding 0 - NaN handling is non-deterministic", i)
-			}
+		_, err := Marshal(m)
+		if err == nil {
+			t.Fatal("expected error encoding NaN map key")
 		}
 	})
 
-	t.Run("NaNSortsAfterInfinity", func(t *testing.T) {
-		// Verify NaN sorts after all other values including +Inf
+	t.Run("InfMapKeysRoundTrip", func(t *testing.T) {
+		// ±Inf keys are still allowed (no NaN-style equality
+		// pathology) and must round-trip deterministically.
 		m := map[float64]string{
-			math.NaN():   "nan",
 			math.Inf(1):  "pos_inf",
 			math.Inf(-1): "neg_inf",
 			0.0:          "zero",
 		}
-
-		// The encoding should be consistent
 		data1, err := Marshal(m)
 		if err != nil {
 			t.Fatalf("marshal failed: %v", err)
 		}
-
-		data2, err := Marshal(m)
-		if err != nil {
-			t.Fatalf("marshal failed: %v", err)
+		for i := 0; i < 5; i++ {
+			data2, err := Marshal(m)
+			if err != nil {
+				t.Fatalf("marshal failed: %v", err)
+			}
+			if !bytes.Equal(data1, data2) {
+				t.Errorf("iteration %d: ±Inf-key map encoding non-deterministic", i)
+			}
 		}
-
-		if !bytes.Equal(data1, data2) {
-			t.Error("NaN+Inf map encoding is non-deterministic")
+		var got map[float64]string
+		if err := Unmarshal(data1, &got); err != nil {
+			t.Fatalf("unmarshal failed: %v", err)
+		}
+		if len(got) != len(m) {
+			t.Fatalf("round-tripped map size mismatch: %d vs %d", len(got), len(m))
+		}
+		for k, v := range m {
+			if got[k] != v {
+				t.Errorf("key %v: got %q, want %q", k, got[k], v)
+			}
 		}
 	})
 
@@ -498,30 +496,23 @@ func TestSecurityNaNMapKeys(t *testing.T) {
 		}
 	})
 
-	t.Run("MultipleNaNValues", func(t *testing.T) {
-		// Multiple NaN keys should still produce deterministic output
-		nan1 := math.NaN()
-		nan2 := math.NaN()
-
+	t.Run("MultipleNaNValuesRejected", func(t *testing.T) {
+		// NaN map keys are now rejected at encode time. Distinct NaN
+		// bit patterns canonicalize to the same wire bytes, and
+		// MapIndex(nan) returns the zero Value (because NaN != NaN
+		// in Go's map equality), so values silently became zeros on
+		// encode. The error is now explicit; this test pins the
+		// rejection.
 		m := map[float64]string{
-			nan1: "first_nan",
-			nan2: "second_nan",
-			1.0:  "one",
+			math.NaN(): "first_nan",
+			1.0:        "one",
 		}
-
-		results := make([][]byte, 5)
-		for i := 0; i < 5; i++ {
-			data, err := Marshal(m)
-			if err != nil {
-				t.Fatalf("marshal failed: %v", err)
-			}
-			results[i] = data
+		_, err := Marshal(m)
+		if err == nil {
+			t.Fatal("expected error encoding NaN map key, got nil")
 		}
-
-		for i := 1; i < len(results); i++ {
-			if !bytes.Equal(results[0], results[i]) {
-				t.Errorf("encoding %d differs from encoding 0 with multiple NaN keys", i)
-			}
+		if !strings.Contains(err.Error(), "NaN") {
+			t.Errorf("error %q should mention NaN", err)
 		}
 	})
 }

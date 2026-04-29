@@ -224,11 +224,6 @@ func (r *Reader) Pos() int {
 	return r.pos
 }
 
-// Data returns the underlying data slice.
-func (r *Reader) Data() []byte {
-	return r.data
-}
-
 // Remaining returns the unread portion of the data.
 func (r *Reader) Remaining() []byte {
 	if r.pos >= len(r.data) {
