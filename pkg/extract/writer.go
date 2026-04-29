@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/blockberries/cramberry/internal/atomicfile"
 	"github.com/blockberries/cramberry/pkg/schema"
 )
 
@@ -75,25 +76,23 @@ func (e *Extractor) ExtractAndWrite(cfg *ExtractorConfig) error {
 	}
 
 	// Determine output destination
-	var out io.Writer = os.Stdout
-	if cfg.OutputPath != "" {
-		// Ensure output directory exists
-		dir := filepath.Dir(cfg.OutputPath)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return fmt.Errorf("failed to create output directory: %w", err)
-		}
-
-		f, err := os.Create(cfg.OutputPath)
-		if err != nil {
-			return fmt.Errorf("failed to create output file: %w", err)
-		}
-		defer f.Close()
-		out = f
+	if cfg.OutputPath == "" {
+		writer := schema.NewWriter()
+		return writer.WriteSchema(os.Stdout, s)
 	}
 
-	// Write schema
-	writer := schema.NewWriter()
-	return writer.WriteSchema(out, s)
+	// Ensure output directory exists
+	dir := filepath.Dir(cfg.OutputPath)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("failed to create output directory: %w", err)
+	}
+
+	// Atomic write: a crash mid-write must not leave a partial .cram file
+	// at the destination.
+	return atomicfile.Write(cfg.OutputPath, 0o644, func(w io.Writer) error {
+		writer := schema.NewWriter()
+		return writer.WriteSchema(w, s)
+	})
 }
 
 // ExtractToString is a convenience function that extracts a schema and returns it as a string.

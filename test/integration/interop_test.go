@@ -93,7 +93,7 @@ var TestData = struct {
 	},
 }
 
-const goldenDir = "../golden"
+const goldenDir = "../../testdata/golden"
 
 // TestScalarTypesEncodeDecode tests encoding and decoding of scalar types.
 func TestScalarTypesEncodeDecode(t *testing.T) {
@@ -370,7 +370,8 @@ func TestGenerateGoldenFiles(t *testing.T) {
 	}
 }
 
-// TestVerifyGoldenFiles verifies that current encoding matches golden files.
+// TestVerifyGoldenFiles verifies that the reflection marshaller's encoding
+// matches the committed golden bytes.
 func TestVerifyGoldenFiles(t *testing.T) {
 	testCases := []struct {
 		name string
@@ -403,6 +404,59 @@ func TestVerifyGoldenFiles(t *testing.T) {
 
 			if !bytes.Equal(encoded, golden) {
 				t.Errorf("Encoding mismatch for %s\nGot:  %s\nWant: %s",
+					tc.name, hex.EncodeToString(encoded), hex.EncodeToString(golden))
+			}
+		})
+	}
+}
+
+// codegenEncoder is implemented by types whose EncodeTo method is the
+// codegen-equivalent path (i.e. what `cramberry generate -lang go` would
+// emit). The interop fixture in test/integration/gen mirrors that shape.
+type codegenEncoder interface {
+	EncodeTo(*cramberry.Writer)
+}
+
+// TestVerifyGoldenFiles_Codegen exercises the codegen path against the same
+// golden bytes as TestVerifyGoldenFiles. This catches the class of bug
+// where `cramberry.Marshal` (reflection) and `x.EncodeTo` (codegen) diverge
+// for the same input — the worst finding in the pre-2.0 review, where
+// generated code did not sort map keys but the reflection path did.
+func TestVerifyGoldenFiles_Codegen(t *testing.T) {
+	testCases := []struct {
+		name string
+		data codegenEncoder
+	}{
+		{"scalar_types", TestData.ScalarTypes},
+		{"repeated_types", TestData.RepeatedTypes},
+		{"nested_message", TestData.NestedMessage},
+		{"complex_types", TestData.ComplexTypes},
+		{"edge_cases", TestData.EdgeCases},
+		{"all_field_numbers", TestData.AllFieldNumbers},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(goldenDir, tc.name+".bin")
+			golden, err := os.ReadFile(path)
+			if os.IsNotExist(err) {
+				t.Skipf("Golden file not found: %s", path)
+				return
+			}
+			if err != nil {
+				t.Fatalf("Failed to read golden file: %v", err)
+			}
+
+			w := cramberry.GetWriter()
+			defer cramberry.PutWriter(w)
+			tc.data.EncodeTo(w)
+			if w.Err() != nil {
+				t.Fatalf("EncodeTo error: %v", w.Err())
+			}
+			encoded := w.Bytes()
+
+			if !bytes.Equal(encoded, golden) {
+				t.Errorf("Codegen encoding mismatch for %s\nGot:  %s\nWant: %s",
 					tc.name, hex.EncodeToString(encoded), hex.EncodeToString(golden))
 			}
 		})

@@ -5,6 +5,7 @@ import (
 	"math"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -497,7 +498,7 @@ func getStructInfo(t reflect.Type) *structInfo {
 			continue // Skip this field
 		}
 		if tag != "" {
-			fi = parseFieldTag(tag, fi, fieldNum)
+			fi = parseFieldTag(tag, fi, fieldNum, f.Name)
 		} else {
 			fi.num = fieldNum
 		}
@@ -531,34 +532,35 @@ func getStructInfo(t reflect.Type) *structInfo {
 // parseFieldTag parses a cramberry struct tag.
 // Format: "num,option,option,..."
 // Options: omitempty, required
-func parseFieldTag(tag string, fi fieldInfo, defaultNum int) fieldInfo {
+//
+// Tag-parse errors panic. They cannot be a runtime concern: tags are static
+// metadata, so an unparseable tag is a programming bug that must be visible.
+// Silent fallback (the previous behavior) hid two real footguns: any
+// non-digit produced a default-numbered field that could collide with a
+// real field number, and unknown options like a typo'd "omit_empty" were
+// dropped without warning.
+func parseFieldTag(tag string, fi fieldInfo, defaultNum int, fieldName string) fieldInfo {
 	parts := strings.Split(tag, ",")
 	if parts[0] != "" {
-		// Parse field number
-		var num int
-		for _, c := range parts[0] {
-			if c < '0' || c > '9' {
-				num = defaultNum
-				break
-			}
-			num = num*10 + int(c-'0')
+		n, err := strconv.Atoi(parts[0])
+		if err != nil || n <= 0 {
+			panic(fmt.Sprintf("cramberry: invalid field number %q in tag for field %q", parts[0], fieldName))
 		}
-		if num > 0 {
-			fi.num = num
-		} else {
-			fi.num = defaultNum
-		}
+		fi.num = n
 	} else {
 		fi.num = defaultNum
 	}
 
-	// Parse options
 	for _, opt := range parts[1:] {
 		switch opt {
+		case "":
+			// Trailing comma — tolerate.
 		case "omitempty":
 			fi.omitEmpty = true
 		case "required":
 			fi.required = true
+		default:
+			panic(fmt.Sprintf("cramberry: unknown tag option %q on field %q", opt, fieldName))
 		}
 	}
 
@@ -602,8 +604,16 @@ func isZeroValueWithDepth(v reflect.Value, depth int) bool {
 	case reflect.Ptr, reflect.Interface:
 		return v.IsNil()
 	case reflect.Struct:
-		// Check all fields with increased depth
+		// Only consider exported fields. The encoder skips unexported fields,
+		// so a struct that is "non-zero only in an unexported field" must
+		// still be treated as zero — otherwise OmitEmpty emits an empty
+		// body that round-trips to a zero value, breaking the invariant
+		// "encoded → decoded yields the originally-emitted fields".
+		t := v.Type()
 		for i := 0; i < v.NumField(); i++ {
+			if !t.Field(i).IsExported() {
+				continue
+			}
 			if !isZeroValueWithDepth(v.Field(i), depth+1) {
 				return false
 			}

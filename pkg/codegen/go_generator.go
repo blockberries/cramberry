@@ -1308,15 +1308,16 @@ func (c *goContext) jsonDecodeMap(t *schema.MapType, targetVar string) string {
 	code.WriteString(fmt.Sprintf("\t\t%s = make(map[%s]%s, len(mapRaw))\n", targetVar, c.goType(t.Key), c.goType(t.Value)))
 	code.WriteString("\t\tfor keyStr, valRaw := range mapRaw {\n")
 
-	// Convert string key to actual key type
+	// Convert string key to actual key type. Propagate parse errors so
+	// malformed JSON does not silently coerce to key=0.
 	keyType := t.Key.(*schema.ScalarType)
 	switch keyType.Name {
 	case "string":
 		code.WriteString("\t\t\tk := keyStr\n")
 	case "int8", "int16", "int32", "int64", "int":
-		code.WriteString(fmt.Sprintf("\t\t\tkInt, _ := cramberry.ParseInt64FromString(keyStr)\n\t\t\tk := %s(kInt)\n", c.goType(t.Key)))
+		code.WriteString(fmt.Sprintf("\t\t\tkInt, kErr := cramberry.ParseInt64FromString(keyStr)\n\t\t\tif kErr != nil {\n\t\t\t\treturn fmt.Errorf(\"field %%s: invalid map key %%q: %%w\", \"%s\", keyStr, kErr)\n\t\t\t}\n\t\t\tk := %s(kInt)\n", targetVar, c.goType(t.Key)))
 	case "uint8", "uint16", "uint32", "uint64", "uint", "byte":
-		code.WriteString(fmt.Sprintf("\t\t\tkUint, _ := cramberry.ParseUint64FromString(keyStr)\n\t\t\tk := %s(kUint)\n", c.goType(t.Key)))
+		code.WriteString(fmt.Sprintf("\t\t\tkUint, kErr := cramberry.ParseUint64FromString(keyStr)\n\t\t\tif kErr != nil {\n\t\t\t\treturn fmt.Errorf(\"field %%s: invalid map key %%q: %%w\", \"%s\", keyStr, kErr)\n\t\t\t}\n\t\t\tk := %s(kUint)\n", targetVar, c.goType(t.Key)))
 	default:
 		code.WriteString("\t\t\tk := keyStr\n")
 	}

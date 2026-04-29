@@ -351,7 +351,7 @@ func (m *ComplexTypes) MarshalCramberry() ([]byte, error) {
 
 // EncodeTo encodes the message directly to the writer using V2 format.
 func (m *ComplexTypes) EncodeTo(w *cramberry.Writer) {
-	w.WriteTag(1, cramberry.WireBytes)
+	w.WriteTag(1, cramberry.WireSVarint)
 	m.Status.EncodeTo(w)
 	if m.OptionalNested != nil {
 		w.WriteTag(2, cramberry.WireBytes)

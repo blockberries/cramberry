@@ -45,10 +45,12 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/blockberries/cramberry/internal/atomicfile"
 	"github.com/blockberries/cramberry/pkg/codegen"
 	"github.com/blockberries/cramberry/pkg/cramberry"
 	"github.com/blockberries/cramberry/pkg/extract"
@@ -216,23 +218,15 @@ Options:`)
 		baseName = strings.TrimSuffix(baseName, filepath.Ext(baseName))
 		outputFile := filepath.Join(*outDir, baseName+gen.FileExtension())
 
-		// Generate code
-		f, err := os.Create(outputFile)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating output file: %v\n", err)
-			hasErrors = true
-			continue
-		}
-
-		if err := gen.Generate(f, s, opts); err != nil {
-			f.Close()
-			os.Remove(outputFile)
+		// Generate code via atomic write so a crash mid-generation can't
+		// leave a partial .go/.ts/.rs file at the destination.
+		if err := atomicfile.Write(outputFile, 0o644, func(w io.Writer) error {
+			return gen.Generate(w, s, opts)
+		}); err != nil {
 			fmt.Fprintf(os.Stderr, "Error generating code: %v\n", err)
 			hasErrors = true
 			continue
 		}
-
-		f.Close()
 		fmt.Printf("Generated: %s\n", outputFile)
 	}
 

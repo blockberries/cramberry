@@ -393,15 +393,21 @@ func (r *Registry) RegisterOrGetType(t reflect.Type) TypeID {
 	return id
 }
 
-// RegisterOrGetWithID registers a type with a specific ID, or returns the existing
-// ID if the type is already registered. If the type is already registered with a
-// different ID, the existing ID is returned (not the requested one).
+// RegisterOrGetWithID registers a type with a specific ID, or returns the
+// existing ID if the type is already registered.
+//
+// Panics if id is already in use by a *different* type. The caller asked
+// for a specific ID; silently swapping it for an auto-assigned one (the
+// previous behavior) hid bugs where two types competed for the same ID.
+// Use RegisterOrGet for auto-assignment.
 func RegisterOrGetWithID[T any](id TypeID) TypeID {
 	return DefaultRegistry.RegisterOrGetTypeWithID(reflect.TypeOf((*T)(nil)).Elem(), id)
 }
 
-// RegisterOrGetTypeWithID registers a type with a specific ID, or returns the existing
-// ID if the type is already registered.
+// RegisterOrGetTypeWithID registers a type with a specific ID, or returns
+// the existing ID if the type is already registered.
+//
+// Panics if id is already in use by a different type. See RegisterOrGetWithID.
 func (r *Registry) RegisterOrGetTypeWithID(t reflect.Type, id TypeID) TypeID {
 	// Get the concrete type (dereference pointers)
 	for t.Kind() == reflect.Ptr {
@@ -425,13 +431,18 @@ func (r *Registry) RegisterOrGetTypeWithID(t reflect.Type, id TypeID) TypeID {
 		return reg.ID
 	}
 
-	// Check if the requested ID is already in use
-	if _, ok := r.byID[id]; ok {
-		// ID is in use, fall back to auto-assigned ID
-		id = r.nextID
-		r.nextID++
-	} else if id >= r.nextID {
-		// Ensure nextID stays ahead of manually assigned IDs
+	if existing, ok := r.byID[id]; ok {
+		// The requested ID is already taken by a *different* type. Refusing
+		// is safer than silently re-allocating: the caller passed an explicit
+		// ID for a reason, and a quiet collision shows up later as a wire
+		// format mismatch with no clear cause.
+		panic(fmt.Sprintf(
+			"cramberry: RegisterOrGetTypeWithID: ID %d already in use by %s (cannot reassign to %s)",
+			id, existing.Name, typeName(t),
+		))
+	}
+	if id >= r.nextID {
+		// Ensure nextID stays ahead of manually assigned IDs.
 		r.nextID = id + 1
 	}
 

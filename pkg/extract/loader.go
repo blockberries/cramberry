@@ -2,6 +2,7 @@
 package extract
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/types"
@@ -35,7 +36,10 @@ func (l *PackageLoader) Load(patterns []string) ([]*packages.Package, error) {
 		return nil, fmt.Errorf("failed to load packages: %w", err)
 	}
 
-	// Check for errors in loaded packages
+	// Aggregate errors from every loaded package. Reporting only the first
+	// loses information when several packages fail at once and the first
+	// error is misleading (e.g. a cache stale-ness error masking a real
+	// parse error elsewhere).
 	var errs []error
 	packages.Visit(pkgs, nil, func(pkg *packages.Package) {
 		for _, err := range pkg.Errors {
@@ -44,7 +48,7 @@ func (l *PackageLoader) Load(patterns []string) ([]*packages.Package, error) {
 	})
 
 	if len(errs) > 0 {
-		return nil, fmt.Errorf("package errors: %v", errs[0])
+		return nil, fmt.Errorf("package errors: %w", errors.Join(errs...))
 	}
 
 	return pkgs, nil
