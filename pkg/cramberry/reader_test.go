@@ -780,29 +780,6 @@ func TestSkipValueUnknownWireType(t *testing.T) {
 	}
 }
 
-func TestSubReader(t *testing.T) {
-	data := []byte{1, 2, 3, 4, 5, 6, 7, 8}
-	r := NewReader(data)
-	r.Skip(2)
-
-	sub := r.SubReader(4)
-	if sub == nil {
-		t.Fatal("SubReader returned nil")
-	}
-	if sub.Len() != 4 {
-		t.Errorf("SubReader Len() = %d, want 4", sub.Len())
-	}
-	if r.Pos() != 6 {
-		t.Errorf("Parent Pos() = %d, want 6", r.Pos())
-	}
-
-	// Read from sub-reader
-	v := sub.ReadUint8()
-	if v != 3 {
-		t.Errorf("SubReader ReadUint8 = %d, want 3", v)
-	}
-}
-
 func TestReaderRemaining(t *testing.T) {
 	data := []byte{1, 2, 3, 4, 5}
 	r := NewReader(data)

@@ -197,8 +197,19 @@ func (w *Writer) WriteEndMarker() {
 
 // ReadTag reads a field tag from the reader.
 // Returns fieldNum=0 for end marker or on error.
+//
+// EOF without an explicit `0x00` end marker is itself an error
+// (`ErrUnexpectedEOF`): a truncated message used to be silently
+// indistinguishable from a clean end-of-fields, so a corrupt wire
+// payload would round-trip to a struct whose tail fields all held
+// their zero values with no error returned. Encoders always emit an
+// end marker, so a missing one means the bytes are short.
 func (r *Reader) ReadTag() (fieldNum int, wireType byte) {
-	if r.err != nil || r.pos >= len(r.data) {
+	if r.err != nil {
+		return 0, 0
+	}
+	if r.pos >= len(r.data) {
+		r.setErrorAt(ErrUnexpectedEOF, "missing end marker")
 		return 0, 0
 	}
 

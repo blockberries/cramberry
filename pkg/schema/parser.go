@@ -5,6 +5,26 @@ import (
 	"strconv"
 )
 
+// parseIntLiteral parses an integer literal token value, accepting both
+// the decimal form `123` and the hex form `0xFF` produced by the lexer.
+// It clamps the result to int range — which the validator separately
+// bounds to MaxFieldNumber where applicable.
+func parseIntLiteral(s string) (int, error) {
+	v, err := strconv.ParseInt(s, 0, 64)
+	if err != nil {
+		return 0, err
+	}
+	if v < int64(minInt) || v > int64(maxInt) {
+		return 0, fmt.Errorf("integer literal %q out of int range", s)
+	}
+	return int(v), nil
+}
+
+const (
+	maxInt = int(^uint(0) >> 1)
+	minInt = -maxInt - 1
+)
+
 // Parser parses schema source code into an AST.
 type Parser struct {
 	lexer    *Lexer
@@ -315,7 +335,7 @@ func (p *Parser) parseMessage() (*Message, *ParseError) {
 		if !p.check(TokenInt) {
 			return nil, p.error("expected type ID after '@'")
 		}
-		id, err := strconv.Atoi(p.current.Value)
+		id, err := parseIntLiteral(p.current.Value)
 		if err != nil {
 			return nil, p.error("invalid type ID")
 		}
@@ -414,7 +434,7 @@ parseType:
 	if !p.check(TokenInt) {
 		return nil, p.error("expected field number")
 	}
-	num, parseErr := strconv.Atoi(p.current.Value)
+	num, parseErr := parseIntLiteral(p.current.Value)
 	if parseErr != nil {
 		return nil, p.error("invalid field number")
 	}
@@ -526,7 +546,7 @@ func (p *Parser) parseTypeRef() (TypeRef, *ParseError) {
 		p.advance()
 		var size int
 		if p.check(TokenInt) {
-			sz, err := strconv.Atoi(p.current.Value)
+			sz, err := parseIntLiteral(p.current.Value)
 			if err != nil {
 				return nil, p.error("invalid array size")
 			}
@@ -685,7 +705,7 @@ func (p *Parser) parseEnumValue() (*EnumValue, *ParseError) {
 	if !p.check(TokenInt) {
 		return nil, p.error("expected enum value number")
 	}
-	num, err := strconv.Atoi(p.current.Value)
+	num, err := parseIntLiteral(p.current.Value)
 	if err != nil {
 		return nil, p.error("invalid enum value number")
 	}
@@ -766,7 +786,7 @@ func (p *Parser) parseImplementation() (*Implementation, *ParseError) {
 	if !p.check(TokenInt) {
 		return nil, p.error("expected type ID")
 	}
-	typeID, err := strconv.Atoi(p.current.Value)
+	typeID, err := parseIntLiteral(p.current.Value)
 	if err != nil {
 		return nil, p.error("invalid type ID")
 	}

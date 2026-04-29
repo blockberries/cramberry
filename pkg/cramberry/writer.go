@@ -434,6 +434,15 @@ func (w *Writer) EndMessage(checkpoint int) {
 	if checkpoint < 0 || w.err != nil {
 		return
 	}
+	// Defensive bounds: a buggy caller passing a stale checkpoint (e.g.
+	// from a different Writer or after a Reset) would otherwise compute
+	// a negative msgLen, write a giant uvarint length prefix into a
+	// scratch buffer, and copy() into a meaningless region of w.buf.
+	// Catch it here rather than producing silent wire corruption.
+	if checkpoint+MaxVarintLen64 > len(w.buf) {
+		w.setError(NewEncodeError("EndMessage: checkpoint past buffer end (stale or wrong Writer?)", nil))
+		return
+	}
 	w.exitNested()
 
 	// Calculate the message length (excluding the length prefix placeholder)

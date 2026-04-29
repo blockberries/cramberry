@@ -1068,8 +1068,14 @@ func (c *goContext) jsonEncodeValue(t schema.TypeRef, varName string, repeated b
 	case *schema.MapType:
 		return c.jsonEncodeMap(typ, varName)
 	case *schema.PointerType:
-		// Handle optional pointer
-		inner := c.jsonEncodeValue(typ.Element, "*"+varName, false, false)
+		// Handle optional pointer. The inner expression is wrapped in
+		// parentheses so the dereference binds tighter than any
+		// subsequent method call: `*m.X.ToJSON()` parses as
+		// `*(m.X.ToJSON())` and won't compile when ToJSON returns
+		// (string, error). Using `(*m.X)` works for scalars and
+		// messages alike (Go auto-dereferences methods anyway, so the
+		// extra parens are a safe no-op).
+		inner := c.jsonEncodeValue(typ.Element, "(*"+varName+")", false, false)
 		return fmt.Sprintf("\tif %s != nil {\n\t%s\t} else {\n\t\tbuf.WriteString(\"null\")\n\t}\n", varName, strings.ReplaceAll(inner, "\t", "\t\t"))
 	default:
 		return "\tbuf.WriteString(`null`)\n"

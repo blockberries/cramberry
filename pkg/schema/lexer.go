@@ -327,6 +327,23 @@ func (l *Lexer) scanNumber() Token {
 		l.advance()
 	}
 
+	// Hex literal `0x...` / `0X...`. Without explicit hex support the
+	// lexer used to split `0xFF` into `Int(0)` + `Ident(xFF)`, silently
+	// dropping the user's intent.
+	if l.peek() == '0' && l.pos+1 < len(l.input) &&
+		(l.input[l.pos+1] == 'x' || l.input[l.pos+1] == 'X') {
+		l.advance() // 0
+		l.advance() // x
+		hexStart := l.pos
+		for l.pos < len(l.input) && isHexDigit(l.peek()) {
+			l.advance()
+		}
+		if l.pos == hexStart {
+			return l.errorf("hex literal has no digits after 0x")
+		}
+		return l.token(TokenInt, l.input[l.start:l.pos])
+	}
+
 	// Scan integer part
 	for l.pos < len(l.input) && isDigit(l.peek()) {
 		l.advance()
@@ -345,15 +362,21 @@ func (l *Lexer) scanNumber() Token {
 		}
 	}
 
-	// Check for exponent
+	// Check for exponent. The exponent must contain at least one digit;
+	// otherwise `1e` and `1e-` used to lex as TokenFloat with a value
+	// that subsequent strconv.ParseFloat would fail on at codegen time.
 	if l.pos < len(l.input) && (l.input[l.pos] == 'e' || l.input[l.pos] == 'E') {
 		isFloat = true
 		l.advance()
 		if l.pos < len(l.input) && (l.input[l.pos] == '+' || l.input[l.pos] == '-') {
 			l.advance()
 		}
+		expStart := l.pos
 		for l.pos < len(l.input) && isDigit(l.peek()) {
 			l.advance()
+		}
+		if l.pos == expStart {
+			return l.errorf("malformed number: exponent has no digits")
 		}
 	}
 
@@ -362,6 +385,12 @@ func (l *Lexer) scanNumber() Token {
 		return l.token(TokenFloat, num)
 	}
 	return l.token(TokenInt, num)
+}
+
+func isHexDigit(ch rune) bool {
+	return (ch >= '0' && ch <= '9') ||
+		(ch >= 'a' && ch <= 'f') ||
+		(ch >= 'A' && ch <= 'F')
 }
 
 // scanString scans a string literal.

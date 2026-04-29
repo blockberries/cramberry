@@ -296,7 +296,14 @@ func (r *Reader) exitNested() {
 }
 
 // Skip skips n bytes.
+//
+// A negative n used to silently rewind the read position because
+// `r.pos + (-n) > len(r.data)` reads as false. Reject up front.
 func (r *Reader) Skip(n int) {
+	if n < 0 {
+		r.setError(ErrOverflow)
+		return
+	}
 	if !r.ensure(n) {
 		return
 	}
@@ -877,20 +884,6 @@ func (r *Reader) ReadMapHeader() int {
 		return 0
 	}
 	return n
-}
-
-// SubReader creates a sub-reader for a portion of the data.
-// The sub-reader has independent position tracking but shares the underlying data.
-func (r *Reader) SubReader(length int) *Reader {
-	if !r.ensure(length) {
-		return nil
-	}
-	sub := &Reader{
-		data: r.data[r.pos : r.pos+length],
-		opts: r.opts,
-	}
-	r.pos += length
-	return sub
 }
 
 // MaxInt is the maximum value of int (platform dependent).

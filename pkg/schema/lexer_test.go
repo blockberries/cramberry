@@ -562,3 +562,50 @@ func TestLexerUnicodeOffset(t *testing.T) {
 		t.Errorf("'bar' offset = %d, want 6", tok2.Position.Offset)
 	}
 }
+
+// TestLexer_HexInt covers the previously-broken `0xFF` lexing path.
+// Without explicit hex support the lexer split `0xFF` into `Int(0)` +
+// `Ident(xFF)`, silently dropping the user's intent.
+func TestLexer_HexInt(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{"0xFF", "0xFF"},
+		{"0X10", "0X10"},
+		{"0xdeadbeef", "0xdeadbeef"},
+	}
+	for _, tc := range cases {
+		tokens := Tokenize("test", tc.input)
+		if len(tokens) < 1 || tokens[0].Type != TokenInt || tokens[0].Value != tc.want {
+			t.Fatalf("input %q lexed as %+v; want a single TokenInt(%q)", tc.input, tokens, tc.want)
+		}
+	}
+
+	// Empty hex literal should error.
+	tokens := Tokenize("test", "0x")
+	for _, tok := range tokens {
+		if tok.Type == TokenError {
+			return
+		}
+	}
+	t.Fatalf("expected lexer error for `0x`, got tokens %+v", tokens)
+}
+
+// TestLexer_RejectsMalformedExponent covers `1e` and `1e-` which used to
+// produce a bare TokenFloat that then died at codegen time.
+func TestLexer_RejectsMalformedExponent(t *testing.T) {
+	for _, input := range []string{"1e", "1e-", "1e+"} {
+		tokens := Tokenize("test", input)
+		gotErr := false
+		for _, tok := range tokens {
+			if tok.Type == TokenError {
+				gotErr = true
+				break
+			}
+		}
+		if !gotErr {
+			t.Errorf("input %q should produce a lexer error; got %+v", input, tokens)
+		}
+	}
+}

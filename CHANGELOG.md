@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (correctness — fifth review pass)
+
+- **`Reader.ReadTag` no longer treats truncated input as a clean
+  end-of-message**. EOF without an explicit `0x00` end marker now
+  returns `ErrUnexpectedEOF`. Encoders always emit the marker, so a
+  missing one means the wire bytes are short — silently accepting
+  it caused truncated payloads to round-trip to a struct whose tail
+  fields all held zero values with no error reported.
+- **`Writer.EndMessage` validates `checkpoint` is in range**. A buggy
+  caller passing a stale checkpoint (e.g. from a Reset'd writer)
+  would compute a negative `msgLen`, encode a giant `uvarint` length
+  prefix, and `copy()` it into a bogus offset — silent wire
+  corruption. Now sets an explicit error.
+- **`Reader.Skip(-n)` rejected**. The `ensure(n)` bound check was
+  vacuous for negative `n`, so `Skip(-5)` rewound the read position
+  by 5 with no error.
+- **Generated Go `ToJSON` for optional message fields no longer
+  emits uncompilable `*m.X.ToJSON()`**. Operator precedence parses
+  that as `*(m.X.ToJSON())`, which fails because `ToJSON` returns
+  `(string, error)`. The generator now wraps in parentheses
+  (`(*m.X)`), which Go auto-dereferences for method calls anyway.
+- **Schema lexer accepts hex literals (`0xFF`, `0xdeadbeef`)** —
+  previously split into `Int(0)` + `Ident(xFF)`, silently dropping
+  the user's intent.
+- **Schema lexer rejects malformed exponents (`1e`, `1e-`)** —
+  previously produced a `TokenFloat` with a value that
+  `strconv.ParseFloat` then failed on at codegen time.
+- **`SubReader` removed**. No production callers; sub-reader errors
+  did not propagate back to the parent — anyone using it would have
+  silently read past corruption.
+
 ### Fixed (consensus-critical)
 
 - **Non-canonical varint encodings now rejected** in Go and Rust. Two
