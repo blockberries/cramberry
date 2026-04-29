@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Schema validator now rejects fields that stack mutually-exclusive
+  modifiers (e.g. `required repeated`, `optional repeated`). Previously the
+  parser accepted these silently because each modifier is independent on
+  the AST. The error names every offending modifier so authors can pick
+  one.
+- Rust integration tests now resolve the Go-produced golden fixtures
+  correctly. The path was `../../golden`, which silently missed the
+  fixtures at `testdata/golden/` — the affected tests passed only because
+  `load_golden` falls back to "skip" on missing files. Path corrected to
+  `../../../testdata/golden`.
+
+### Added
+
+- Rust integration tests for `ComplexTypes` (status enum, optional /
+  required nested messages, repeated message lists, sorted maps) and
+  `EdgeCases` (i32/i64/u32/u64 boundaries, unicode strings). Each suite
+  cross-checks both round-trip identity and byte-for-byte equality
+  against the Go-produced golden bytes.
+
+### Removed
+
+- Dead public helpers in `internal/wire`:
+  `PutFixed32`, `PutFixed64`, `PutFloat32`, `PutFloat64`,
+  `IsNaN32`, `IsNaN64`, `IsNegativeZero32`, `IsNegativeZero64`,
+  `PutUvarint`, `PutSvarint`. All callers used the `Append*` variants;
+  the `Put*` and predicate forms had no production callers.
+- Dead public helpers in `pkg/cramberry`:
+  `GetWriterWithHint` (no callers), `IsRetryable` (always returned
+  `false`), `ZeroCopyString.UnsafeString`, `ZeroCopyBytes.UnsafeBytes`
+  (the safe `String`/`Bytes` accessors already provide the same access
+  with generation validation).
+
 ## [2.0.0] - 2026-04-29
 
 ### Changed (BREAKING)

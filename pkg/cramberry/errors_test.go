@@ -285,21 +285,6 @@ func TestWrapError(t *testing.T) {
 	}
 }
 
-func TestIsRetryable(t *testing.T) {
-	// Currently all errors are non-retryable
-	errs := []error{
-		ErrInvalidVarint,
-		ErrUnexpectedEOF,
-		ErrNotPointer,
-		NewDecodeError("test", nil),
-	}
-
-	for _, err := range errs {
-		if IsRetryable(err) {
-			t.Errorf("IsRetryable(%v) = true, want false", err)
-		}
-	}
-}
 
 func TestIsFatal(t *testing.T) {
 	fatalErrors := []error{

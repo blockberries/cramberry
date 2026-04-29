@@ -4,12 +4,17 @@
 //! encodings to Go and can decode Go-generated golden files.
 
 use cramberry::{Reader, Result, WireType, Writer};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
 use crate::interop::*;
 
-const GOLDEN_DIR: &str = "../../golden";
+// Golden bytes are produced by the Go reflection marshaller in
+// testdata/golden/. cargo test runs from the integration crate dir
+// (test/integration/rust/), so the relative path goes up three levels
+// to the project root.
+const GOLDEN_DIR: &str = "../../../testdata/golden";
 
 // Test data matching Go's TestData
 fn test_scalar_types() -> ScalarTypes {
@@ -41,6 +46,42 @@ fn test_all_field_numbers() -> AllFieldNumbers {
         field_127: 12700,
         field_128: 12800,
         field_1000: 100000,
+    }
+}
+
+fn test_complex_types() -> ComplexTypes {
+    let mut string_int_map = HashMap::new();
+    string_int_map.insert("one".to_string(), 1);
+    string_int_map.insert("two".to_string(), 2);
+    string_int_map.insert("three".to_string(), 3);
+
+    let mut int_string_map = HashMap::new();
+    int_string_map.insert(1, "one".to_string());
+    int_string_map.insert(2, "two".to_string());
+    int_string_map.insert(3, "three".to_string());
+
+    ComplexTypes {
+        status: Status::Active,
+        optional_nested: Some(Box::new(NestedMessage {
+            name: "optional".to_string(),
+            value: 456,
+        })),
+        required_nested: NestedMessage {
+            name: "required".to_string(),
+            value: 789,
+        },
+        nested_list: vec![
+            NestedMessage {
+                name: "first".to_string(),
+                value: 1,
+            },
+            NestedMessage {
+                name: "second".to_string(),
+                value: 2,
+            },
+        ],
+        string_int_map,
+        int_string_map,
     }
 }
 
@@ -232,6 +273,220 @@ fn decode_all_field_numbers(reader: &mut Reader) -> Result<AllFieldNumbers> {
     Ok(result)
 }
 
+// Encode a NestedMessage into a fresh sub-buffer so it can be wrapped
+// as length-prefixed bytes by the parent encoder. This mirrors the Go
+// codegen's BeginMessage / EndMessage pattern.
+fn encode_nested_to_bytes(msg: &NestedMessage) -> Result<Vec<u8>> {
+    let mut sub = Writer::new();
+    encode_nested_message(&mut sub, msg)?;
+    Ok(sub.into_bytes())
+}
+
+fn encode_complex_types(writer: &mut Writer, msg: &ComplexTypes) -> Result<()> {
+    // Field 1: status (always emitted; codegen does not check zero-value
+    // because enums have a default variant).
+    writer.write_tag(1, WireType::SVarint)?;
+    writer.write_svarint(msg.status as i32)?;
+
+    // Field 2: optional_nested (length-prefixed message body, only if set).
+    if let Some(nested) = &msg.optional_nested {
+        writer.write_tag(2, WireType::Bytes)?;
+        let body = encode_nested_to_bytes(nested)?;
+        writer.write_length_prefixed_bytes(&body)?;
+    }
+
+    // Field 3: required_nested (always emitted, length-prefixed body).
+    writer.write_tag(3, WireType::Bytes)?;
+    let body = encode_nested_to_bytes(&msg.required_nested)?;
+    writer.write_length_prefixed_bytes(&body)?;
+
+    // Field 4: nested_list (length-prefixed body containing count + elements).
+    if !msg.nested_list.is_empty() {
+        writer.write_tag(4, WireType::Bytes)?;
+        let mut sub = Writer::new();
+        sub.write_varint64(msg.nested_list.len() as u64)?;
+        for n in &msg.nested_list {
+            encode_nested_message(&mut sub, n)?;
+        }
+        writer.write_length_prefixed_bytes(&sub.into_bytes())?;
+    }
+
+    // Field 5: string_int_map (sorted by UTF-8 byte order).
+    if !msg.string_int_map.is_empty() {
+        writer.write_tag(5, WireType::Bytes)?;
+        let mut sub = Writer::new();
+        sub.write_varint64(msg.string_int_map.len() as u64)?;
+        let mut keys: Vec<&String> = msg.string_int_map.keys().collect();
+        keys.sort();
+        for k in keys {
+            sub.write_string(k)?;
+            sub.write_int32(msg.string_int_map[k])?;
+        }
+        writer.write_length_prefixed_bytes(&sub.into_bytes())?;
+    }
+
+    // Field 6: int_string_map (sorted by numeric key).
+    if !msg.int_string_map.is_empty() {
+        writer.write_tag(6, WireType::Bytes)?;
+        let mut sub = Writer::new();
+        sub.write_varint64(msg.int_string_map.len() as u64)?;
+        let mut keys: Vec<&i32> = msg.int_string_map.keys().collect();
+        keys.sort();
+        for k in keys {
+            sub.write_int32(*k)?;
+            sub.write_string(&msg.int_string_map[k])?;
+        }
+        writer.write_length_prefixed_bytes(&sub.into_bytes())?;
+    }
+
+    writer.write_end_marker()?;
+    Ok(())
+}
+
+fn decode_complex_types(reader: &mut Reader) -> Result<ComplexTypes> {
+    let mut result = ComplexTypes::default();
+
+    while reader.has_more() {
+        let tag = reader.read_tag()?;
+        if Reader::is_end_marker(&tag) {
+            break;
+        }
+        match tag.field_number {
+            1 => {
+                let raw = reader.read_svarint()?;
+                result.status = Status::from_i32(raw).unwrap_or(Status::Unknown);
+            }
+            2 => {
+                let body = reader.read_length_prefixed_bytes()?;
+                let mut sub = Reader::new(body);
+                result.optional_nested = Some(Box::new(decode_nested_message(&mut sub)?));
+            }
+            3 => {
+                let body = reader.read_length_prefixed_bytes()?;
+                let mut sub = Reader::new(body);
+                result.required_nested = decode_nested_message(&mut sub)?;
+            }
+            4 => {
+                let body = reader.read_length_prefixed_bytes()?;
+                let mut sub = Reader::new(body);
+                let n = sub.read_varint64()? as usize;
+                let mut list = Vec::with_capacity(n);
+                for _ in 0..n {
+                    list.push(decode_nested_message(&mut sub)?);
+                }
+                result.nested_list = list;
+            }
+            5 => {
+                let body = reader.read_length_prefixed_bytes()?;
+                let mut sub = Reader::new(body);
+                let n = sub.read_varint64()? as usize;
+                let mut m = HashMap::with_capacity(n);
+                for _ in 0..n {
+                    let k = sub.read_string()?.to_string();
+                    let v = sub.read_int32()?;
+                    m.insert(k, v);
+                }
+                result.string_int_map = m;
+            }
+            6 => {
+                let body = reader.read_length_prefixed_bytes()?;
+                let mut sub = Reader::new(body);
+                let n = sub.read_varint64()? as usize;
+                let mut m = HashMap::with_capacity(n);
+                for _ in 0..n {
+                    let k = sub.read_int32()?;
+                    let v = sub.read_string()?.to_string();
+                    m.insert(k, v);
+                }
+                result.int_string_map = m;
+            }
+            _ => reader.skip_value(tag.wire_type)?,
+        }
+    }
+
+    Ok(result)
+}
+
+fn encode_edge_cases(writer: &mut Writer, msg: &EdgeCases) -> Result<()> {
+    // Mirrors the codegen omitempty rules: scalar fields with the
+    // zero value are skipped. The Go fixture relies on this to keep
+    // the golden bytes minimal — zero_int, empty_string and
+    // empty_bytes never appear on the wire.
+    if msg.zero_int != 0 {
+        writer.write_tag(1, WireType::SVarint)?;
+        writer.write_int32(msg.zero_int)?;
+    }
+    if msg.negative_one != 0 {
+        writer.write_tag(2, WireType::SVarint)?;
+        writer.write_int32(msg.negative_one)?;
+    }
+    if msg.max_int32 != 0 {
+        writer.write_tag(3, WireType::SVarint)?;
+        writer.write_int32(msg.max_int32)?;
+    }
+    if msg.min_int32 != 0 {
+        writer.write_tag(4, WireType::SVarint)?;
+        writer.write_int32(msg.min_int32)?;
+    }
+    if msg.max_int64 != 0 {
+        writer.write_tag(5, WireType::SVarint)?;
+        writer.write_int64(msg.max_int64)?;
+    }
+    if msg.min_int64 != 0 {
+        writer.write_tag(6, WireType::SVarint)?;
+        writer.write_int64(msg.min_int64)?;
+    }
+    if msg.max_uint32 != 0 {
+        writer.write_tag(7, WireType::Varint)?;
+        writer.write_uint32(msg.max_uint32)?;
+    }
+    if msg.max_uint64 != 0 {
+        writer.write_tag(8, WireType::Varint)?;
+        writer.write_uint64(msg.max_uint64)?;
+    }
+    if !msg.empty_string.is_empty() {
+        writer.write_tag(9, WireType::Bytes)?;
+        writer.write_string(&msg.empty_string)?;
+    }
+    if !msg.unicode_string.is_empty() {
+        writer.write_tag(10, WireType::Bytes)?;
+        writer.write_string(&msg.unicode_string)?;
+    }
+    if !msg.empty_bytes.is_empty() {
+        writer.write_tag(11, WireType::Bytes)?;
+        writer.write_length_prefixed_bytes(&msg.empty_bytes)?;
+    }
+    writer.write_end_marker()?;
+    Ok(())
+}
+
+fn decode_edge_cases(reader: &mut Reader) -> Result<EdgeCases> {
+    let mut result = EdgeCases::default();
+
+    while reader.has_more() {
+        let tag = reader.read_tag()?;
+        if Reader::is_end_marker(&tag) {
+            break;
+        }
+        match tag.field_number {
+            1 => result.zero_int = reader.read_int32()?,
+            2 => result.negative_one = reader.read_int32()?,
+            3 => result.max_int32 = reader.read_int32()?,
+            4 => result.min_int32 = reader.read_int32()?,
+            5 => result.max_int64 = reader.read_int64()?,
+            6 => result.min_int64 = reader.read_int64()?,
+            7 => result.max_uint32 = reader.read_uint32()?,
+            8 => result.max_uint64 = reader.read_uint64()?,
+            9 => result.empty_string = reader.read_string()?.to_string(),
+            10 => result.unicode_string = reader.read_string()?.to_string(),
+            11 => result.empty_bytes = reader.read_length_prefixed_bytes()?.to_vec(),
+            _ => reader.skip_value(tag.wire_type)?,
+        }
+    }
+
+    Ok(result)
+}
+
 fn load_golden(name: &str) -> Option<Vec<u8>> {
     let path = PathBuf::from(GOLDEN_DIR).join(format!("{}.bin", name));
     fs::read(&path).ok()
@@ -409,5 +664,116 @@ mod tests {
             let hex = hex::encode(writer.as_bytes());
             assert_eq!(hex, expected, "svarint({}) failed", value);
         }
+    }
+
+    #[test]
+    fn test_complex_types_encode_decode() {
+        let msg = test_complex_types();
+        let mut writer = Writer::new();
+        encode_complex_types(&mut writer, &msg).unwrap();
+        let encoded = writer.into_bytes();
+
+        println!("ComplexTypes encoded: {}", hex::encode(&encoded));
+
+        let mut reader = Reader::new(&encoded);
+        let decoded = decode_complex_types(&mut reader).unwrap();
+
+        assert_eq!(decoded.status, msg.status);
+        assert_eq!(decoded.optional_nested, msg.optional_nested);
+        assert_eq!(decoded.required_nested, msg.required_nested);
+        assert_eq!(decoded.nested_list, msg.nested_list);
+        assert_eq!(decoded.string_int_map, msg.string_int_map);
+        assert_eq!(decoded.int_string_map, msg.int_string_map);
+    }
+
+    #[test]
+    fn test_complex_types_golden_decode() {
+        let golden = match load_golden("complex_types") {
+            Some(data) => data,
+            None => {
+                println!("Golden file not found, skipping");
+                return;
+            }
+        };
+
+        println!("Golden ComplexTypes hex: {}", hex::encode(&golden));
+
+        let mut reader = Reader::new(&golden);
+        let decoded = decode_complex_types(&mut reader).unwrap();
+
+        let expected = test_complex_types();
+        assert_eq!(decoded.status, expected.status);
+        assert_eq!(decoded.optional_nested, expected.optional_nested);
+        assert_eq!(decoded.required_nested, expected.required_nested);
+        assert_eq!(decoded.nested_list, expected.nested_list);
+        assert_eq!(decoded.string_int_map, expected.string_int_map);
+        assert_eq!(decoded.int_string_map, expected.int_string_map);
+    }
+
+    #[test]
+    fn test_edge_cases_encode_decode() {
+        let msg = test_edge_cases();
+        let mut writer = Writer::new();
+        encode_edge_cases(&mut writer, &msg).unwrap();
+        let encoded = writer.into_bytes();
+
+        let mut reader = Reader::new(&encoded);
+        let decoded = decode_edge_cases(&mut reader).unwrap();
+
+        assert_eq!(decoded.zero_int, msg.zero_int);
+        assert_eq!(decoded.negative_one, msg.negative_one);
+        assert_eq!(decoded.max_int32, msg.max_int32);
+        assert_eq!(decoded.min_int32, msg.min_int32);
+        assert_eq!(decoded.max_int64, msg.max_int64);
+        assert_eq!(decoded.min_int64, msg.min_int64);
+        assert_eq!(decoded.max_uint32, msg.max_uint32);
+        assert_eq!(decoded.max_uint64, msg.max_uint64);
+        assert_eq!(decoded.empty_string, msg.empty_string);
+        assert_eq!(decoded.unicode_string, msg.unicode_string);
+        assert_eq!(decoded.empty_bytes, msg.empty_bytes);
+    }
+
+    #[test]
+    fn test_edge_cases_encoding_matches_golden() {
+        let golden = match load_golden("edge_cases") {
+            Some(data) => data,
+            None => {
+                println!("Golden file not found, skipping");
+                return;
+            }
+        };
+
+        let msg = test_edge_cases();
+        let mut writer = Writer::new();
+        encode_edge_cases(&mut writer, &msg).unwrap();
+        let encoded = writer.into_bytes();
+
+        assert_eq!(
+            hex::encode(&encoded),
+            hex::encode(&golden),
+            "Rust EdgeCases encoding diverges from Go golden bytes"
+        );
+    }
+
+    #[test]
+    fn test_complex_types_encoding_matches_golden() {
+        let golden = match load_golden("complex_types") {
+            Some(data) => data,
+            None => {
+                println!("Golden file not found, skipping");
+                return;
+            }
+        };
+
+        let msg = test_complex_types();
+        let mut writer = Writer::new();
+        encode_complex_types(&mut writer, &msg).unwrap();
+        let encoded = writer.into_bytes();
+
+        assert_eq!(
+            hex::encode(&encoded),
+            hex::encode(&golden),
+            "Rust encoding diverges from Go golden bytes"
+        );
     }
 }

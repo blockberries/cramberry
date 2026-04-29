@@ -233,36 +233,6 @@ func TestSvarintSize(t *testing.T) {
 	}
 }
 
-func TestPutUvarint(t *testing.T) {
-	for _, tc := range uvarintTestCases {
-		t.Run(tc.name, func(t *testing.T) {
-			buf := make([]byte, MaxVarintLen64)
-			n := PutUvarint(buf, tc.value)
-			if n != len(tc.expected) {
-				t.Errorf("PutUvarint(%d) returned %d, want %d", tc.value, n, len(tc.expected))
-			}
-			if !bytes.Equal(buf[:n], tc.expected) {
-				t.Errorf("PutUvarint(%d) = %v, want %v", tc.value, buf[:n], tc.expected)
-			}
-		})
-	}
-}
-
-func TestPutSvarint(t *testing.T) {
-	for _, tc := range svarintTestCases {
-		t.Run(tc.name, func(t *testing.T) {
-			buf := make([]byte, MaxVarintLen64)
-			n := PutSvarint(buf, tc.value)
-			if n != len(tc.expected) {
-				t.Errorf("PutSvarint(%d) returned %d, want %d", tc.value, n, len(tc.expected))
-			}
-			if !bytes.Equal(buf[:n], tc.expected) {
-				t.Errorf("PutSvarint(%d) = %v, want %v", tc.value, buf[:n], tc.expected)
-			}
-		})
-	}
-}
-
 func TestDecodeUvarintWithTrailingData(t *testing.T) {
 	// Ensure we correctly return bytes consumed when there's trailing data
 	data := []byte{0xac, 0x02, 0xff, 0xff} // 300 followed by garbage

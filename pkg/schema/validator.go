@@ -225,16 +225,21 @@ func (v *Validator) validateMessage(msg *Message) {
 		// Validate field type
 		v.validateTypeRef(field.Type, msg.Name, field.Name)
 
-		// Check modifier combinations
-		modifierCount := 0
+		// Check modifier combinations. The parser accepts stacked modifiers
+		// like `required repeated optional T x = 1;` because each modifier
+		// is independent on the AST. Mutual exclusion is enforced here.
+		var modifiers []string
 		if field.Required {
-			modifierCount++
+			modifiers = append(modifiers, "required")
 		}
 		if field.Optional {
-			modifierCount++
+			modifiers = append(modifiers, "optional")
 		}
-		if modifierCount > 1 {
-			v.addError(field.Position, "field cannot be both required and optional")
+		if field.Repeated {
+			modifiers = append(modifiers, "repeated")
+		}
+		if len(modifiers) > 1 {
+			v.addError(field.Position, "field has mutually exclusive modifiers: %v", modifiers)
 		}
 
 		// Validate map key type

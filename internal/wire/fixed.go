@@ -59,28 +59,6 @@ func DecodeFixed64(data []byte) (uint64, error) {
 	return binary.LittleEndian.Uint64(data), nil
 }
 
-// PutFixed32 writes a 32-bit value to buf in little-endian format.
-// The buffer must have at least 4 bytes available.
-func PutFixed32(buf []byte, v uint32) {
-	buf[0] = byte(v)
-	buf[1] = byte(v >> 8)
-	buf[2] = byte(v >> 16)
-	buf[3] = byte(v >> 24)
-}
-
-// PutFixed64 writes a 64-bit value to buf in little-endian format.
-// The buffer must have at least 8 bytes available.
-func PutFixed64(buf []byte, v uint64) {
-	buf[0] = byte(v)
-	buf[1] = byte(v >> 8)
-	buf[2] = byte(v >> 16)
-	buf[3] = byte(v >> 24)
-	buf[4] = byte(v >> 32)
-	buf[5] = byte(v >> 40)
-	buf[6] = byte(v >> 48)
-	buf[7] = byte(v >> 56)
-}
-
 // Float32 encoding with canonicalization for deterministic output.
 
 // AppendFloat32 appends a float32 in canonicalized little-endian format.
@@ -101,12 +79,6 @@ func DecodeFloat32(data []byte) (float32, error) {
 		return 0, err
 	}
 	return math.Float32frombits(bits), nil
-}
-
-// PutFloat32 writes a canonicalized float32 to buf in little-endian format.
-func PutFloat32(buf []byte, v float32) {
-	bits := canonicalizeFloat32(v)
-	PutFixed32(buf, bits)
 }
 
 // canonicalizeFloat32 returns the canonical bit representation of a float32.
@@ -146,12 +118,6 @@ func DecodeFloat64(data []byte) (float64, error) {
 		return 0, err
 	}
 	return math.Float64frombits(bits), nil
-}
-
-// PutFloat64 writes a canonicalized float64 to buf in little-endian format.
-func PutFloat64(buf []byte, v float64) {
-	bits := canonicalizeFloat64(v)
-	PutFixed64(buf, bits)
 }
 
 // canonicalizeFloat64 returns the canonical bit representation of a float64.
@@ -229,28 +195,6 @@ const (
 	Complex64Size  = 8
 	Complex128Size = 16
 )
-
-// IsNaN32 returns true if the float32 is any NaN value.
-func IsNaN32(v float32) bool {
-	bits := math.Float32bits(v)
-	return bits&0x7F800000 == 0x7F800000 && bits&0x007FFFFF != 0
-}
-
-// IsNaN64 returns true if the float64 is any NaN value.
-func IsNaN64(v float64) bool {
-	bits := math.Float64bits(v)
-	return bits&0x7FF0000000000000 == 0x7FF0000000000000 && bits&0x000FFFFFFFFFFFFF != 0
-}
-
-// IsNegativeZero32 returns true if the float32 is negative zero.
-func IsNegativeZero32(v float32) bool {
-	return math.Float32bits(v) == 0x80000000
-}
-
-// IsNegativeZero64 returns true if the float64 is negative zero.
-func IsNegativeZero64(v float64) bool {
-	return math.Float64bits(v) == 0x8000000000000000
-}
 
 // CanonicalFloat32Bits returns the canonical bit representation of a float32.
 // NaN values are converted to the canonical NaN (0x7FC00000).

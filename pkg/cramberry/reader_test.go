@@ -1007,10 +1007,6 @@ func TestZeroCopyStringInvalidAfterReset(t *testing.T) {
 		t.Error("ZeroCopyString should be invalid after Reset")
 	}
 
-	// UnsafeString should still return the value (but it's unsafe)
-	if zcs.UnsafeString() != "hello" {
-		t.Errorf("ZeroCopyString.UnsafeString() = %q, want %q", zcs.UnsafeString(), "hello")
-	}
 }
 
 func TestZeroCopyStringPanicAfterReset(t *testing.T) {
@@ -1092,10 +1088,6 @@ func TestZeroCopyBytesInvalidAfterReset(t *testing.T) {
 		t.Error("ZeroCopyBytes should be invalid after Reset")
 	}
 
-	// UnsafeBytes should still return the value (but it's unsafe)
-	if !bytes.Equal(zcb.UnsafeBytes(), []byte{1, 2, 3, 4, 5}) {
-		t.Error("ZeroCopyBytes.UnsafeBytes() mismatch")
-	}
 }
 
 func TestZeroCopyBytesPanicAfterReset(t *testing.T) {

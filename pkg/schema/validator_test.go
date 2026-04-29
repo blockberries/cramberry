@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -1046,5 +1047,50 @@ func TestValidator_AllowsRecursionThroughRepeatedField(t *testing.T) {
 		if e.Severity == SeverityError {
 			t.Errorf("recursion through repeated field should be allowed; got error: %s", e.Message)
 		}
+	}
+}
+
+func TestValidator_RejectsStackedModifiers(t *testing.T) {
+	cases := []struct {
+		name  string
+		field *Field
+	}{
+		{
+			name:  "required+repeated",
+			field: &Field{Name: "x", Number: 1, Type: &ScalarType{Name: "int32"}, Required: true, Repeated: true},
+		},
+		{
+			name:  "required+optional",
+			field: &Field{Name: "x", Number: 1, Type: &ScalarType{Name: "int32"}, Required: true, Optional: true},
+		},
+		{
+			name:  "optional+repeated",
+			field: &Field{Name: "x", Number: 1, Type: &ScalarType{Name: "int32"}, Optional: true, Repeated: true},
+		},
+		{
+			name:  "all three",
+			field: &Field{Name: "x", Number: 1, Type: &ScalarType{Name: "int32"}, Required: true, Optional: true, Repeated: true},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &Schema{
+				Messages: []*Message{
+					{Name: "M", Fields: []*Field{tc.field}},
+				},
+			}
+			v := NewValidator(s)
+			errs := v.Validate()
+			found := false
+			for _, e := range errs {
+				if e.Severity == SeverityError && strings.Contains(e.Message, "mutually exclusive") {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Fatalf("expected mutually-exclusive-modifier error; got %v", errs)
+			}
+		})
 	}
 }

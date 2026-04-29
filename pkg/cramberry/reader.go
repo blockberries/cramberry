@@ -46,12 +46,6 @@ func (zcs ZeroCopyString) Valid() bool {
 	return zcs.reader == nil || zcs.reader.generation == zcs.generation
 }
 
-// UnsafeString returns the underlying string without validation.
-// Only use this if you have externally guaranteed the Reader hasn't been reset.
-func (zcs ZeroCopyString) UnsafeString() string {
-	return zcs.s
-}
-
 // IsEmpty returns true if the string is empty.
 func (zcs ZeroCopyString) IsEmpty() bool {
 	return len(zcs.s) == 0
@@ -110,12 +104,6 @@ func (zcb ZeroCopyBytes) Bytes() []byte {
 // Valid returns true if the ZeroCopyBytes is still valid (Reader not reset).
 func (zcb ZeroCopyBytes) Valid() bool {
 	return zcb.reader == nil || zcb.reader.generation == zcb.generation
-}
-
-// UnsafeBytes returns the underlying slice without validation.
-// Only use this if you have externally guaranteed the Reader hasn't been reset.
-func (zcb ZeroCopyBytes) UnsafeBytes() []byte {
-	return zcb.b
 }
 
 // IsEmpty returns true if the slice is empty.

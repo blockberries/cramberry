@@ -155,25 +155,3 @@ func SvarintSize(v int64) int {
 	return UvarintSize(uv)
 }
 
-// PutUvarint encodes v into buf and returns the number of bytes written.
-// The buffer must be large enough to hold the encoded value; use UvarintSize
-// to determine the required size.
-//
-// This is a lower-level function than AppendUvarint, useful when the buffer
-// is already allocated.
-func PutUvarint(buf []byte, v uint64) int {
-	i := 0
-	for v >= 0x80 {
-		buf[i] = byte(v) | 0x80
-		v >>= 7
-		i++
-	}
-	buf[i] = byte(v)
-	return i + 1
-}
-
-// PutSvarint encodes v into buf using zigzag encoding and returns bytes written.
-func PutSvarint(buf []byte, v int64) int {
-	uv := uint64(v<<1) ^ uint64(v>>63)
-	return PutUvarint(buf, uv)
-}

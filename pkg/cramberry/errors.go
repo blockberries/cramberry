@@ -309,12 +309,6 @@ func WrapError(err error, message string) error {
 	return fmt.Errorf("%s: %w", message, err)
 }
 
-// IsRetryable returns true if the error might succeed on retry.
-// Currently, no cramberry errors are retryable.
-func IsRetryable(_ error) bool {
-	return false
-}
-
 // IsFatal returns true if the error indicates a programming error
 // that should not occur in correct code.
 func IsFatal(err error) bool {

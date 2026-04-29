@@ -68,16 +68,6 @@ func PutBuffer(buf []byte) {
 	}
 }
 
-// GetWriterWithHint gets a Writer with a pre-allocated buffer sized for the hint.
-// The Writer should be returned with PutWriter when done.
-func GetWriterWithHint(sizeHint int) *Writer {
-	buf := GetBuffer(sizeHint)
-	return &Writer{
-		buf:  buf,
-		opts: DefaultOptions,
-	}
-}
-
 // BufferPoolStats returns statistics about buffer pool usage.
 // This is useful for tuning and debugging.
 type BufferPoolStats struct {

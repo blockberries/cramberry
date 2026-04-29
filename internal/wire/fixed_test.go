@@ -140,24 +140,6 @@ func TestDecodeFixed64Error(t *testing.T) {
 	}
 }
 
-func TestPutFixed32(t *testing.T) {
-	buf := make([]byte, 4)
-	PutFixed32(buf, 0x12345678)
-	expected := []byte{0x78, 0x56, 0x34, 0x12}
-	if !bytes.Equal(buf, expected) {
-		t.Errorf("PutFixed32 = %v, want %v", buf, expected)
-	}
-}
-
-func TestPutFixed64(t *testing.T) {
-	buf := make([]byte, 8)
-	PutFixed64(buf, 0x123456789ABCDEF0)
-	expected := []byte{0xF0, 0xDE, 0xBC, 0x9A, 0x78, 0x56, 0x34, 0x12}
-	if !bytes.Equal(buf, expected) {
-		t.Errorf("PutFixed64 = %v, want %v", buf, expected)
-	}
-}
-
 // Float32 tests
 
 func TestAppendFloat32(t *testing.T) {
@@ -433,52 +415,6 @@ func TestDecodeComplex128Error(t *testing.T) {
 	}
 }
 
-// Helper function tests
-
-func TestIsNaN32(t *testing.T) {
-	if !IsNaN32(float32(math.NaN())) {
-		t.Error("IsNaN32(NaN) should be true")
-	}
-	if IsNaN32(0) {
-		t.Error("IsNaN32(0) should be false")
-	}
-	if IsNaN32(float32(math.Inf(1))) {
-		t.Error("IsNaN32(+Inf) should be false")
-	}
-}
-
-func TestIsNaN64(t *testing.T) {
-	if !IsNaN64(math.NaN()) {
-		t.Error("IsNaN64(NaN) should be true")
-	}
-	if IsNaN64(0) {
-		t.Error("IsNaN64(0) should be false")
-	}
-	if IsNaN64(math.Inf(1)) {
-		t.Error("IsNaN64(+Inf) should be false")
-	}
-}
-
-func TestIsNegativeZero32(t *testing.T) {
-	negZero := math.Float32frombits(0x80000000)
-	if !IsNegativeZero32(negZero) {
-		t.Error("IsNegativeZero32(-0) should be true")
-	}
-	if IsNegativeZero32(0) {
-		t.Error("IsNegativeZero32(+0) should be false")
-	}
-}
-
-func TestIsNegativeZero64(t *testing.T) {
-	negZero := math.Float64frombits(0x8000000000000000)
-	if !IsNegativeZero64(negZero) {
-		t.Error("IsNegativeZero64(-0) should be true")
-	}
-	if IsNegativeZero64(0) {
-		t.Error("IsNegativeZero64(+0) should be false")
-	}
-}
-
 // Determinism test
 func TestEncodingDeterminism(t *testing.T) {
 	// Same value should always produce identical encoding
@@ -618,7 +554,7 @@ func FuzzFloat64RoundTrip(f *testing.F) {
 		}
 
 		// For -0, check that we get +0 back (canonicalization)
-		if IsNegativeZero64(v) {
+		if math.Float64bits(v) == 0x8000000000000000 {
 			if decoded != 0 || math.Float64bits(decoded) != 0 {
 				t.Fatalf("negative zero should decode to positive zero")
 			}
