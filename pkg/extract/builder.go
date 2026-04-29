@@ -155,7 +155,7 @@ func (b *SchemaBuilder) buildMessages() {
 			}
 
 			schemaField := &schema.Field{
-				Name:     toSnakeCase(field.Name),
+				Name:     escapeSchemaName(toSnakeCase(field.Name)),
 				Number:   field.FieldNum,
 				Type:     fieldType,
 				Optional: field.Optional,
@@ -399,4 +399,33 @@ func toSnakeCase(s string) string {
 		}
 	}
 	return result.String()
+}
+
+// schemaReservedNames is the set of identifiers the .cram lexer treats
+// as keywords. A field whose snake_case name lands on one of these
+// produces an unparseable schema (e.g. `Optional string` extracts as
+// `optional string optional = 1;` and the parser fails). The
+// extractor escapes such collisions by appending `_` so the round-trip
+// extract → validate → generate still succeeds.
+var schemaReservedNames = map[string]struct{}{
+	"package": {}, "import": {}, "as": {},
+	"message": {}, "enum": {}, "interface": {}, "option": {},
+	"required": {}, "repeated": {}, "optional": {},
+	"map": {}, "true": {}, "false": {}, "deprecated": {},
+	// Built-in scalar type names — not lexer keywords, but emitting a
+	// field named e.g. `int32 int32 = 1;` is needlessly confusing
+	// and may break planned tooling. Treat them as reserved.
+	"bool": {}, "string": {}, "bytes": {},
+	"int": {}, "int8": {}, "int16": {}, "int32": {}, "int64": {},
+	"uint": {}, "uint8": {}, "uint16": {}, "uint32": {}, "uint64": {},
+	"float32": {}, "float64": {},
+}
+
+// escapeSchemaName ensures the field name doesn't collide with a
+// schema keyword or built-in type name.
+func escapeSchemaName(name string) string {
+	if _, reserved := schemaReservedNames[name]; reserved {
+		return name + "_"
+	}
+	return name
 }

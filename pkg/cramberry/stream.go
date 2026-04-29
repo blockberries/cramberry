@@ -64,14 +64,22 @@ func GetStreamWriter(w io.Writer) *StreamWriter {
 
 // PutStreamWriter returns a StreamWriter to the pool.
 //
-// Callers MUST call Flush (or Close) before PutStreamWriter; otherwise
-// any data still in the underlying bufio.Writer is silently dropped on
-// the floor when the writer's reference is cleared. PutStreamWriter
-// does not flush itself because the underlying io.Writer may already be
-// closed by the caller.
+// As a safety net, this auto-flushes any buffered bytes before
+// dropping the underlying writer reference. Without that, the
+// previous behavior was to silently drop up to 4 KiB of buffered
+// output every time a caller forgot to call Flush — there was no
+// observable signal of data loss. Auto-flush errors are stored on
+// the StreamWriter (visible via Err on the next use) but cannot be
+// surfaced from this void function; callers who need the explicit
+// error should still Flush before pooling.
 func PutStreamWriter(sw *StreamWriter) {
 	if sw == nil {
 		return
+	}
+	if sw.w != nil && sw.err == nil {
+		if err := sw.w.Flush(); err != nil {
+			sw.err = NewEncodeError("flush failed during PutStreamWriter", err)
+		}
 	}
 	sw.w = nil // Allow GC of the underlying writer
 	streamWriterPool.Put(sw)

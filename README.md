@@ -21,8 +21,14 @@ codec across the [Stealth blockchain stack](../README.md).
 ## Install
 
 ```bash
-cd cramberry && go install ./cmd/cramberry
+cd cramberry && make install   # injects version / commit / build-date ldflags
+# or:
+cd cramberry && make build     # produces ./bin/cramberry
 ```
+
+`go install ./cmd/cramberry` also works but produces a binary that
+reports `cramberry version dev (unknown, unknown)` — `make` is what
+plumbs the version metadata through `-ldflags`.
 
 ## Usage
 

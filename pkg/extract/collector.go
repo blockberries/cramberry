@@ -441,10 +441,31 @@ func isPointer(t types.Type) bool {
 	return ok
 }
 
+// isSliceOrArray reports whether t is a Go slice or array, EXCLUDING
+// `[]byte` / `[N]byte`. Those map to the schema's `bytes` scalar type
+// (length-prefixed on the wire), so they must NOT be marked as a
+// repeated field — the wire format for `repeated bytes` is
+// `count + (length+bytes)*` while `bytes` is just `length+bytes`.
+//
+// Without this exclusion, `Photo []byte` extracted as
+// `repeated bytes photo`; round-tripping the schema produced
+// generated Go with `Photo [][]byte`, completely different wire
+// bytes from the original `[]byte`.
 func isSliceOrArray(t types.Type) bool {
-	switch t.(type) {
-	case *types.Slice, *types.Array:
-		return true
+	switch s := t.(type) {
+	case *types.Slice:
+		return !isByteType(s.Elem())
+	case *types.Array:
+		return !isByteType(s.Elem())
+	}
+	return false
+}
+
+// isByteType reports whether t is the `byte` / `uint8` type (the
+// element type of `[]byte` / `[N]byte`).
+func isByteType(t types.Type) bool {
+	if basic, ok := t.(*types.Basic); ok {
+		return basic.Kind() == types.Uint8 || basic.Kind() == types.Byte
 	}
 	return false
 }

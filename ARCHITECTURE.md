@@ -71,8 +71,12 @@ number.
   (ints/floats), or by primitive bool order. NaN sorts last.
 - Structs: fields emitted in tag-number order. Cached on first encode.
 - Floats: NaN canonicalized to a fixed bit pattern; `-0.0` → `+0.0`.
-- Optional fields: omitted when zero **only if** `Options.OmitEmpty=true`.
-  (Per-field `omitempty` tag is currently ignored — see PLAN T1-10.)
+- Optional fields: omitted when zero if `Options.OmitEmpty` is true OR
+  the field carries an explicit `,omitempty` tag.
+- NaN map keys are rejected at encode time: distinct NaN bit patterns
+  collapse to the same wire bytes (information loss) and Go's
+  `MapIndex(nan)` returns the zero value (NaN ≠ NaN under `==`), so
+  encoded values would silently become zero.
 
 ### JSON float formatting
 
@@ -167,8 +171,8 @@ message User {
 }
 
 interface Principal {
-    User = 128;
-    Organization = 129;
+    128 = User;
+    129 = Organization;
 }
 ```
 

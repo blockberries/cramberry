@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (extract round-trip)
+
+- **`[]byte` and `[N]byte` extracted as `repeated bytes`** — that's
+  not a thing in the schema; it produced unparseable round-trip
+  output and would round-trip to a `[][]byte` Go field with totally
+  different wire bytes from the original `[]byte`. The extractor
+  now treats byte slices as the schema scalar `bytes` (not as a
+  repeated field).
+- **Extracted field names that collide with reserved words** are now
+  escaped with a trailing `_`. A Go field named `Optional` /
+  `Required` / `Repeated` / `Map` / `Package` (etc.) used to extract
+  as `optional optional = 1;` — the parser then rejected the
+  resulting schema with `expected field name`. Now produces
+  `optional_`. Same for built-in scalar type names (`bytes`,
+  `int32`, …) where the collision was confusing rather than fatal.
+
+### Fixed (UX / docs)
+
+- **README install command** now points at `make install` /
+  `make build`, with a note that `go install` produces a binary
+  reporting `cramberry version dev (unknown, unknown)` because the
+  ldflags injection happens in the Makefile.
+- **ARCHITECTURE.md interface example** now uses the actual schema
+  syntax (`128 = User;`) rather than the swapped form
+  (`User = 128;`) which the parser rejects.
+- **ARCHITECTURE.md per-field omitempty** note updated: the tag is
+  honored as of the T1-10 fix; the doc said "currently ignored."
+- **Duplicate `examples/user.cram`** removed. The canonical schema
+  lives at `examples/schemas/user.cram`; the older top-level copy
+  defined a different (and lesser) shape, leaving new users to
+  guess which one was authoritative.
+
+### Fixed (memory safety)
+
+- **`PutStreamWriter` auto-flushes** any buffered bytes before
+  dropping the underlying writer reference. The previous behavior
+  silently dropped up to 4 KiB of output every time a caller forgot
+  to call `Flush` — no observable signal. Flush errors are stored
+  on the StreamWriter for callers who do explicit Flush; auto-flush
+  is the safety net.
+
 ### Fixed (consensus-critical, seventh review pass)
 
 - **Forward-compat: pointer-to-primitive fields used to corrupt the
