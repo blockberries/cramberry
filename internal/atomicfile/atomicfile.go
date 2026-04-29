@@ -8,12 +8,18 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // Write invokes write with an io.Writer that targets a temp file in the
 // destination's directory; on success it atomically renames the temp file
 // over path. On failure (or panic) the temp file is removed and path is
 // untouched.
+//
+// On POSIX systems (Linux/macOS), the parent directory is fsync'd after
+// the rename so the new entry is durable across power loss. This is the
+// difference between "atomic for crashes mid-write" and "atomic for power
+// loss" — both matter for a tool that writes consensus-relevant artifacts.
 func Write(path string, perm os.FileMode, write func(io.Writer) error) (retErr error) {
 	dir := filepath.Dir(path)
 	f, err := os.CreateTemp(dir, ".cramberry-*.tmp")
@@ -47,5 +53,15 @@ func Write(path string, perm os.FileMode, write func(io.Writer) error) (retErr e
 		return fmt.Errorf("atomicfile: rename: %w", err)
 	}
 	committed = true
+
+	// fsync the parent directory so the new entry survives a power loss.
+	// Skip on Windows (no equivalent semantics) and treat any failure as
+	// non-fatal: the rename succeeded; durability is best-effort.
+	if runtime.GOOS != "windows" {
+		if dirF, err := os.Open(dir); err == nil {
+			_ = dirF.Sync()
+			_ = dirF.Close()
+		}
+	}
 	return nil
 }
