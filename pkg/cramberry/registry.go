@@ -129,6 +129,17 @@ func (r *Registry) registerLocked(t reflect.Type, id TypeID) error {
 		return NewRegistrationError("", id, "cannot register invalid type", nil)
 	}
 
+	// User types must claim IDs in the user-defined range. The lower ranges
+	// (1..63 builtin, 64..127 stdlib) are reserved; silently accepting a
+	// user registration in those ranges previously caused polymorphic
+	// dispatch collisions in multi-module builds.
+	if id != TypeIDNil && id < TypeIDUserStart {
+		return NewRegistrationError(typeName(t), id,
+			fmt.Sprintf("type ID %d is in the reserved range [1, %d]; user types must use IDs >= %d",
+				id, TypeIDUserStart-1, TypeIDUserStart),
+			ErrInvalidTypeID)
+	}
+
 	name := typeName(t)
 
 	// Check for duplicate registration

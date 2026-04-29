@@ -47,3 +47,8 @@ typescript/node_modules/
 typescript/dist/
 typescript/*.tsbuildinfo
 test/integration/ts/node_modules/
+
+# Build artifacts
+basic
+polymorphic
+streaming

@@ -19,6 +19,11 @@ type orderedMapKey interface {
 //
 // For string keys the comparison is by raw byte (UTF-8) order; for integer
 // keys it is numeric order.
+//
+// Codegen-only API. The function is exported so emitted code can reach it,
+// but user code should rely on cramberry.Marshal (with Deterministic=true)
+// or generated EncodeTo methods rather than calling this directly. The
+// signature and ordering rules may change without a major version bump.
 func SortedMapKeys[K orderedMapKey, V any](m map[K]V) []K {
 	keys := make([]K, 0, len(m))
 	for k := range m {

@@ -66,6 +66,62 @@ func TestTypeIDConstants(t *testing.T) {
 	}
 }
 
+// TestLimitsMatchArchitectureDoc pins DefaultLimits / SecureLimits values
+// against the table in ARCHITECTURE.md. The values drifted between code and
+// docs once already; a developer or security reviewer reading the doc must
+// see the actual limits the code enforces.
+func TestLimitsMatchArchitectureDoc(t *testing.T) {
+	want := struct {
+		MaxMessageSize  int64
+		MaxStringLength int
+		MaxBytesLength  int
+		MaxArrayLength  int
+		MaxMapSize      int
+		MaxDepth        int
+	}{
+		MaxMessageSize:  64 * 1024 * 1024,
+		MaxStringLength: 10 * 1024 * 1024,
+		MaxBytesLength:  100 * 1024 * 1024,
+		MaxArrayLength:  1_000_000,
+		MaxMapSize:      1_000_000,
+		MaxDepth:        100,
+	}
+	got := DefaultLimits
+	if got.MaxMessageSize != want.MaxMessageSize ||
+		got.MaxStringLength != want.MaxStringLength ||
+		got.MaxBytesLength != want.MaxBytesLength ||
+		got.MaxArrayLength != want.MaxArrayLength ||
+		got.MaxMapSize != want.MaxMapSize ||
+		got.MaxDepth != want.MaxDepth {
+		t.Errorf("DefaultLimits drifted from ARCHITECTURE.md table:\n got: %+v\nwant: %+v", got, want)
+	}
+
+	wantSecure := struct {
+		MaxMessageSize  int64
+		MaxStringLength int
+		MaxBytesLength  int
+		MaxArrayLength  int
+		MaxMapSize      int
+		MaxDepth        int
+	}{
+		MaxMessageSize:  1 * 1024 * 1024,
+		MaxStringLength: 1 * 1024 * 1024,
+		MaxBytesLength:  10 * 1024 * 1024,
+		MaxArrayLength:  10_000,
+		MaxMapSize:      10_000,
+		MaxDepth:        32,
+	}
+	gotSecure := SecureLimits
+	if gotSecure.MaxMessageSize != wantSecure.MaxMessageSize ||
+		gotSecure.MaxStringLength != wantSecure.MaxStringLength ||
+		gotSecure.MaxBytesLength != wantSecure.MaxBytesLength ||
+		gotSecure.MaxArrayLength != wantSecure.MaxArrayLength ||
+		gotSecure.MaxMapSize != wantSecure.MaxMapSize ||
+		gotSecure.MaxDepth != wantSecure.MaxDepth {
+		t.Errorf("SecureLimits drifted from ARCHITECTURE.md table:\n got: %+v\nwant: %+v", gotSecure, wantSecure)
+	}
+}
+
 func TestWireTypeConstants(t *testing.T) {
 	// Verify wire type values used in the tag layout.
 	if WireVarint != 0 {

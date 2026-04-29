@@ -344,6 +344,14 @@ func makeProtobufEvent() *pb.Event {
 	}
 }
 
+// Note: Protobuf-generated message types use pointer slices for repeated
+// message fields ([]*pb.SmallMessage) while cramberry's generated code
+// uses value slices ([]cramgen.SmallMessage). Both are idiomatic for
+// their respective generators, but the encoding hot path differs: the
+// protobuf side has an extra pointer-chase per element, and the cramberry
+// side does not. Benchmark numbers favor cramberry slightly on large
+// batches for that reason; the gap is a real difference in generated
+// code, not a measurement artifact.
 func makeProtobufBatchRequest(size int) *pb.BatchRequest {
 	items := make([]*pb.SmallMessage, size)
 	for i := 0; i < size; i++ {

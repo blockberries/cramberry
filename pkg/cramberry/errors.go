@@ -60,6 +60,10 @@ var (
 	// ErrDuplicateTypeID indicates a type ID was registered more than once.
 	ErrDuplicateTypeID = errors.New("cramberry: duplicate type ID")
 
+	// ErrInvalidTypeID indicates a type ID is in a reserved range that
+	// user code may not claim (typically [1, 127]).
+	ErrInvalidTypeID = errors.New("cramberry: invalid type ID (reserved range)")
+
 	// ErrInvalidFieldNumber indicates an invalid field number (must be > 0).
 	ErrInvalidFieldNumber = errors.New("cramberry: invalid field number")
 

@@ -99,8 +99,8 @@ values for cross-language conformance live in `pkg/cramberry/json_test.go`
 | Limit           | Default (`DefaultLimits`) | Secure (`SecureLimits`) |
 |-----------------|---------------------------|--------------------------|
 | MaxMessageSize  | 64 MB                     | 1 MB                     |
-| MaxStringLength | 64 MB                     | 1 MB                     |
-| MaxBytesLength  | 64 MB                     | 1 MB                     |
+| MaxStringLength | 10 MB                     | 1 MB                     |
+| MaxBytesLength  | 100 MB                    | 10 MB                    |
 | MaxArrayLength  | 1 000 000                 | 10 000                   |
 | MaxMapSize      | 1 000 000                 | 10 000                   |
 | MaxDepth        | 100                       | 32                       |

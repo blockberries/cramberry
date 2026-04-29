@@ -926,22 +926,31 @@ func NewMessageIterator(r io.Reader) *MessageIterator {
 }
 
 // Next reads the next message and returns true if successful.
-// Returns false on EOF or error.
+// Returns false on EOF (clean or otherwise) or on error.
+//
+// Clean EOF means: at the start of where the next message's length prefix
+// would have been, the reader observed io.EOF. We detect this with Peek(1)
+// before attempting the delimited read; if Peek returns io.EOF we're at a
+// clean message boundary. Any error during the read itself (including
+// ErrUnexpectedEOF mid-message) is recorded on the iterator and signals an
+// abnormal termination — the caller can distinguish via Err().
 func (it *MessageIterator) Next(v any) bool {
-	// Check for buffered data first
-	if it.reader.Buffered() == 0 {
-		// Try to peek to detect EOF
-		_, err := it.reader.Peek(1)
-		if err == io.EOF {
-			return false
-		}
+	// Peek before reading. At a message boundary the next byte is the
+	// length-prefix varint; if Peek returns io.EOF we're done cleanly.
+	// Buffered() alone can't distinguish "stream drained naturally" from
+	// "connection dropped exactly at a boundary"; Peek triggers the
+	// underlying Read which surfaces EOF vs other I/O errors directly.
+	_, err := it.reader.Peek(1)
+	if err == io.EOF {
+		return false
 	}
-	err := it.reader.ReadDelimited(v)
 	if err != nil {
-		if err == ErrUnexpectedEOF && it.reader.Buffered() == 0 {
-			// Clean EOF
-			return false
-		}
+		it.err = err
+		return false
+	}
+	if err := it.reader.ReadDelimited(v); err != nil {
+		// A truncated message after a successful Peek is an abnormal
+		// termination — record it.
 		it.err = err
 		return false
 	}

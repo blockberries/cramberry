@@ -214,6 +214,13 @@ func computePackable(t reflect.Type) bool {
 // Elements are encoded without individual tags, contiguously.
 func encodePackedSlice(w *Writer, v reflect.Value) error {
 	n := v.Len()
+	// Honor MaxArrayLength on the encode side too. Without this the encoder
+	// could produce arrays that the decoder rejects, leaving cross-language
+	// validators in disagreement on identical input.
+	if lim := w.Options().Limits.MaxArrayLength; lim > 0 && n > lim {
+		w.setError(ErrMaxArrayLength)
+		return w.Err()
+	}
 	w.WriteUvarint(uint64(n))
 	if w.Err() != nil {
 		return w.Err()
@@ -278,6 +285,10 @@ func encodeArray(w *Writer, v reflect.Value) error {
 // encodePackedArray encodes an array of primitive types in packed format.
 func encodePackedArray(w *Writer, v reflect.Value) error {
 	n := v.Len()
+	if lim := w.Options().Limits.MaxArrayLength; lim > 0 && n > lim {
+		w.setError(ErrMaxArrayLength)
+		return w.Err()
+	}
 	w.WriteUvarint(uint64(n))
 	if w.Err() != nil {
 		return w.Err()
@@ -455,7 +466,15 @@ func getWireTypeCached(t reflect.Type) byte {
 	return computed
 }
 
-// computeWireType computes the V2 wire type for a reflect.Type.
+// computeWireType computes the wire type for a reflect.Type.
+//
+// Note for struct/pointer/interface fields: this returns WireBytes (the
+// length-prefixed payload tag), but the body is end-marker-terminated.
+// The encoder length-prefixes nested message bodies at the field-wrapping
+// layer (see encodeStruct's per-field loop and needsBodyLengthPrefix); the
+// resulting on-wire layout — `tag(WireBytes) length:varint body 0x00` —
+// is consistent with what SkipValue(WireBytes) expects, so unknown fields
+// can be skipped without knowing the schema.
 func computeWireType(t reflect.Type) byte {
 	switch t.Kind() {
 	case reflect.Bool, reflect.Uint8, reflect.Uint16, reflect.Uint32,

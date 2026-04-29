@@ -114,15 +114,35 @@ export class StreamWriter {
   }
 
   /**
-   * Writes a varint to the buffer.
+   * Writes a varint length to the buffer. Accepts JS numbers up to
+   * Number.MAX_SAFE_INTEGER (2^53 - 1); values that exceed 32 bits go
+   * through a BigInt accumulator so they don't get truncated by the
+   * 32-bit `>>>` shift. Reserves up to 10 bytes (the worst-case 64-bit
+   * varint length) so encoding any safe-integer length succeeds.
    */
   private writeVarint(value: number): void {
-    this.ensureCapacity(5); // Max 5 bytes for 32-bit varint
-    while (value > 0x7f) {
-      this.buffer[this.pos++] = (value & 0x7f) | 0x80;
-      value >>>= 7;
+    if (!Number.isFinite(value) || value < 0) {
+      throw new Error(`stream length out of range: ${value}`);
     }
-    this.buffer[this.pos++] = value;
+    this.ensureCapacity(10);
+    if (value <= 0xffffffff) {
+      // 32-bit fast path; >>>= 7 is safe here.
+      while (value > 0x7f) {
+        this.buffer[this.pos++] = (value & 0x7f) | 0x80;
+        value >>>= 7;
+      }
+      this.buffer[this.pos++] = value;
+      return;
+    }
+    // 64-bit slow path. JavaScript's >>>= truncates to int32 and would
+    // silently lose bits above 2^32, so anything above 4 GiB takes the
+    // BigInt route to preserve every bit of the length.
+    let big = BigInt(value);
+    while (big > 0x7fn) {
+      this.buffer[this.pos++] = Number(big & 0x7fn) | 0x80;
+      big >>= 7n;
+    }
+    this.buffer[this.pos++] = Number(big);
   }
 
   /**
