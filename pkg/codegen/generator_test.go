@@ -340,21 +340,20 @@ func TestCaseConversions(t *testing.T) {
 		camel  string
 		snake  string
 		upper  string
-		kebab  string
 	}{
-		{"foo", "Foo", "foo", "foo", "FOO", "foo"},
-		{"fooBar", "FooBar", "fooBar", "foo_bar", "FOO_BAR", "foo-bar"},
-		{"FooBar", "FooBar", "fooBar", "foo_bar", "FOO_BAR", "foo-bar"},
-		{"foo_bar", "FooBar", "fooBar", "foo_bar", "FOO_BAR", "foo-bar"},
-		{"FOO_BAR", "FooBar", "fooBar", "foo_bar", "FOO_BAR", "foo-bar"},
-		{"foo-bar", "FooBar", "fooBar", "foo_bar", "FOO_BAR", "foo-bar"},
-		{"ID", "Id", "id", "id", "ID", "id"},
-		{"userID", "UserId", "userId", "user_id", "USER_ID", "user-id"},
+		{"foo", "Foo", "foo", "foo", "FOO"},
+		{"fooBar", "FooBar", "fooBar", "foo_bar", "FOO_BAR"},
+		{"FooBar", "FooBar", "fooBar", "foo_bar", "FOO_BAR"},
+		{"foo_bar", "FooBar", "fooBar", "foo_bar", "FOO_BAR"},
+		{"FOO_BAR", "FooBar", "fooBar", "foo_bar", "FOO_BAR"},
+		{"foo-bar", "FooBar", "fooBar", "foo_bar", "FOO_BAR"},
+		{"ID", "Id", "id", "id", "ID"},
+		{"userID", "UserId", "userId", "user_id", "USER_ID"},
 		// Empty and single character
-		{"", "", "", "", "", ""},
-		{"a", "A", "a", "a", "A", "a"},
+		{"", "", "", "", ""},
+		{"a", "A", "a", "a", "A"},
 		// Unicode handling (using ASCII-only for deterministic behavior)
-		{"café", "Café", "café", "café", "CAFÉ", "café"},
+		{"café", "Café", "café", "café", "CAFÉ"},
 	}
 
 	for _, tt := range tests {
@@ -370,9 +369,6 @@ func TestCaseConversions(t *testing.T) {
 			}
 			if got := ToUpperSnakeCase(tt.input); got != tt.upper {
 				t.Errorf("ToUpperSnakeCase(%q) = %q, want %q", tt.input, got, tt.upper)
-			}
-			if got := ToKebabCase(tt.input); got != tt.kebab {
-				t.Errorf("ToKebabCase(%q) = %q, want %q", tt.input, got, tt.kebab)
 			}
 		})
 	}

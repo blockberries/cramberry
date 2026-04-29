@@ -487,7 +487,7 @@ func TestEmptyPackedSlice(t *testing.T) {
 	}
 }
 
-func TestDeterministicOption(t *testing.T) {
+func TestDeterministicMapEncoding(t *testing.T) {
 	type MapStruct struct {
 		Data map[string]int `cramberry:"1"`
 	}
@@ -496,35 +496,33 @@ func TestDeterministicOption(t *testing.T) {
 		Data: map[string]int{"z": 1, "a": 2, "m": 3},
 	}
 
-	// With deterministic mode, encoding should be consistent
-	data1, _ := MarshalWithOptions(original, DefaultOptions)
-	data2, _ := MarshalWithOptions(original, DefaultOptions)
-
-	if !bytes.Equal(data1, data2) {
-		t.Error("Deterministic mode should produce identical output")
-	}
-
-	// Without deterministic mode, we can't guarantee order
-	// but decoding should still work
-	fastOpts := FastOptions
-	data3, err := MarshalWithOptions(original, fastOpts)
+	// Map encoding is deterministic by design — sort is unconditional
+	// across reflection and codegen paths. Two calls must produce
+	// byte-identical output regardless of Go's map iteration order.
+	data1, err := Marshal(original)
 	if err != nil {
-		t.Fatalf("Fast marshal error: %v", err)
+		t.Fatalf("Marshal error: %v", err)
+	}
+	for i := 0; i < 50; i++ {
+		data2, err := Marshal(original)
+		if err != nil {
+			t.Fatalf("Marshal error: %v", err)
+		}
+		if !bytes.Equal(data1, data2) {
+			t.Fatalf("iteration %d: map encoding non-deterministic", i)
+		}
 	}
 
 	var decoded MapStruct
-	err = UnmarshalWithOptions(data3, &decoded, fastOpts)
-	if err != nil {
+	if err := Unmarshal(data1, &decoded); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
-
-	// Values should match even if order differs
 	if len(decoded.Data) != len(original.Data) {
-		t.Error("Map size mismatch")
+		t.Fatalf("map size mismatch: got %d, want %d", len(decoded.Data), len(original.Data))
 	}
 	for k, v := range original.Data {
 		if decoded.Data[k] != v {
-			t.Errorf("Map value mismatch for key %s", k)
+			t.Errorf("map value mismatch for key %s: got %d, want %d", k, decoded.Data[k], v)
 		}
 	}
 }

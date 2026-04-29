@@ -90,6 +90,7 @@ func (c *rustContext) funcMap() template.FuncMap {
 		"rustWireType":      c.rustWireType,
 		"rustWriteField":    c.rustWriteField,
 		"rustReadField":     c.rustReadField,
+		"rustZeroCheck":     c.rustZeroCheck,
 		"comment":           c.rustComment,
 		"toCamel":           ToCamelCase,
 		"toPascal":          ToPascalCase,
@@ -274,6 +275,43 @@ func (c *rustContext) rustWireTypeForType(t schema.TypeRef) string {
 func (c *rustContext) rustWriteField(f *schema.Field) string {
 	fieldName := "msg." + ToSnakeCase(f.Name)
 	return c.rustWriteValue(f.Type, fieldName, f.Repeated)
+}
+
+// rustZeroCheck returns a Rust boolean expression that is true when the
+// field is non-zero / non-empty / Some(...) and should therefore be
+// emitted on the wire. The shape mirrors the Go generator's zeroCheck
+// (and the reflection marshaller's isOmittableZero) so the three
+// runtimes produce byte-identical output:
+//
+//   - bool / numeric / string / Vec<T>: skip when default
+//   - Option<T> (including PointerType): skip when None
+//   - Named types, maps, fixed-length arrays: always emit
+//
+// The empty string returned for "always emit" tells the template to
+// skip the surrounding `if`.
+func (c *rustContext) rustZeroCheck(f *schema.Field) string {
+	fieldName := "msg." + ToSnakeCase(f.Name)
+	if f.Repeated {
+		return fmt.Sprintf("!%s.is_empty()", fieldName)
+	}
+	switch typ := f.Type.(type) {
+	case *schema.ScalarType:
+		switch typ.Name {
+		case "bool":
+			return fieldName
+		case "string":
+			return fmt.Sprintf("!%s.is_empty()", fieldName)
+		case "bytes":
+			return fmt.Sprintf("!%s.is_empty()", fieldName)
+		case "int8", "int16", "int32", "int64", "int",
+			"uint8", "uint16", "uint32", "uint64", "uint",
+			"float32", "float64", "byte":
+			return fmt.Sprintf("%s != 0 as _", fieldName)
+		}
+	case *schema.PointerType:
+		return fmt.Sprintf("%s.is_some()", fieldName)
+	}
+	return ""
 }
 
 // rustWriteValueForSubWriter generates write code using sub_writer instead of writer
@@ -875,8 +913,16 @@ impl {{rustEnumType $enum}} {
 pub fn encode_{{toSnake $msg.Name}}(writer: &mut Writer, msg: &{{rustMessageType $msg}}) -> Result<()> {
 {{range $msg.Fields}}
     // Field {{.Number}}: {{.Name}}
+{{- $zc := rustZeroCheck . }}
+{{- if $zc }}
+    if {{ $zc }} {
+        writer.write_tag({{.Number}}, {{rustWireType .}})?;
+        {{rustWriteField .}}?;
+    }
+{{- else }}
     writer.write_tag({{.Number}}, {{rustWireType .}})?;
     {{rustWriteField .}}?;
+{{- end }}
 {{end}}
     // End marker
     writer.write_end_marker()?;

@@ -248,9 +248,16 @@ func (v *Validator) validateMessage(msg *Message) {
 		}
 	}
 
-	// Check TypeID if specified
+	// Check TypeID if specified.
+	//
+	// Type IDs 1-127 are reserved by the runtime (1-63 builtin, 64-127
+	// stdlib; see pkg/cramberry/types.go's TypeID* constants). User
+	// schemas must pick IDs ≥ 128 — picking a reserved ID otherwise
+	// causes silent registry collisions across the runtimes.
 	if msg.TypeID < 0 {
 		v.addError(msg.Position, "type ID must be non-negative, got %d", msg.TypeID)
+	} else if msg.TypeID > 0 && msg.TypeID < 128 {
+		v.addError(msg.Position, "type ID %d is in the reserved range (1-127); user-defined messages must use type IDs ≥ 128", msg.TypeID)
 	}
 }
 
@@ -299,9 +306,12 @@ func (v *Validator) validateInterface(iface *Interface) {
 	typeIDs := make(map[int]string) // typeID -> type name
 
 	for _, impl := range iface.Implementations {
-		// Check type ID is valid
+		// Check type ID is valid. IDs 1-127 are reserved by the runtime;
+		// see validateMessage above for the same rationale.
 		if impl.TypeID <= 0 {
 			v.addError(impl.Position, "type ID must be positive, got %d", impl.TypeID)
+		} else if impl.TypeID < 128 {
+			v.addError(impl.Position, "type ID %d is in the reserved range (1-127); user-defined implementations must use type IDs ≥ 128", impl.TypeID)
 		}
 
 		// Check for duplicate type IDs

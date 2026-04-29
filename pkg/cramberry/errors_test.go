@@ -102,8 +102,8 @@ func TestDecodeErrorIs(t *testing.T) {
 		t.Error("Should match ErrUnexpectedEOF via cause")
 	}
 
-	if errors.Is(err, ErrInvalidWireType) {
-		t.Error("Should not match ErrInvalidWireType")
+	if errors.Is(err, ErrUnknownType) {
+		t.Error("Should not match ErrUnknownType")
 	}
 
 	// Error without cause
@@ -212,16 +212,6 @@ func TestNewEncodeError(t *testing.T) {
 	}
 }
 
-func TestNewFieldEncodeError(t *testing.T) {
-	err := NewFieldEncodeError("Order", "items", "too large", nil)
-	if err.Type != "Order" {
-		t.Errorf("Type = %q, want %q", err.Type, "Order")
-	}
-	if err.Field != "items" {
-		t.Errorf("Field = %q, want %q", err.Field, "items")
-	}
-}
-
 func TestRegistrationErrorFormat(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -266,22 +256,6 @@ func TestNewRegistrationError(t *testing.T) {
 	}
 	if err.Unwrap() != ErrDuplicateTypeID {
 		t.Error("Unwrap should return cause")
-	}
-}
-
-func TestWrapError(t *testing.T) {
-	// Nil error should return nil
-	if WrapError(nil, "prefix") != nil {
-		t.Error("WrapError(nil) should return nil")
-	}
-
-	// Non-nil error should be wrapped
-	err := WrapError(ErrInvalidVarint, "context")
-	if err == nil {
-		t.Error("WrapError should return non-nil")
-	}
-	if !errors.Is(err, ErrInvalidVarint) {
-		t.Error("Wrapped error should match original")
 	}
 }
 
@@ -348,10 +322,8 @@ func TestSentinelErrors(t *testing.T) {
 	errs := []error{
 		ErrInvalidVarint,
 		ErrUnexpectedEOF,
-		ErrInvalidWireType,
 		ErrUnknownType,
 		ErrUnregisteredType,
-		ErrTypeMismatch,
 		ErrNotPointer,
 		ErrNilPointer,
 		ErrMaxDepthExceeded,

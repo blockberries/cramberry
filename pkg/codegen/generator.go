@@ -151,15 +151,6 @@ func ToUpperSnakeCase(s string) string {
 	return strings.Join(parts, "_")
 }
 
-// ToKebabCase converts a string to kebab-case.
-func ToKebabCase(s string) string {
-	parts := splitName(s)
-	for i, p := range parts {
-		parts[i] = strings.ToLower(p)
-	}
-	return strings.Join(parts, "-")
-}
-
 // splitName splits a name into parts based on underscores and case transitions.
 func splitName(s string) []string {
 	if s == "" {

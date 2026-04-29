@@ -1094,3 +1094,87 @@ func TestValidator_RejectsStackedModifiers(t *testing.T) {
 		})
 	}
 }
+
+// TestValidator_RejectsReservedTypeID covers the runtime-reserved range:
+// type IDs 1-127 are owned by the runtime (1-63 builtin, 64-127 stdlib),
+// so user schemas that pick a reserved ID must fail validation rather
+// than collide silently with another runtime registration.
+func TestValidator_RejectsReservedTypeID(t *testing.T) {
+	cases := []struct {
+		name   string
+		schema string
+	}{
+		{
+			name: "message in builtin range",
+			schema: `
+package test;
+message Foo @5 {
+  string x = 1;
+}`,
+		},
+		{
+			name: "message in stdlib range",
+			schema: `
+package test;
+message Foo @100 {
+  string x = 1;
+}`,
+		},
+		{
+			name: "message at upper boundary",
+			schema: `
+package test;
+message Foo @127 {
+  string x = 1;
+}`,
+		},
+		{
+			name: "interface implementation in reserved range",
+			schema: `
+package test;
+message M { string x = 1; }
+interface I {
+  5 = M;
+}`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, parseErrs := ParseFile("test.cram", tc.schema)
+			if len(parseErrs) > 0 {
+				t.Fatalf("parse errors: %v", parseErrs)
+			}
+			v := NewValidator(s)
+			errs := v.Validate()
+			found := false
+			for _, e := range errs {
+				if e.Severity == SeverityError && strings.Contains(e.Message, "reserved range") {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Fatalf("expected reserved-range error, got: %v", errs)
+			}
+		})
+	}
+}
+
+func TestValidator_AcceptsTypeIDAtUserBoundary(t *testing.T) {
+	input := `
+package test;
+message Foo @128 {
+  string x = 1;
+}`
+	s, parseErrs := ParseFile("test.cram", input)
+	if len(parseErrs) > 0 {
+		t.Fatalf("parse errors: %v", parseErrs)
+	}
+	v := NewValidator(s)
+	errs := v.Validate()
+	for _, e := range errs {
+		if e.Severity == SeverityError {
+			t.Errorf("type ID 128 should validate cleanly; got %v", e)
+		}
+	}
+}

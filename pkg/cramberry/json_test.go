@@ -394,24 +394,3 @@ func TestEscapeJSONString(t *testing.T) {
 		})
 	}
 }
-
-func TestJSONStringValue(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{"simple", "hello", `hello`},
-		{"with quotes", `say "hello"`, `say \"hello\"`},
-		{"with newline", "line1\nline2", `line1\nline2`},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := JSONStringValue(tt.input)
-			if result != tt.expected {
-				t.Errorf("JSONStringValue(%q) = %s, want %s", tt.input, result, tt.expected)
-			}
-		})
-	}
-}

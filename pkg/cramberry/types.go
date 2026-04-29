@@ -106,11 +106,10 @@ var SecureLimits = Limits{
 	MaxMapSize:      10_000,
 }
 
-// NoLimits disables all resource limits.
-// Use with caution - only for trusted input.
-var NoLimits = Limits{}
-
-// Options configures encoding/decoding behavior.
+// Options configures encoding/decoding behavior. Determinism (sorted map
+// keys, canonical floats, fixed field order) is unconditional and not
+// configurable: the wire format is byte-identical across runtimes by
+// design.
 type Options struct {
 	// Limits specifies resource limits.
 	Limits Limits
@@ -128,48 +127,30 @@ type Options struct {
 	// PresenceBitmap uses a presence bitmap for tracking field presence.
 	// This allows distinguishing zero values from absent values.
 	PresenceBitmap bool
-
-	// Deterministic ensures deterministic output by sorting map keys.
-	// This is enabled by default for reproducible encoding.
-	// Disable for better performance when determinism is not required.
-	Deterministic bool
 }
 
 // DefaultOptions are the default encoding/decoding options.
 var DefaultOptions = Options{
-	Limits:        DefaultLimits,
-	StrictMode:    false,
-	ValidateUTF8:  true,
-	OmitEmpty:     true,
-	Deterministic: true,
+	Limits:       DefaultLimits,
+	StrictMode:   false,
+	ValidateUTF8: true,
+	OmitEmpty:    true,
 }
 
 // SecureOptions are conservative options for untrusted input.
 var SecureOptions = Options{
-	Limits:        SecureLimits,
-	StrictMode:    false,
-	ValidateUTF8:  true,
-	OmitEmpty:     true,
-	Deterministic: true,
+	Limits:       SecureLimits,
+	StrictMode:   false,
+	ValidateUTF8: true,
+	OmitEmpty:    true,
 }
 
 // StrictOptions reject unknown fields and validate strings.
 var StrictOptions = Options{
-	Limits:        DefaultLimits,
-	StrictMode:    true,
-	ValidateUTF8:  true,
-	OmitEmpty:     true,
-	Deterministic: true,
-}
-
-// FastOptions prioritize performance over determinism.
-// Use when decoding output from the same encoder (map order doesn't matter).
-var FastOptions = Options{
-	Limits:        DefaultLimits,
-	StrictMode:    false,
-	ValidateUTF8:  false,
-	OmitEmpty:     true,
-	Deterministic: false,
+	Limits:       DefaultLimits,
+	StrictMode:   true,
+	ValidateUTF8: true,
+	OmitEmpty:    true,
 }
 
 // Version information, set by ldflags at build time.
@@ -214,7 +195,4 @@ const (
 
 	// MaxVarintLen64 is the maximum encoded size of a varint64.
 	MaxVarintLen64 = 10
-
-	// MaxTagSize is the maximum encoded size of a field tag.
-	MaxTagSize = MaxVarintLen64
 )

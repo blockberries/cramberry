@@ -330,8 +330,11 @@ func encodePackedArray(w *Writer, v reflect.Value) error {
 	return w.Err()
 }
 
-// encodeMap encodes a map value.
-// If Deterministic option is enabled, keys are sorted for reproducible output.
+// encodeMap encodes a map value. Keys are always sorted: the wire format
+// is deterministic (CLAUDE.md determinism rule #1) and the codegen path
+// always sorts via cramberry.SortedMapKeys, so sorting unconditionally
+// here is the only way the reflection and codegen paths produce the same
+// bytes for the same input.
 func encodeMap(w *Writer, v reflect.Value) error {
 	if v.IsNil() {
 		w.WriteMapHeader(0)
@@ -353,10 +356,7 @@ func encodeMap(w *Writer, v reflect.Value) error {
 		return w.Err()
 	}
 
-	// Sort keys only if deterministic mode is enabled
-	if w.Options().Deterministic {
-		keys = sortMapKeys(keys)
-	}
+	keys = sortMapKeys(keys)
 
 	for _, key := range keys {
 		if err := encodeValue(w, key); err != nil {
@@ -381,11 +381,19 @@ func encodeMap(w *Writer, v reflect.Value) error {
 func encodeStruct(w *Writer, v reflect.Value) error {
 	info := getStructInfo(v.Type())
 
+	omitEmpty := w.Options().OmitEmpty
 	for _, field := range info.fields {
 		fv := v.Field(field.index)
 
-		// Handle OmitEmpty
-		if w.Options().OmitEmpty && isZeroValue(fv) {
+		// A field is skipped if it is the zero value of an "omittable" kind
+		// AND either the global OmitEmpty option is on, or the field
+		// carries an explicit `,omitempty` tag. Composite kinds (struct,
+		// map, named-type, interface) are always emitted to match the
+		// codegen path — see isOmittableZero.
+		//
+		// CLAUDE.md previously tracked the per-field tag being silently
+		// ignored as T1-10; this branch fixes that.
+		if (omitEmpty || field.omitEmpty) && isOmittableZero(fv) {
 			continue
 		}
 
@@ -630,6 +638,46 @@ const maxZeroValueDepth = 100
 // isZeroValue returns true if the value is the zero value for its type.
 func isZeroValue(v reflect.Value) bool {
 	return isZeroValueWithDepth(v, 0)
+}
+
+// isOmittableZero reports whether a struct field with `omitempty` semantics
+// should be skipped given its current value. The rule mirrors what the
+// codegen-emitted EncodeTo methods produce so reflection and codegen
+// produce identical bytes for the same input:
+//
+//   - bool false, numeric 0, empty string, nil/empty []byte: omit
+//   - nil pointer/interface, empty repeated slice (not []byte): omit
+//   - struct, map, array, named-type: NEVER omit (always emit)
+//
+// The "always emit composites" rule matches Go's generator (see
+// pkg/codegen/go_generator.go::zeroCheck), and corresponds to the
+// "presence semantics" the wire format uses for messages and maps:
+// emitting an empty map (`tag + length-prefix + 0-count`) is observably
+// different from omitting the field entirely.
+func isOmittableZero(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.Bool:
+		return !v.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return v.Int() == 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return v.Uint() == 0
+	case reflect.Float32, reflect.Float64:
+		return v.Float() == 0
+	case reflect.Complex64, reflect.Complex128:
+		return v.Complex() == 0
+	case reflect.String:
+		return v.Len() == 0
+	case reflect.Ptr:
+		return v.IsNil()
+	case reflect.Slice:
+		// []byte and other repeated scalar/composite slices: empty/nil
+		// counts as omittable. This matches Go codegen's
+		// `if len(field) > 0 { ... }` guard.
+		return v.IsNil() || v.Len() == 0
+	}
+	// Composite kinds (struct, map, array, interface) are not omitted.
+	return false
 }
 
 // isZeroValueWithDepth returns true if the value is the zero value, with depth limiting.

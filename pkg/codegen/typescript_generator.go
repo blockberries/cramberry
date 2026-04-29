@@ -91,6 +91,7 @@ func (c *tsContext) funcMap() template.FuncMap {
 		"tsWireType":       c.tsWireType,
 		"tsWriteField":     c.tsWriteField,
 		"tsReadField":      c.tsReadField,
+		"tsZeroCheck":      c.tsZeroCheck,
 		"comment":          c.tsComment,
 		"toCamel":          ToCamelCase,
 		"toPascal":         ToPascalCase,
@@ -252,6 +253,48 @@ func (c *tsContext) tsWireTypeForType(t schema.TypeRef) string {
 func (c *tsContext) tsWriteField(f *schema.Field) string {
 	fieldName := "msg." + ToCamelCase(f.Name)
 	return c.tsWriteValue(f.Type, fieldName, f.Repeated)
+}
+
+// tsZeroCheck returns a TypeScript boolean expression that is true when
+// the field is non-default / non-empty / present and should be emitted on
+// the wire. Mirror the Go generator's zeroCheck and the reflection
+// marshaller's isOmittableZero so all three runtimes produce
+// byte-identical output:
+//
+//   - undefined / null is always treated as absent and skipped
+//   - bool false, numeric 0, bigint 0n, empty string: skip
+//   - empty Uint8Array, empty array: skip
+//   - named-type / map / fixed-length-array fields: always emit
+//
+// The empty string returned for "always emit" tells the template to
+// fall back to a presence-only check.
+func (c *tsContext) tsZeroCheck(f *schema.Field) string {
+	fieldName := "msg." + ToCamelCase(f.Name)
+	presence := fmt.Sprintf("%s !== undefined && %s !== null", fieldName, fieldName)
+	if f.Repeated {
+		return fmt.Sprintf("%s && %s.length > 0", presence, fieldName)
+	}
+	switch typ := f.Type.(type) {
+	case *schema.ScalarType:
+		switch typ.Name {
+		case "bool":
+			return fmt.Sprintf("%s && %s", presence, fieldName)
+		case "string":
+			return fmt.Sprintf("%s && %s.length > 0", presence, fieldName)
+		case "bytes":
+			return fmt.Sprintf("%s && %s.length > 0", presence, fieldName)
+		case "int64", "uint64":
+			// Emitted as bigint in TS.
+			return fmt.Sprintf("%s && %s !== 0n", presence, fieldName)
+		case "int8", "int16", "int32", "int",
+			"uint8", "uint16", "uint32", "uint",
+			"float32", "float64", "byte":
+			return fmt.Sprintf("%s && %s !== 0", presence, fieldName)
+		}
+	case *schema.PointerType:
+		return presence
+	}
+	return presence
 }
 
 // tsWriteValueWithWriter generates write code using a custom writer name
@@ -885,7 +928,7 @@ export interface {{tsMessageType $msg}} {
 export function encode{{tsMessageType $msg}}(writer: Writer, msg: {{tsMessageType $msg}}): void {
 {{range $msg.Fields}}
   // Field {{.Number}}: {{.Name}}
-  if (msg.{{tsFieldName .}} !== undefined{{if not .Optional}} && msg.{{tsFieldName .}} !== null{{end}}) {
+  if ({{tsZeroCheck .}}) {
     writer.writeTag({{.Number}}, {{tsWireType .}});
     {{tsWriteField .}};
   }

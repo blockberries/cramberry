@@ -15,17 +15,11 @@ var (
 	// ErrUnexpectedEOF indicates the data was truncated unexpectedly.
 	ErrUnexpectedEOF = errors.New("cramberry: unexpected end of data")
 
-	// ErrInvalidWireType indicates an unknown or invalid wire type.
-	ErrInvalidWireType = errors.New("cramberry: invalid wire type")
-
 	// ErrUnknownType indicates a type ID was not found in the registry.
 	ErrUnknownType = errors.New("cramberry: unknown type")
 
 	// ErrUnregisteredType indicates a type was not registered for polymorphic encoding.
 	ErrUnregisteredType = errors.New("cramberry: unregistered type")
-
-	// ErrTypeMismatch indicates the decoded type does not match the expected type.
-	ErrTypeMismatch = errors.New("cramberry: type mismatch")
 
 	// ErrNotPointer indicates the target for unmarshaling is not a pointer.
 	ErrNotPointer = errors.New("cramberry: target must be a pointer")
@@ -226,16 +220,6 @@ func NewEncodeError(message string, cause error) *EncodeError {
 	}
 }
 
-// NewFieldEncodeError creates an EncodeError for a specific field.
-func NewFieldEncodeError(typeName, fieldName string, message string, cause error) *EncodeError {
-	return &EncodeError{
-		Type:    typeName,
-		Field:   fieldName,
-		Message: message,
-		Cause:   cause,
-	}
-}
-
 // RegistrationError represents an error during type registration.
 type RegistrationError struct {
 	// TypeName is the name of the type being registered.
@@ -298,15 +282,6 @@ func NewValidationError(typeName, fieldName, message string) *ValidationError {
 		Field:   fieldName,
 		Message: message,
 	}
-}
-
-// WrapError wraps an error with additional context.
-// If the error is nil, nil is returned.
-func WrapError(err error, message string) error {
-	if err == nil {
-		return nil
-	}
-	return fmt.Errorf("%s: %w", message, err)
 }
 
 // IsFatal returns true if the error indicates a programming error

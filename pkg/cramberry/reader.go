@@ -469,13 +469,6 @@ func (r *Reader) ReadSvarint() int64 {
 	return v
 }
 
-// ReadSvarintInline reads a signed varint with inlined fast path.
-func (r *Reader) ReadSvarintInline() int64 {
-	u := r.ReadUvarintInline()
-	// ZigZag decode: (u >> 1) ^ -(u & 1)
-	return int64(u>>1) ^ -int64(u&1)
-}
-
 // ReadFixed32 reads a fixed 32-bit value (little-endian).
 func (r *Reader) ReadFixed32() uint32 {
 	if !r.ensure(Fixed32Size) {

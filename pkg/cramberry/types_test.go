@@ -184,19 +184,6 @@ func TestSecureLimits(t *testing.T) {
 	}
 }
 
-func TestNoLimits(t *testing.T) {
-	l := NoLimits
-	if l.MaxMessageSize != 0 {
-		t.Errorf("MaxMessageSize = %d, want 0", l.MaxMessageSize)
-	}
-	if l.MaxDepth != 0 {
-		t.Errorf("MaxDepth = %d, want 0", l.MaxDepth)
-	}
-	if l.MaxStringLength != 0 {
-		t.Errorf("MaxStringLength = %d, want 0", l.MaxStringLength)
-	}
-}
-
 func TestDefaultOptions(t *testing.T) {
 	opts := DefaultOptions
 	if opts.StrictMode {
@@ -268,8 +255,5 @@ func TestSizeConstants(t *testing.T) {
 	}
 	if MaxVarintLen64 != 10 {
 		t.Errorf("MaxVarintLen64 = %d, want 10", MaxVarintLen64)
-	}
-	if MaxTagSize != 10 {
-		t.Errorf("MaxTagSize = %d, want 10", MaxTagSize)
 	}
 }

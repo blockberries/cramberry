@@ -523,7 +523,11 @@ func sizeStruct(v reflect.Value, opts Options) int {
 	size := 0
 	for _, field := range info.fields {
 		fv := v.Field(field.index)
-		if opts.OmitEmpty && isZeroValue(fv) {
+		// Mirror encodeStruct: skip if either the global OmitEmpty option
+		// or the per-field `,omitempty` tag asks for it. Composite kinds
+		// (struct/map/array/interface) are always emitted — see
+		// isOmittableZero in marshal.go.
+		if (opts.OmitEmpty || field.omitEmpty) && isOmittableZero(fv) {
 			continue
 		}
 		// Compact tag size + value size

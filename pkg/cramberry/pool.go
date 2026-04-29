@@ -15,9 +15,6 @@ var bufferPools = [6]sync.Pool{
 	{New: func() any { return make([]byte, 0, 65536) }}, // XXLarge: <= 64KB
 }
 
-// bufferSizes maps pool index to capacity.
-var bufferSizes = [6]int{64, 256, 1024, 4096, 16384, 65536}
-
 // poolIndex returns the pool index for a given size hint.
 func poolIndex(size int) int {
 	if size <= 64 {
@@ -65,20 +62,5 @@ func PutBuffer(buf []byte) {
 	if idx >= 0 {
 		//nolint:staticcheck // SA6002: slice pooling is intentional, boxing overhead is acceptable
 		bufferPools[idx].Put(buf[:0])
-	}
-}
-
-// BufferPoolStats returns statistics about buffer pool usage.
-// This is useful for tuning and debugging.
-type BufferPoolStats struct {
-	SizeClasses  []int // Capacity of each size class
-	TotalClasses int   // Number of size classes
-}
-
-// GetBufferPoolStats returns current buffer pool configuration.
-func GetBufferPoolStats() BufferPoolStats {
-	return BufferPoolStats{
-		SizeClasses:  bufferSizes[:],
-		TotalClasses: len(bufferSizes),
 	}
 }

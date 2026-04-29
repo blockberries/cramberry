@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/blockberries/cramberry/internal/atomicfile"
 )
 
 // Loader loads and resolves schema files.
@@ -132,12 +134,6 @@ func (l *Loader) resolveImportPath(importPath, baseDir string) string {
 	}
 
 	return ""
-}
-
-// GetSchema returns a loaded schema by its path.
-func (l *Loader) GetSchema(path string) *Schema {
-	absPath, _ := filepath.Abs(path)
-	return l.loaded[absPath]
 }
 
 // AllSchemas returns all loaded schemas.
@@ -409,16 +405,15 @@ func (w *Writer) formatValue(v Value) string {
 	}
 }
 
-// WriteToFile writes a schema to a file.
+// WriteToFile writes a schema to a file atomically: the schema is first
+// staged in a sibling temp file, then renamed over path. A crash or write
+// error mid-encode leaves the existing file untouched rather than half
+// overwritten.
 func WriteToFile(path string, schema *Schema) error {
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
 	writer := NewWriter()
-	return writer.WriteSchema(f, schema)
+	return atomicfile.Write(path, 0o644, func(w io.Writer) error {
+		return writer.WriteSchema(w, schema)
+	})
 }
 
 // FormatSchema returns a formatted string representation of a schema.

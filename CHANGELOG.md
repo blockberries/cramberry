@@ -7,28 +7,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **T1-10 (per-field `,omitempty`)**: the reflection marshaller now
+  honors the per-field `omitempty` tag. Previously the flag was parsed
+  on the struct-info but never consulted, so `cramberry:"3,omitempty"`
+  produced different bytes from any codegen path that respected the
+  tag. With the fix, a field is skipped if either the global
+  `Options.OmitEmpty` is on, or the field carries an explicit tag.
+- **Map sort divergence**: map keys are now sorted unconditionally on
+  encode, matching the codegen path. The reflection path previously
+  gated sorting on `Options.Deterministic`, so calling
+  `MarshalWithOptions(x, FastOptions)` produced different bytes from
+  `x.EncodeTo(w)` for the same input — a violation of CLAUDE.md's
+  determinism rule #1.
+- **Rust generator emitted tags for absent fields**: every field's
+  `write_tag` was unconditional, so a `None` `Option<T>` field produced
+  a tag with no body and a zero scalar produced `tag + zero` instead of
+  being skipped. The generator now wraps the tag write in a per-field
+  zero/presence check that mirrors the Go generator and the reflection
+  marshaller.
+- **TypeScript generator only checked undefined / null**: zero scalars,
+  empty strings, and empty arrays were emitted as `tag + payload`,
+  diverging from Go's reflection canon. The generator now skips
+  zero-valued fields the same way Go codegen does.
+- **Schema reserved type-ID range now enforced**: validator rejects
+  message and interface-implementation type IDs in the runtime-reserved
+  1-127 range (1-63 builtin, 64-127 stdlib). User-defined IDs must be
+  ≥ 128 to avoid silent collisions across the runtimes' built-in
+  registries.
+- **`schema.WriteToFile` is now atomic**: it stages to a temp file in
+  the destination directory and renames over the target. A crash or
+  encode error mid-write previously left a half-written `.cram` on
+  disk that the next codegen step would silently feed garbage to.
+
 ### Changed
 
 - Schema validator now rejects fields that stack mutually-exclusive
-  modifiers (e.g. `required repeated`, `optional repeated`). Previously the
-  parser accepted these silently because each modifier is independent on
-  the AST. The error names every offending modifier so authors can pick
-  one.
+  modifiers (e.g. `required repeated`, `optional repeated`). Previously
+  the parser accepted these silently because each modifier is
+  independent on the AST. The error names every offending modifier so
+  authors can pick one.
 - Rust integration tests now resolve the Go-produced golden fixtures
   correctly. The path was `../../golden`, which silently missed the
-  fixtures at `testdata/golden/` — the affected tests passed only because
-  `load_golden` falls back to "skip" on missing files. Path corrected to
-  `../../../testdata/golden`.
+  fixtures at `testdata/golden/` — the affected tests passed only
+  because `load_golden` falls back to "skip" on missing files. Path
+  corrected to `../../../testdata/golden`.
+
+### Removed (BREAKING)
+
+- `Options.Deterministic` field, `FastOptions` preset, `NoLimits`
+  preset, and the `MaxTagSize` constant. Determinism (sorted map keys,
+  canonical floats, fixed field order) is now an unconditional
+  invariant — there is no way to opt out, because doing so would split
+  reflection and codegen output. `MaxTagSize` aliased `MaxVarintLen64`
+  with no callers.
+- Dead public helpers in `pkg/cramberry`: `Reader.ReadSvarintInline`,
+  `BufferPoolStats` and `GetBufferPoolStats`, `JSONStringValue`,
+  `WrapError`, `NewFieldEncodeError`, the sentinel errors
+  `ErrInvalidWireType` and `ErrTypeMismatch` (neither was returned
+  anywhere), and the narrow JSON helpers
+  `Format{Int,Uint}{8,16,32}ToString` /
+  `Parse{Int,Uint}{8,16,32}FromString` (codegen only emits the 64-bit
+  variants).
+- `pkg/codegen.ToKebabCase` (no template referenced it) and
+  `(*schema.Loader).GetSchema` (no callers).
 
 ### Added
 
 - Rust integration tests for `ComplexTypes` (status enum, optional /
   required nested messages, repeated message lists, sorted maps) and
-  `EdgeCases` (i32/i64/u32/u64 boundaries, unicode strings). Each suite
-  cross-checks both round-trip identity and byte-for-byte equality
-  against the Go-produced golden bytes.
+  `EdgeCases` (i32/i64/u32/u64 boundaries, unicode strings). Each
+  suite cross-checks both round-trip identity and byte-for-byte
+  equality against the Go-produced golden bytes.
+- `cramberry.isOmittableZero` (internal) — the canonical zero-test
+  the encoder uses to decide whether a field is skippable. The rule is
+  now spelled out in the runtime so codegen, the reflection
+  marshaller, and the TS / Rust generators all agree on it: skip
+  bool-false / numeric-0 / empty-string / empty-bytes /
+  empty-repeated / nil-pointer; always emit struct, map, array, and
+  named-type fields.
 
-### Removed
+### Earlier in Unreleased
 
 - Dead public helpers in `internal/wire`:
   `PutFixed32`, `PutFixed64`, `PutFloat32`, `PutFloat64`,

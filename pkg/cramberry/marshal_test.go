@@ -916,3 +916,62 @@ func TestFieldNumberUniqueness(t *testing.T) {
 		_, _ = Marshal(WithSkipped{})
 	})
 }
+
+// TestPerFieldOmitEmpty exercises the per-field `,omitempty` tag. CLAUDE.md
+// previously tracked this as T1-10 ("silently ignored"); the fix makes the
+// reflection marshaller honor the flag even when the global
+// Options.OmitEmpty is off, matching what codegen emits and what the wire
+// format demands.
+func TestPerFieldOmitEmpty(t *testing.T) {
+	type Mixed struct {
+		Always   string `cramberry:"1"`
+		Optional string `cramberry:"2,omitempty"`
+	}
+
+	opts := DefaultOptions
+	opts.OmitEmpty = false // Global "always emit" – `,omitempty` must still skip.
+
+	t.Run("per-field omitempty skips zero even with global OmitEmpty=false", func(t *testing.T) {
+		v := Mixed{Always: "", Optional: ""}
+		data, err := MarshalWithOptions(v, opts)
+		if err != nil {
+			t.Fatalf("Marshal: %v", err)
+		}
+		// Expect: tag(1, WireBytes) = (1<<4)|(2<<1) = 0x14, len=0,
+		// then end marker 0x00. Optional is skipped.
+		want := []byte{0x14, 0x00, 0x00}
+		if !bytes.Equal(data, want) {
+			t.Fatalf("encoded bytes mismatch: got %x, want %x", data, want)
+		}
+	})
+
+	t.Run("per-field omitempty honored on roundtrip", func(t *testing.T) {
+		v := Mixed{Always: "x", Optional: ""}
+		data, err := MarshalWithOptions(v, opts)
+		if err != nil {
+			t.Fatalf("Marshal: %v", err)
+		}
+		var got Mixed
+		if err := UnmarshalWithOptions(data, &got, opts); err != nil {
+			t.Fatalf("Unmarshal: %v", err)
+		}
+		if got.Always != "x" || got.Optional != "" {
+			t.Fatalf("roundtrip mismatch: got %+v", got)
+		}
+	})
+
+	t.Run("non-zero value emits regardless of omitempty", func(t *testing.T) {
+		v := Mixed{Always: "a", Optional: "b"}
+		data, err := MarshalWithOptions(v, opts)
+		if err != nil {
+			t.Fatalf("Marshal: %v", err)
+		}
+		var got Mixed
+		if err := UnmarshalWithOptions(data, &got, opts); err != nil {
+			t.Fatalf("Unmarshal: %v", err)
+		}
+		if got.Always != "a" || got.Optional != "b" {
+			t.Fatalf("roundtrip mismatch: got %+v", got)
+		}
+	})
+}

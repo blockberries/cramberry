@@ -23,36 +23,6 @@ func FormatUint64ToString(v uint64) string {
 	return strconv.FormatUint(v, 10)
 }
 
-// FormatInt32ToString converts an int32 to a string for JSON encoding.
-func FormatInt32ToString(v int32) string {
-	return strconv.FormatInt(int64(v), 10)
-}
-
-// FormatUint32ToString converts a uint32 to a string for JSON encoding.
-func FormatUint32ToString(v uint32) string {
-	return strconv.FormatUint(uint64(v), 10)
-}
-
-// FormatInt16ToString converts an int16 to a string for JSON encoding.
-func FormatInt16ToString(v int16) string {
-	return strconv.FormatInt(int64(v), 10)
-}
-
-// FormatUint16ToString converts a uint16 to a string for JSON encoding.
-func FormatUint16ToString(v uint16) string {
-	return strconv.FormatUint(uint64(v), 10)
-}
-
-// FormatInt8ToString converts an int8 to a string for JSON encoding.
-func FormatInt8ToString(v int8) string {
-	return strconv.FormatInt(int64(v), 10)
-}
-
-// FormatUint8ToString converts a uint8 to a string for JSON encoding.
-func FormatUint8ToString(v uint8) string {
-	return strconv.FormatUint(uint64(v), 10)
-}
-
 // FormatFloat32 formats a float32 with 9 significant digits for deterministic JSON.
 // Returns error if the value is NaN or Infinity.
 func FormatFloat32(v float32) (string, error) {
@@ -130,60 +100,6 @@ func ParseUint64FromString(s string) (uint64, error) {
 	return strconv.ParseUint(s, 10, 64)
 }
 
-// ParseInt32FromString parses an int32 from a JSON string.
-func ParseInt32FromString(s string) (int32, error) {
-	v, err := strconv.ParseInt(s, 10, 32)
-	if err != nil {
-		return 0, err
-	}
-	return int32(v), nil
-}
-
-// ParseUint32FromString parses a uint32 from a JSON string.
-func ParseUint32FromString(s string) (uint32, error) {
-	v, err := strconv.ParseUint(s, 10, 32)
-	if err != nil {
-		return 0, err
-	}
-	return uint32(v), nil
-}
-
-// ParseInt16FromString parses an int16 from a JSON string.
-func ParseInt16FromString(s string) (int16, error) {
-	v, err := strconv.ParseInt(s, 10, 16)
-	if err != nil {
-		return 0, err
-	}
-	return int16(v), nil
-}
-
-// ParseUint16FromString parses a uint16 from a JSON string.
-func ParseUint16FromString(s string) (uint16, error) {
-	v, err := strconv.ParseUint(s, 10, 16)
-	if err != nil {
-		return 0, err
-	}
-	return uint16(v), nil
-}
-
-// ParseInt8FromString parses an int8 from a JSON string.
-func ParseInt8FromString(s string) (int8, error) {
-	v, err := strconv.ParseInt(s, 10, 8)
-	if err != nil {
-		return 0, err
-	}
-	return int8(v), nil
-}
-
-// ParseUint8FromString parses a uint8 from a JSON string.
-func ParseUint8FromString(s string) (uint8, error) {
-	v, err := strconv.ParseUint(s, 10, 8)
-	if err != nil {
-		return 0, err
-	}
-	return uint8(v), nil
-}
-
 // SortMapKeysLexicographic sorts map keys lexicographically by UTF-8 byte order.
 // This ensures deterministic JSON output for maps.
 func SortMapKeysLexicographic(keys []string) []string {
@@ -224,12 +140,4 @@ func EscapeJSONString(s string) string {
 	}
 	buf.WriteByte('"')
 	return buf.String()
-}
-
-// JSONStringValue returns the escaped JSON string without surrounding quotes.
-// Used when building JSON manually.
-func JSONStringValue(s string) string {
-	escaped := EscapeJSONString(s)
-	// Remove surrounding quotes added by EscapeJSONString
-	return escaped[1 : len(escaped)-1]
 }
