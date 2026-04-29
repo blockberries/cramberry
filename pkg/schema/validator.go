@@ -3,6 +3,8 @@ package schema
 import (
 	"fmt"
 	"sort"
+
+	"github.com/blockberries/cramberry/internal/wire"
 )
 
 // ValidationError represents a schema validation error.
@@ -193,9 +195,11 @@ func (v *Validator) validateMessage(msg *Message) {
 			v.addError(field.Position, "field number must be positive, got %d", field.Number)
 		}
 
-		// Check field number range
-		if field.Number > 536870911 { // 2^29 - 1, max protobuf field number
-			v.addError(field.Position, "field number %d exceeds maximum (536870911)", field.Number)
+		// Check field number range. The single source of truth is
+		// wire.MaxFieldNumber; the runtime decoder enforces the same
+		// bound, and the TS port mirrors it as MAX_FIELD_NUMBER.
+		if field.Number > wire.MaxFieldNumber {
+			v.addError(field.Position, "field number %d exceeds maximum (%d)", field.Number, wire.MaxFieldNumber)
 		}
 
 		// Reserved field numbers (19000-19999 in protobuf, we'll use same range)

@@ -236,7 +236,9 @@ export function sortMapKeysLexicographic(keys: string[]): string[] {
 }
 
 /**
- * Escapes a string for safe inclusion in JSON.
+ * Returns a JSON string literal — the escaped contents *plus* surrounding
+ * double quotes. Equivalent to Go's `cramberry.EscapeJSONString`. Use this
+ * when you need a complete JSON string token to splice into a JSON document.
  */
 export function escapeJSONString(str: string): string {
   return JSON.stringify(str);

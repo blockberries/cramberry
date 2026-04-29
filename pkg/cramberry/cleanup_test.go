@@ -106,3 +106,51 @@ func TestRegisterOrGetTypeWithID_ReturnsExistingIDForRepeatRegistration(t *testi
 		t.Errorf("expected id=200, got %d", id1)
 	}
 }
+
+// --- nil vs empty slice round-trip contract ----------------------------
+
+// TestSliceNilEmptyRoundTrip locks in the documented contract: nil and
+// empty slices both encode as `varint(0)` (a length prefix of zero), and
+// both decode back to a non-nil empty slice. This is by design — the wire
+// format has no way to distinguish nil from empty without a presence
+// bitmap, and OmitEmpty treats both as zero. A change to either branch
+// would silently flip semantics in user code, so we test it explicitly.
+func TestSliceNilEmptyRoundTrip(t *testing.T) {
+	type S struct {
+		Items []int32 `cramberry:"1"`
+	}
+
+	cases := []struct {
+		name  string
+		items []int32
+	}{
+		{"nil", nil},
+		{"empty", []int32{}},
+	}
+
+	// We disable OmitEmpty so the field is always emitted; otherwise both
+	// are omitted and we don't observe the wire format at all.
+	opts := DefaultOptions
+	opts.OmitEmpty = false
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := MarshalWithOptions(&S{Items: tc.items}, opts)
+			if err != nil {
+				t.Fatalf("Marshal: %v", err)
+			}
+
+			var got S
+			if err := UnmarshalWithOptions(data, &got, opts); err != nil {
+				t.Fatalf("Unmarshal: %v", err)
+			}
+			// Both nil and empty round-trip to a non-nil zero-length slice.
+			if got.Items == nil {
+				t.Errorf("decoded slice is nil; expected empty non-nil")
+			}
+			if len(got.Items) != 0 {
+				t.Errorf("decoded slice = %v, want empty", got.Items)
+			}
+		})
+	}
+}

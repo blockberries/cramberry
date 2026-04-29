@@ -76,6 +76,21 @@ lint: ## Run golangci-lint
 generate: ## Run go generate
 	$(GO) generate $(PKG)
 
+generate-test: build ## Regenerate test/integration code from .cram schemas and verify it compiles + tests still pass
+	@echo "Regenerating testdata/generated from testdata/schemas/json_test.cram..."
+	@$(BINARY_DIR)/$(BINARY) generate -lang go -out testdata/generated testdata/schemas/json_test.cram
+	@echo "Verifying generated code compiles..."
+	@$(GO) build ./testdata/generated/...
+	@echo "Verifying tests still pass..."
+	@$(GO) test ./pkg/cramberry/... ./pkg/codegen/... ./test/integration/...
+	@echo "Verifying no drift (run 'git status' to inspect changes)..."
+	@if ! git diff --quiet testdata/generated/; then \
+		echo "WARNING: testdata/generated/ has uncommitted changes after regeneration."; \
+		echo "Review and commit: git diff testdata/generated/"; \
+	else \
+		echo "OK: regenerated output matches committed fixture."; \
+	fi
+
 ## Utility targets
 
 clean: ## Clean build artifacts

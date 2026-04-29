@@ -4,6 +4,7 @@ package codegen
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"golang.org/x/text/cases"
@@ -98,12 +99,14 @@ func Get(lang Language) (Generator, bool) {
 	return gen, ok
 }
 
-// Languages returns all registered languages.
+// Languages returns all registered languages, sorted by name for stable
+// output (used in error messages).
 func Languages() []Language {
 	langs := make([]Language, 0, len(registry))
 	for lang := range registry {
 		langs = append(langs, lang)
 	}
+	sort.Slice(langs, func(i, j int) bool { return langs[i] < langs[j] })
 	return langs
 }
 

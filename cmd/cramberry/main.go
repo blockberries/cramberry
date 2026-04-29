@@ -176,7 +176,12 @@ Options:`)
 	gen, ok := codegen.Get(codegen.Language(*lang))
 	if !ok {
 		fmt.Fprintf(os.Stderr, "Error: unsupported language: %s\n", *lang)
-		fmt.Fprintln(os.Stderr, "Supported languages: go")
+		langs := codegen.Languages()
+		names := make([]string, len(langs))
+		for i, l := range langs {
+			names[i] = string(l)
+		}
+		fmt.Fprintf(os.Stderr, "Supported languages: %s\n", strings.Join(names, ", "))
 		os.Exit(1)
 	}
 
