@@ -438,8 +438,11 @@ func (c *tsContext) jsonEncodeValue(t schema.TypeRef, varName string, repeated b
 				return c.jsonEncodeEnum(varName)
 			}
 		}
-		// It's a message
-		return c.jsonEncodeMessage(varName)
+		// It's a message — dispatch to the generated toJSON_<TypeName>
+		// function so we honor cramberry's deterministic JSON rules
+		// (sorted keys, integer-as-string, etc.) instead of falling back
+		// to the runtime's default JSON.stringify, which is non-deterministic.
+		return c.jsonEncodeMessage(typ, varName)
 	case *schema.MapType:
 		return c.jsonEncodeMap(typ, varName)
 	case *schema.PointerType:
@@ -478,11 +481,12 @@ func (c *tsContext) jsonEncodeEnum(varName string) string {
 	return fmt.Sprintf("  result += '\"' + %s.toString() + '\"';\n", varName)
 }
 
-// jsonEncodeMessage generates code to encode a nested message.
-func (c *tsContext) jsonEncodeMessage(varName string) string {
-	// For now, use JSON.stringify as a simple solution
-	// TODO: Call specific toJSON function when we have type info
-	return fmt.Sprintf("  result += JSON.stringify(%s);\n", varName)
+// jsonEncodeMessage generates code to encode a nested message by dispatching
+// to the typed toJSON_<TypeName> helper. This preserves cramberry's
+// deterministic JSON output (sorted keys, integer-as-string, fixed float
+// format) instead of falling back to the runtime's default JSON.stringify.
+func (c *tsContext) jsonEncodeMessage(typ *schema.NamedType, varName string) string {
+	return fmt.Sprintf("  result += toJSON_%s(%s);\n", ToPascalCase(typ.Name), varName)
 }
 
 // jsonEncodeArray generates code to encode an array.

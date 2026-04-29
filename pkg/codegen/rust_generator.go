@@ -519,8 +519,8 @@ func (c *rustContext) jsonEncodeValue(t schema.TypeRef, varName string, repeated
 				return c.jsonEncodeEnum(e, varName)
 			}
 		}
-		// It's a message
-		return c.jsonEncodeMessage(varName)
+		// It's a message — dispatch to the typed to_json_<name> helper.
+		return c.jsonEncodeMessage(typ, varName)
 	case *schema.MapType:
 		return c.jsonEncodeMap(typ, varName)
 	case *schema.PointerType:
@@ -574,9 +574,13 @@ func (c *rustContext) jsonEncodeEnum(e *schema.Enum, varName string) string {
 	return code.String()
 }
 
-// jsonEncodeMessage generates code to encode a nested message.
-func (c *rustContext) jsonEncodeMessage(varName string) string {
-	return fmt.Sprintf("    result.push_str(&%s.to_json().map_err(|e| e.to_string())?);\n", varName)
+// jsonEncodeMessage generates code to encode a nested message by dispatching
+// to the typed to_json_<name> helper. The previous version called a
+// .to_json() method that was generated as a free function elsewhere, so the
+// emitted call did not resolve. Calling the free function directly also
+// guarantees we honor cramberry's deterministic JSON rules.
+func (c *rustContext) jsonEncodeMessage(typ *schema.NamedType, varName string) string {
+	return fmt.Sprintf("    result.push_str(&to_json_%s(&%s)?);\n", ToSnakeCase(typ.Name), varName)
 }
 
 // jsonEncodeArray generates code to encode an array.
