@@ -157,23 +157,19 @@ func encodeInterface(w *Writer, v reflect.Value, reg *Registry) error {
 	return encodeValueWithRegistry(w, elem, reg)
 }
 
-// encodeSlice encodes a slice value.
+// encodeSlice encodes a slice value. As with encodeStruct, depth tracking
+// is owned by the BeginMessage at the field-wrapping layer; entering nested
+// here too would double-count.
 func encodeSlice(w *Writer, v reflect.Value) error {
 	if v.IsNil() {
 		w.WriteArrayHeader(0)
 		return w.Err()
 	}
 
-	// Use packed encoding for primitive types (no depth tracking needed for primitives)
+	// Use packed encoding for primitive types
 	if isPackableTypeCached(v.Type().Elem()) {
 		return encodePackedSlice(w, v)
 	}
-
-	// Check depth limit for non-primitive element types
-	if !w.enterNested() {
-		return w.Err()
-	}
-	defer w.exitNested()
 
 	n := v.Len()
 	w.WriteArrayHeader(n)
@@ -261,17 +257,11 @@ func encodePackedSlice(w *Writer, v reflect.Value) error {
 
 // encodeArray encodes an array value.
 func encodeArray(w *Writer, v reflect.Value) error {
-	// Use packed encoding for primitive types (no depth tracking needed for primitives)
 	if isPackableTypeCached(v.Type().Elem()) {
 		return encodePackedArray(w, v)
 	}
 
-	// Check depth limit for non-primitive element types
-	if !w.enterNested() {
-		return w.Err()
-	}
-	defer w.exitNested()
-
+	// Depth tracking owned by BeginMessage at the field-wrapping layer.
 	n := v.Len()
 	w.WriteArrayHeader(n)
 	if w.Err() != nil {
@@ -337,11 +327,7 @@ func encodeMap(w *Writer, v reflect.Value) error {
 		return w.Err()
 	}
 
-	// Check depth limit
-	if !w.enterNested() {
-		return w.Err()
-	}
-	defer w.exitNested()
+	// Depth tracking owned by BeginMessage at the field-wrapping layer.
 
 	// Validate that the key type is supported for encoding
 	keyType := v.Type().Key()
@@ -374,13 +360,14 @@ func encodeMap(w *Writer, v reflect.Value) error {
 
 // encodeStruct encodes a struct value using field tags.
 // Uses compact tags and end marker format.
+//
+// Depth tracking is owned by BeginMessage at the field-wrapping layer (see
+// the per-field loop below). encodeStruct itself doesn't enter a nested
+// scope: at top level the depth is 0, and each nested struct field passes
+// through BeginMessage which increments depth before this function is
+// re-entered. Counting in both places double-counted depth and tripped
+// the limit at half the documented depth.
 func encodeStruct(w *Writer, v reflect.Value) error {
-	// Check depth limit
-	if !w.enterNested() {
-		return w.Err()
-	}
-	defer w.exitNested()
-
 	info := getStructInfo(v.Type())
 
 	for _, field := range info.fields {
@@ -397,15 +384,65 @@ func encodeStruct(w *Writer, v reflect.Value) error {
 			return w.Err()
 		}
 
-		// Encode value
-		if err := encodeValue(w, fv); err != nil {
-			return err
+		// Struct, pointer-to-struct, and interface field bodies are
+		// end-marker-terminated rather than length-prefixed by the value
+		// itself. The matching SkipValue(WireBytes) path expects a length
+		// prefix, so without one a future schema that doesn't recognize the
+		// field cannot skip it (it'd misread the first body byte as a length
+		// and corrupt the decoder). Wrap the body with BeginMessage /
+		// EndMessage so the outer length prefix is present. Non-struct
+		// values that map to WireBytes (string, bytes, slice, map, packed
+		// arrays) already write their own length prefix and don't need
+		// this wrapping.
+		if needsBodyLengthPrefix(fv) {
+			cp := w.BeginMessage()
+			if cp < 0 {
+				return w.Err()
+			}
+			if err := encodeValue(w, fv); err != nil {
+				return err
+			}
+			w.EndMessage(cp)
+		} else {
+			if err := encodeValue(w, fv); err != nil {
+				return err
+			}
 		}
 	}
 
 	// Write end marker
 	w.WriteEndMarker()
 	return w.Err()
+}
+
+// needsBodyLengthPrefix reports whether a field value requires its body to
+// be length-prefixed by the surrounding encoder.
+//
+// Tag wire-type WireBytes is the canonical "length-prefixed payload" tag,
+// so SkipValue(WireBytes) reads a length and skips that many bytes. For
+// the impl to satisfy that contract, every value that gets a WireBytes tag
+// has to either length-prefix itself (strings via WriteString and []byte
+// via WriteBytes do this) or be wrapped here.
+//
+// Composite types — struct, slice (excluding []byte), array (excluding
+// [N]byte), map, interface, and pointers to any of those — write inline
+// bodies (count + elements, fields + end marker, or typeID + value), so we
+// wrap them at the field boundary.
+func needsBodyLengthPrefix(v reflect.Value) bool {
+	t := v.Type()
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	switch t.Kind() {
+	case reflect.Struct, reflect.Map, reflect.Interface:
+		return true
+	case reflect.Slice, reflect.Array:
+		// []byte and [N]byte get encoded via WriteBytes which is already
+		// length-prefixed. Anything else is count-then-elements and needs
+		// the surrounding length prefix.
+		return t.Elem().Kind() != reflect.Uint8
+	}
+	return false
 }
 
 // getWireTypeCached returns the V2 wire type for a reflect.Type, using cache.

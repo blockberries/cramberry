@@ -196,24 +196,30 @@ func (m *RepeatedTypes) MarshalCramberry() ([]byte, error) {
 func (m *RepeatedTypes) EncodeTo(w *cramberry.Writer) {
 	if len(m.Int32List) > 0 {
 		w.WriteTag(1, cramberry.WireBytes)
+		cp := w.BeginMessage()
 		w.WriteUvarint(uint64(len(m.Int32List)))
 		for _, v := range m.Int32List {
 			w.WriteInt32(v)
 		}
+		w.EndMessage(cp)
 	}
 	if len(m.StringList) > 0 {
 		w.WriteTag(2, cramberry.WireBytes)
+		cp := w.BeginMessage()
 		w.WriteUvarint(uint64(len(m.StringList)))
 		for _, v := range m.StringList {
 			w.WriteString(v)
 		}
+		w.EndMessage(cp)
 	}
 	if len(m.BytesList) > 0 {
 		w.WriteTag(3, cramberry.WireBytes)
+		cp := w.BeginMessage()
 		w.WriteUvarint(uint64(len(m.BytesList)))
 		for _, v := range m.BytesList {
 			w.WriteBytes(v)
 		}
+		w.EndMessage(cp)
 	}
 	w.WriteEndMarker()
 }
@@ -235,23 +241,29 @@ func (m *RepeatedTypes) DecodeFrom(r *cramberry.Reader) {
 		}
 		switch fieldNum {
 		case 1:
+			endPos := r.BeginMessage()
 			n := int(r.ReadUvarint())
 			m.Int32List = make([]int32, n)
 			for i := 0; i < n; i++ {
 				m.Int32List[i] = r.ReadInt32()
 			}
+			r.EndMessage(endPos)
 		case 2:
+			endPos := r.BeginMessage()
 			n := int(r.ReadUvarint())
 			m.StringList = make([]string, n)
 			for i := 0; i < n; i++ {
 				m.StringList[i] = r.ReadString()
 			}
+			r.EndMessage(endPos)
 		case 3:
+			endPos := r.BeginMessage()
 			n := int(r.ReadUvarint())
 			m.BytesList = make([][]byte, n)
 			for i := 0; i < n; i++ {
 				m.BytesList[i] = r.ReadBytes()
 			}
+			r.EndMessage(endPos)
 		default:
 			// Skip unknown field for forward compatibility
 			r.SkipValue(wireType)
@@ -355,34 +367,46 @@ func (m *ComplexTypes) EncodeTo(w *cramberry.Writer) {
 	m.Status.EncodeTo(w)
 	if m.OptionalNested != nil {
 		w.WriteTag(2, cramberry.WireBytes)
+		cp := w.BeginMessage()
 		m.OptionalNested.EncodeTo(w)
+		w.EndMessage(cp)
 	}
 	w.WriteTag(3, cramberry.WireBytes)
-	m.RequiredNested.EncodeTo(w)
+	{
+		cp := w.BeginMessage()
+		m.RequiredNested.EncodeTo(w)
+		w.EndMessage(cp)
+	}
 	if len(m.NestedList) > 0 {
 		w.WriteTag(4, cramberry.WireBytes)
+		cp := w.BeginMessage()
 		w.WriteUvarint(uint64(len(m.NestedList)))
 		for _, v := range m.NestedList {
 			v.EncodeTo(w)
 		}
+		w.EndMessage(cp)
 	}
 	if m.StringIntMap != nil {
 		w.WriteTag(5, cramberry.WireBytes)
+		cp := w.BeginMessage()
 		keys := cramberry.SortedMapKeys(m.StringIntMap)
 		w.WriteUvarint(uint64(len(keys)))
 		for _, k := range keys {
 			w.WriteString(k)
 			w.WriteInt32(m.StringIntMap[k])
 		}
+		w.EndMessage(cp)
 	}
 	if m.IntStringMap != nil {
 		w.WriteTag(6, cramberry.WireBytes)
+		cp := w.BeginMessage()
 		keys := cramberry.SortedMapKeys(m.IntStringMap)
 		w.WriteUvarint(uint64(len(keys)))
 		for _, k := range keys {
 			w.WriteInt32(k)
 			w.WriteString(m.IntStringMap[k])
 		}
+		w.EndMessage(cp)
 	}
 	w.WriteEndMarker()
 }
@@ -406,20 +430,25 @@ func (m *ComplexTypes) DecodeFrom(r *cramberry.Reader) {
 		case 1:
 			m.Status.DecodeFrom(r)
 		case 2:
-			{
-				var v NestedMessage
-				v.DecodeFrom(r)
-				m.OptionalNested = &v
-			}
+			endPos := r.BeginMessage()
+			var v NestedMessage
+			v.DecodeFrom(r)
+			m.OptionalNested = &v
+			r.EndMessage(endPos)
 		case 3:
+			endPos := r.BeginMessage()
 			m.RequiredNested.DecodeFrom(r)
+			r.EndMessage(endPos)
 		case 4:
+			endPos := r.BeginMessage()
 			n := int(r.ReadUvarint())
 			m.NestedList = make([]NestedMessage, n)
 			for i := 0; i < n; i++ {
 				m.NestedList[i].DecodeFrom(r)
 			}
+			r.EndMessage(endPos)
 		case 5:
+			endPos := r.BeginMessage()
 			n := int(r.ReadUvarint())
 			m.StringIntMap = make(map[string]int32, n)
 			for i := 0; i < n; i++ {
@@ -429,7 +458,9 @@ func (m *ComplexTypes) DecodeFrom(r *cramberry.Reader) {
 				v = r.ReadInt32()
 				m.StringIntMap[k] = v
 			}
+			r.EndMessage(endPos)
 		case 6:
+			endPos := r.BeginMessage()
 			n := int(r.ReadUvarint())
 			m.IntStringMap = make(map[int32]string, n)
 			for i := 0; i < n; i++ {
@@ -439,6 +470,7 @@ func (m *ComplexTypes) DecodeFrom(r *cramberry.Reader) {
 				v = r.ReadString()
 				m.IntStringMap[k] = v
 			}
+			r.EndMessage(endPos)
 		default:
 			// Skip unknown field for forward compatibility
 			r.SkipValue(wireType)

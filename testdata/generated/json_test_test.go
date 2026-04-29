@@ -115,8 +115,10 @@ func TestMapKeyOrdering(t *testing.T) {
 
 	t.Logf("Map JSON: %s", jsonStr)
 
-	// Verify keys are sorted lexicographically
-	expected := `{"string_map":{"apple":"a","banana":"b","zebra":"z"},"int_map":{"a":"1","b":"2","z":"26"}}`
+	// Verify keys are sorted lexicographically. The two int-keyed fields
+	// (int_keyed, uint_keyed) are present-but-empty; the JSON encoder
+	// emits them as `{}` because the encoder doesn't omit empty maps.
+	expected := `{"string_map":{"apple":"a","banana":"b","zebra":"z"},"int_map":{"a":"1","b":"2","z":"26"},"int_keyed":{},"uint_keyed":{}}`
 	if jsonStr != expected {
 		t.Errorf("Map key ordering incorrect:\nGot:  %s\nWant: %s", jsonStr, expected)
 	}

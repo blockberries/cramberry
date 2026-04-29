@@ -328,7 +328,12 @@ func (c *tsContext) tsWriteValue(t schema.TypeRef, value string, repeated bool) 
 		if c.isNamedEnum(typ) {
 			return fmt.Sprintf("writer.writeSVarint(%s)", value)
 		}
-		return fmt.Sprintf("encode%s(writer, %s)", ToPascalCase(typ.Name), value)
+		// Nested message bodies are end-marker-terminated, so we wrap the
+		// encoded body in a length-prefixed payload. Without this, a future
+		// schema that doesn't recognize the field can't skip it cleanly:
+		// the SkipValue(WireType.Bytes) path reads the first body byte as a
+		// length and corrupts subsequent decoding.
+		return fmt.Sprintf("{ const __sub = new Writer(); encode%s(__sub, %s); writer.writeLengthPrefixedBytes(__sub.bytes()); }", ToPascalCase(typ.Name), value)
 	case *schema.ArrayType:
 		return c.tsWriteValue(typ.Element, value, true)
 	case *schema.MapType:
@@ -384,7 +389,8 @@ func (c *tsContext) tsReadValue(t schema.TypeRef, repeated bool) string {
 		if c.isNamedEnum(typ) {
 			return "reader.readSVarint()"
 		}
-		return fmt.Sprintf("decode%s(reader)", ToPascalCase(typ.Name))
+		// Mirror the encoder: nested message bodies are length-prefixed.
+		return fmt.Sprintf("(() => { const __data = reader.readLengthPrefixedBytes(); return decode%s(new Reader(__data)); })()", ToPascalCase(typ.Name))
 	case *schema.ArrayType:
 		return c.tsReadValue(typ.Element, true)
 	case *schema.MapType:

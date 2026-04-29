@@ -17,11 +17,22 @@ A message is a sequence of `(tag, value)` pairs terminated by a single
 `0x00` end marker.
 
 ```
-message := length:varint  body:byte*  0x00
-body    := field*
-field   := compact_tag value
-        |  extended_tag fieldnum:varint value
+message      := body 0x00
+body         := field*
+field        := tag value
+tag          := compact_tag | extended_tag
+value        := scalar | length-prefixed-body
 ```
+
+A top-level `Marshal` output is `body 0x00`. When a struct value appears as
+a *field value* in another message, its body is wrapped in a length-prefixed
+payload: `tag length:varint body 0x00`. The wrapping lets `SkipValue(WireBytes)`
+skip a field whose schema the decoder doesn't recognize without misreading
+the first body byte as a length.
+
+The same length-prefix wrapping applies to repeated fields (count + elements)
+and map fields (count + entries). Strings and `[]byte` already self-prefix
+via their write helpers and aren't double-wrapped.
 
 ### Compact tag (fields 1–15)
 

@@ -149,54 +149,94 @@ func (c *goContext) encodeFieldV2(f *schema.Field) string {
 func (c *goContext) encodePointerFieldV2(f *schema.Field, fieldName string, fieldNum int) string {
 	wireType := c.wireTypeV2(f)
 	inner := c.encodeValueV2(f.Type, fieldName, true)
+	body := c.maybeWrapBody(f.Type, false /*repeated*/, inner)
 
 	return fmt.Sprintf(`if %s != nil {
 		w.WriteTag(%d, %s)
 		%s
-	}`, fieldName, fieldNum, wireType, inner)
+	}`, fieldName, fieldNum, wireType, body)
 }
 
 func (c *goContext) encodeRepeatedFieldV2(f *schema.Field, fieldName string, fieldNum int) string {
 	wireType := c.wireTypeV2(f)
 
-	// Check if it's a packable type
+	var body string
 	if c.isPackableType(f.Type) {
-		return fmt.Sprintf(`if len(%s) > 0 {
-		w.WriteTag(%d, %s)
-		w.WriteUvarint(uint64(len(%s)))
+		// Packable types: count followed by elements concatenated.
+		body = fmt.Sprintf(`w.WriteUvarint(uint64(len(%s)))
 		for _, v := range %s {
 			%s
-		}
-	}`, fieldName, fieldNum, wireType, fieldName, fieldName, c.encodePackedElementV2(f.Type))
+		}`, fieldName, fieldName, c.encodePackedElementV2(f.Type))
+	} else {
+		body = fmt.Sprintf(`w.WriteUvarint(uint64(len(%s)))
+		for _, v := range %s {
+			%s
+		}`, fieldName, fieldName, c.encodeValueV2(f.Type, "v", false))
 	}
 
-	// Non-packable types (messages, strings, etc.)
-	// Note: range variable v is the value, not a pointer
+	// Repeated fields are always wrapped in a length-prefixed payload so a
+	// future schema that doesn't recognize the field can SkipValue(WireBytes)
+	// over it cleanly. (Without the wrap, SkipValue reads the count as a
+	// length and skips the wrong number of bytes.)
+	body = wrapInBeginEnd(body)
+
 	return fmt.Sprintf(`if len(%s) > 0 {
 		w.WriteTag(%d, %s)
-		w.WriteUvarint(uint64(len(%s)))
-		for _, v := range %s {
-			%s
-		}
-	}`, fieldName, fieldNum, wireType, fieldName, fieldName, c.encodeValueV2(f.Type, "v", false))
+		%s
+	}`, fieldName, fieldNum, wireType, body)
 }
 
 func (c *goContext) encodeScalarFieldV2(f *schema.Field, fieldName string, fieldNum int) string {
 	wireType := c.wireTypeV2(f)
 	zeroCheck := c.zeroCheck(f)
 	inner := c.encodeValueV2(f.Type, fieldName, false)
+	body := c.maybeWrapBody(f.Type, false /*repeated*/, inner)
 
 	// For optional fields, always emit if non-zero
 	if zeroCheck != "" {
 		return fmt.Sprintf(`if %s {
 		w.WriteTag(%d, %s)
 		%s
-	}`, zeroCheck, fieldNum, wireType, inner)
+	}`, zeroCheck, fieldNum, wireType, body)
 	}
 
 	// Always emit for required fields
 	return fmt.Sprintf(`w.WriteTag(%d, %s)
-	%s`, fieldNum, wireType, inner)
+	%s`, fieldNum, wireType, body)
+}
+
+// maybeWrapBody wraps the emitted body in BeginMessage/EndMessage when the
+// field's body needs an explicit length prefix. Composite values (messages,
+// maps) write their bodies inline without a length prefix; the surrounding
+// length-prefix lets SkipValue(WireBytes) skip the field cleanly when the
+// schema is unknown. Strings, byte slices, and packable scalars don't need
+// wrapping (their wire-type encoders or fixed widths handle framing).
+func (c *goContext) maybeWrapBody(t schema.TypeRef, repeated bool, inner string) string {
+	if repeated {
+		return wrapInBeginEnd(inner)
+	}
+	switch typ := t.(type) {
+	case *schema.NamedType:
+		// Message body needs wrapping; enum doesn't (it's a single SVarint).
+		if c.isNamedEnum(typ) {
+			return inner
+		}
+		return wrapInBeginEnd(inner)
+	case *schema.MapType:
+		return wrapInBeginEnd(inner)
+	case *schema.PointerType:
+		// Recurse: a pointer doesn't change the body shape.
+		return c.maybeWrapBody(typ.Element, false, inner)
+	}
+	return inner
+}
+
+func wrapInBeginEnd(body string) string {
+	return fmt.Sprintf(`{
+		__cp := w.BeginMessage()
+		%s
+		w.EndMessage(__cp)
+	}`, body)
 }
 
 func (c *goContext) encodeValueV2(t schema.TypeRef, varName string, isPointer bool) string {
@@ -318,26 +358,65 @@ func (c *goContext) encodePackedElementV2(t schema.TypeRef) string {
 }
 
 // decodeFieldV2 generates the decoding code for a field using V2 format.
+//
+// For wire-type WireBytes payloads, we mirror the encoder's BeginMessage /
+// EndMessage wrapping (see encodePointerFieldV2 / encodeRepeatedFieldV2 /
+// encodeScalarFieldV2 + maybeWrapBody). Reading the length first bounds
+// the body decode to that length, so trailing bytes inside the field don't
+// leak into the parent's tag stream.
 func (c *goContext) decodeFieldV2(f *schema.Field) string {
 	fieldName := "m." + ToPascalCase(f.Name)
 
-	// Handle repeated fields first
+	var body string
+	switch {
+	case f.Repeated:
+		body = c.decodeRepeatedFieldV2(f, fieldName)
+	default:
+		if _, isMap := f.Type.(*schema.MapType); isMap {
+			body = c.decodeMapFieldV2(f, fieldName)
+		} else if c.isPointerField(f) {
+			body = c.decodePointerFieldV2(f, fieldName)
+		} else {
+			body = c.decodeScalarFieldV2(f, fieldName)
+		}
+	}
+
+	if c.fieldNeedsBodyWrap(f) {
+		return wrapDecodeBeginEnd(body)
+	}
+	return body
+}
+
+// fieldNeedsBodyWrap mirrors maybeWrapBody on the encode side: returns true
+// for repeated fields, maps, and named-message fields (excluding enums).
+func (c *goContext) fieldNeedsBodyWrap(f *schema.Field) bool {
 	if f.Repeated {
-		return c.decodeRepeatedFieldV2(f, fieldName)
+		return true
 	}
+	return c.typeNeedsBodyWrap(f.Type)
+}
 
-	// Handle maps - they're reference types, no pointer wrapping needed
-	if _, isMap := f.Type.(*schema.MapType); isMap {
-		return c.decodeMapFieldV2(f, fieldName)
+func (c *goContext) typeNeedsBodyWrap(t schema.TypeRef) bool {
+	switch typ := t.(type) {
+	case *schema.NamedType:
+		return !c.isNamedEnum(typ)
+	case *schema.MapType:
+		return true
+	case *schema.PointerType:
+		return c.typeNeedsBodyWrap(typ.Element)
 	}
+	return false
+}
 
-	// Handle pointers (optional scalars or message fields)
-	if c.isPointerField(f) {
-		return c.decodePointerFieldV2(f, fieldName)
-	}
-
-	// Handle regular fields
-	return c.decodeScalarFieldV2(f, fieldName)
+func wrapDecodeBeginEnd(body string) string {
+	return fmt.Sprintf(`{
+		__endPos := r.BeginMessage()
+		if __endPos < 0 {
+			return
+		}
+		%s
+		r.EndMessage(__endPos)
+	}`, body)
 }
 
 func (c *goContext) decodePointerFieldV2(f *schema.Field, fieldName string) string {

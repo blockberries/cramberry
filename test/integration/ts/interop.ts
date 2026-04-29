@@ -388,20 +388,24 @@ export function encodeComplexTypes(writer: Writer, msg: ComplexTypes): void {
 
   // Field 1: status
   if (msg.status !== undefined && msg.status !== null) {
-    writer.writeTag(1, WireType.Varint);
+    writer.writeTag(1, WireType.SVarint);
     writer.writeSVarint(msg.status);
   }
 
-  // Field 2: optional_nested
+  // Field 2: optional_nested (length-prefixed)
   if (msg.optionalNested !== undefined && msg.optionalNested !== null) {
-    writer.writeTag(2, WireType.TypeRef);
-    if (msg.optionalNested !== null) { encodeNestedMessage(writer, msg.optionalNested) };
+    writer.writeTag(2, WireType.Bytes);
+    const __sub = new Writer();
+    encodeNestedMessage(__sub, msg.optionalNested);
+    writer.writeLengthPrefixedBytes(__sub.bytes());
   }
 
-  // Field 3: required_nested
+  // Field 3: required_nested (length-prefixed)
   if (msg.requiredNested !== undefined && msg.requiredNested !== null) {
     writer.writeTag(3, WireType.Bytes);
-    encodeNestedMessage(writer, msg.requiredNested);
+    const __sub = new Writer();
+    encodeNestedMessage(__sub, msg.requiredNested);
+    writer.writeLengthPrefixedBytes(__sub.bytes());
   }
 
   // Field 4: nested_list

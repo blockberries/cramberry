@@ -289,6 +289,91 @@ func TestForwardCompatAllWireTypes(t *testing.T) {
 	})
 }
 
+// TestForwardCompatSkipUnknownNestedMessage covers the case where a future
+// schema's message contains a nested-message field that the older schema
+// doesn't recognize. Before length-prefix wrapping, SkipValue(WireBytes)
+// for such a field misread the first body byte as a length, corrupting
+// the decoder. This test pins the contract: the older schema must skip
+// past the unknown nested message cleanly.
+func TestForwardCompatSkipUnknownNestedMessage(t *testing.T) {
+	type V2Inner struct {
+		Text string `cramberry:"1"`
+	}
+	type V2Outer struct {
+		Nested V2Inner `cramberry:"5"`
+		Name   string  `cramberry:"6"`
+	}
+	type V1Outer struct {
+		Name string `cramberry:"6"`
+	}
+
+	v2 := &V2Outer{Nested: V2Inner{Text: "hello"}, Name: "world"}
+	data, err := Marshal(v2)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	var v1 V1Outer
+	if err := Unmarshal(data, &v1); err != nil {
+		t.Fatalf("forward-compat Unmarshal failed: %v\nbytes: %x", err, data)
+	}
+	if v1.Name != "world" {
+		t.Errorf("v1.Name = %q, want %q (decoder skipped the wrong number of bytes)", v1.Name, "world")
+	}
+}
+
+// TestForwardCompatSkipUnknownNestedSlice covers an unknown repeated
+// field. Repeated fields encode as length-prefixed payloads (count +
+// elements); SkipValue must skip the whole payload via the length prefix.
+func TestForwardCompatSkipUnknownNestedSlice(t *testing.T) {
+	type V2 struct {
+		Nums []int32 `cramberry:"5"`
+		Name string  `cramberry:"6"`
+	}
+	type V1 struct {
+		Name string `cramberry:"6"`
+	}
+
+	v2 := &V2{Nums: []int32{1, 2, 3, 4, 5}, Name: "after"}
+	data, err := Marshal(v2)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	var v1 V1
+	if err := Unmarshal(data, &v1); err != nil {
+		t.Fatalf("forward-compat Unmarshal failed: %v\nbytes: %x", err, data)
+	}
+	if v1.Name != "after" {
+		t.Errorf("v1.Name = %q, want %q", v1.Name, "after")
+	}
+}
+
+// TestForwardCompatSkipUnknownNestedMap covers an unknown map field.
+func TestForwardCompatSkipUnknownNestedMap(t *testing.T) {
+	type V2 struct {
+		Tags map[string]string `cramberry:"5"`
+		Name string            `cramberry:"6"`
+	}
+	type V1 struct {
+		Name string `cramberry:"6"`
+	}
+
+	v2 := &V2{Tags: map[string]string{"a": "1", "b": "2"}, Name: "after"}
+	data, err := Marshal(v2)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	var v1 V1
+	if err := Unmarshal(data, &v1); err != nil {
+		t.Fatalf("forward-compat Unmarshal failed: %v\nbytes: %x", err, data)
+	}
+	if v1.Name != "after" {
+		t.Errorf("v1.Name = %q, want %q", v1.Name, "after")
+	}
+}
+
 func TestForwardCompatFieldOrder(t *testing.T) {
 	t.Run("unknown fields at start", func(t *testing.T) {
 		w := NewWriter()

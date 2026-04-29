@@ -357,7 +357,15 @@ func (c *rustContext) rustWriteValue(t schema.TypeRef, value string, repeated bo
 		if c.isNamedEnum(typ) {
 			return fmt.Sprintf("writer.write_svarint(%s as i32)", value)
 		}
-		return fmt.Sprintf("encode_%s(writer, &%s)", ToSnakeCase(typ.Name), value)
+		// Nested message bodies are end-marker-terminated, so we wrap the
+		// encoded body in a length-prefixed payload. SkipValue(WireType::Bytes)
+		// otherwise misreads the first body byte as a length and corrupts
+		// subsequent decoding for any field a future schema doesn't know.
+		return fmt.Sprintf(`{
+        let mut __sub = Writer::new();
+        encode_%s(&mut __sub, &%s)?;
+        writer.write_length_prefixed_bytes(__sub.as_bytes())
+    }`, ToSnakeCase(typ.Name), value)
 	case *schema.ArrayType:
 		return c.rustWriteValue(typ.Element, value, true)
 	case *schema.MapType:
@@ -443,7 +451,12 @@ func (c *rustContext) rustReadValue(t schema.TypeRef, repeated bool) string {
 			enumType := c.rustEnumType(e)
 			return fmt.Sprintf("%s::from_i32(reader.read_svarint()?).unwrap_or(%s::%s)", enumType, enumType, ToPascalCase(e.Values[0].Name))
 		}
-		return fmt.Sprintf("decode_%s(reader)?", ToSnakeCase(typ.Name))
+		// Mirror the encoder: nested message bodies are length-prefixed.
+		return fmt.Sprintf(`{
+            let __data = reader.read_length_prefixed_bytes()?;
+            let mut __sub = Reader::new(__data);
+            decode_%s(&mut __sub)?
+        }`, ToSnakeCase(typ.Name))
 	case *schema.ArrayType:
 		return c.rustReadValue(typ.Element, true)
 	case *schema.MapType:

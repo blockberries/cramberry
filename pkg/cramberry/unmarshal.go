@@ -112,17 +112,12 @@ func decodePointer(r *Reader, v reflect.Value) error {
 
 // decodeSlice decodes a slice value.
 func decodeSlice(r *Reader, v reflect.Value) error {
-	// Use packed decoding for primitive types (no depth tracking needed for primitives)
 	if isPackableTypeCached(v.Type().Elem()) {
 		return decodePackedSlice(r, v)
 	}
 
-	// Check depth limit for non-primitive element types
-	if !r.enterNested() {
-		return r.Err()
-	}
-	defer r.exitNested()
-
+	// Depth tracking owned by BeginMessage at the field-wrapping layer
+	// (see decodeStruct's per-field loop in this file).
 	n := r.ReadArrayHeader()
 	if r.Err() != nil {
 		return r.Err()
@@ -204,12 +199,7 @@ func decodeArray(r *Reader, v reflect.Value) error {
 		return decodePackedArray(r, v)
 	}
 
-	// Check depth limit for non-primitive element types
-	if !r.enterNested() {
-		return r.Err()
-	}
-	defer r.exitNested()
-
+	// Depth tracking owned by BeginMessage at the field-wrapping layer.
 	n := r.ReadArrayHeader()
 	if r.Err() != nil {
 		return r.Err()
@@ -288,12 +278,7 @@ func decodePackedArray(r *Reader, v reflect.Value) error {
 
 // decodeMap decodes a map value.
 func decodeMap(r *Reader, v reflect.Value) error {
-	// Check depth limit
-	if !r.enterNested() {
-		return r.Err()
-	}
-	defer r.exitNested()
-
+	// Depth tracking owned by BeginMessage at the field-wrapping layer.
 	n := r.ReadMapHeader()
 	if r.Err() != nil {
 		return r.Err()
@@ -327,12 +312,8 @@ func decodeMap(r *Reader, v reflect.Value) error {
 // decodeStruct decodes a struct value using field tags.
 // Uses compact tags and reads until end marker.
 func decodeStruct(r *Reader, v reflect.Value) error {
-	// Check depth limit
-	if !r.enterNested() {
-		return r.Err()
-	}
-	defer r.exitNested()
-
+	// Depth tracking owned by BeginMessage at the field-wrapping layer
+	// (see the per-field loop below).
 	info := getStructInfo(v.Type())
 
 	// Track which fields were set (for required field checking)
@@ -363,8 +344,24 @@ func decodeStruct(r *Reader, v reflect.Value) error {
 		fieldsSeen[fieldNum] = true
 		fv := v.Field(fi.index)
 
-		if err := decodeValue(r, fv); err != nil {
-			return err
+		// Mirror the encoder: struct / pointer-to-struct / interface field
+		// bodies are length-prefixed (see encodeStruct in marshal.go).
+		// Read the length first and bound the body decode to that length so
+		// the inner end marker, when present, doesn't accidentally terminate
+		// the outer struct.
+		if needsBodyLengthPrefix(fv) {
+			endPos := r.BeginMessage()
+			if endPos < 0 {
+				return r.Err()
+			}
+			if err := decodeValue(r, fv); err != nil {
+				return err
+			}
+			r.EndMessage(endPos)
+		} else {
+			if err := decodeValue(r, fv); err != nil {
+				return err
+			}
 		}
 	}
 
