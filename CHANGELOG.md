@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (Rust codegen — multiple compile errors)
+
+The Rust generator emitted code that did not type-check for any
+non-trivial schema. Fixed by compiling every generated output for
+`examples/schemas/user.cram`, `testdata/schemas/interop.cram`, and
+`testdata/schemas/json_test.cram` against the Rust runtime crate.
+
+- **`int8`/`int16`/`uint8`/`uint16` literally appeared as Rust type
+  names** in JSON decode (`as int8`) — fixed by routing through
+  `rustScalarType` to get `i8`/`i16`/`u8`/`u16`.
+- **`write_svarint(msg.int8_val)` mismatched types** — Rust's
+  `write_svarint` takes `i32`; narrow integer fields now widen via
+  `as i32` / `as u32` before the call. Same on the read side
+  (`as i8`, `as u16`, etc.).
+- **`format!("invalid key: {{}}", e)` had no placeholder** — `{{`
+  and `}}` are Rust's `format!` escapes, so the macro saw no
+  argument and rejected `e`. Now emits `format!("invalid key: {}",
+  e)`.
+- **`HashMap<String, V>::get(&k)` failed on `&&str`** — `let k =
+  key_str.as_str()` made `k` a `&str`, then `&k` was `&&str` which
+  doesn't satisfy `Borrow<&str>`. Fixed by passing `k` directly for
+  string keys; numeric keys still pass `&k`.
+- **`reader.read_tag()` returns `FieldTag` (struct), not a tuple**
+  — codegen unpacked it as `let (field_num, wire_type)` which
+  doesn't destructure a struct. Now uses `tag.field_number` /
+  `tag.wire_type`.
+- **`(*v) =` in JSON decode of pointer fields** failed because `v`
+  was bound non-mut. Now `let mut v: Box<T> = ...`.
+- **Pointer-field encode passed `&Box<T>` to `write_svarintN`**
+  — used `as_deref()` so `inner` is `&T`, then dereferences once
+  for scalar values.
+- **`optional T x` Rust type is `Option<T>`** — encoder used the
+  Option directly as if it were T; now unwraps via `.as_ref().unwrap()`
+  inside the rustZeroCheck guard. Decoder wraps the result in
+  `Some(...)`.
+- **`!= 0 as _`** failed type inference — now uses `!= 0 as <T>`
+  with the explicit Rust scalar type.
+
+A new `make rust-codegen-check` target (added to `make integration-test`)
+now generates Rust output for every schema in `examples/` and
+`testdata/` and `cargo build`s it against the runtime crate. CI will
+catch this class of regression going forward.
+
 ### Fixed (codegen)
 
 - **Rust JSON helpers now compile**. The generator emitted

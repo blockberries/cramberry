@@ -2,7 +2,7 @@
 .PHONY: tidy deps verify check ci pre-commit generate-test
 .PHONY: examples example-basic example-streaming example-polymorphic
 .PHONY: schema-generate schema-extract
-.PHONY: ts-build ts-test ts-fmt ts-lint rust-build rust-test rust-fmt rust-lint
+.PHONY: ts-build ts-test ts-fmt ts-lint rust-build rust-test rust-fmt rust-lint rust-codegen-check
 .PHONY: runtimes runtimes-test ts-integration-test rust-integration-test integration-test
 .PHONY: lint-all fmt-all
 
@@ -187,7 +187,11 @@ rust-integration-test: ## Run Rust integration tests against Go-produced golden 
 	@echo "Running Rust integration tests..."
 	@cd test/integration/rust && cargo test
 
-integration-test: ts-integration-test rust-integration-test ## Run cross-language integration tests
+rust-codegen-check: build ## Generate + compile-check Rust output for every example/testdata schema
+	@echo "Compile-checking generated Rust output..."
+	@./scripts/rust-codegen-check.sh
+
+integration-test: ts-integration-test rust-integration-test rust-codegen-check ## Run cross-language integration tests
 
 runtimes: ts-build rust-build ## Build all cross-language runtimes
 

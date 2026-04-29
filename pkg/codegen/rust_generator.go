@@ -254,8 +254,25 @@ func (c *rustContext) rustWireTypeForType(t schema.TypeRef) string {
 }
 
 // rustWriteField generates the code to write a field value.
+//
+// For `optional` fields whose Rust type is `Option<T>` (i.e. non-Pointer
+// types — pointer types already declare PointerType in the AST and are
+// handled by rustWriteValue's PointerType branch), unwrap the Option
+// inside the encoding block so the inner write call sees `T` directly.
+// The outer `if rustZeroCheck { ... }` guard ensures we only enter
+// this block when the Option is Some.
 func (c *rustContext) rustWriteField(f *schema.Field) string {
 	fieldName := "msg." + ToSnakeCase(f.Name)
+	_, isPtr := f.Type.(*schema.PointerType)
+	if f.Optional && !isPtr && !f.Repeated {
+		// `as_ref().unwrap()` is sound because rustZeroCheck emits
+		// `is_some()` ahead of this code.
+		innerWrite := c.rustWriteValue(f.Type, "(*__inner)", false)
+		return fmt.Sprintf(`{
+        let __inner = %s.as_ref().unwrap();
+        %s
+    }`, fieldName, innerWrite)
+	}
 	return c.rustWriteValue(f.Type, fieldName, f.Repeated)
 }
 
@@ -295,7 +312,11 @@ func (c *rustContext) rustZeroCheck(f *schema.Field) string {
 		case "int8", "int16", "int32", "int64", "int",
 			"uint8", "uint16", "uint32", "uint64", "uint",
 			"float32", "float64", "byte":
-			return fmt.Sprintf("%s != 0 as _", fieldName)
+			// Rust integer/float literals adapt to context, so a
+			// bare `!= 0` is valid for any numeric type and
+			// avoids `as _` which fails inference in some
+			// expressions.
+			return fmt.Sprintf("%s != 0 as %s", fieldName, c.rustScalarType(typ.Name))
 		}
 	case *schema.PointerType:
 		return fmt.Sprintf("%s.is_some()", fieldName)
@@ -310,9 +331,13 @@ func (c *rustContext) rustWriteValueForSubWriter(t schema.TypeRef, value string)
 		switch typ.Name {
 		case "bool":
 			return fmt.Sprintf("sub_writer.write_bool(*%s)", value)
-		case "int8", "int16", "int32", "int":
+		case "int8", "int16":
+			return fmt.Sprintf("sub_writer.write_svarint(*%s as i32)", value)
+		case "int32", "int":
 			return fmt.Sprintf("sub_writer.write_svarint(*%s)", value)
-		case "uint8", "uint16", "uint32", "uint":
+		case "uint8", "uint16":
+			return fmt.Sprintf("sub_writer.write_varint(*%s as u32)", value)
+		case "uint32", "uint":
 			return fmt.Sprintf("sub_writer.write_varint(*%s)", value)
 		case "int64":
 			return fmt.Sprintf("sub_writer.write_svarint64(*%s)", value)
@@ -361,9 +386,14 @@ func (c *rustContext) rustWriteValue(t schema.TypeRef, value string, repeated bo
 		switch typ.Name {
 		case "bool":
 			return fmt.Sprintf("writer.write_bool(%s)", value)
-		case "int8", "int16", "int32", "int":
+		case "int8", "int16":
+			// Rust's write_svarint takes i32; widen via `as`.
+			return fmt.Sprintf("writer.write_svarint(%s as i32)", value)
+		case "int32", "int":
 			return fmt.Sprintf("writer.write_svarint(%s)", value)
-		case "uint8", "uint16", "uint32", "uint":
+		case "uint8", "uint16":
+			return fmt.Sprintf("writer.write_varint(%s as u32)", value)
+		case "uint32", "uint":
 			return fmt.Sprintf("writer.write_varint(%s)", value)
 		case "int64":
 			return fmt.Sprintf("writer.write_svarint64(%s)", value)
@@ -414,8 +444,13 @@ func (c *rustContext) rustWriteValue(t schema.TypeRef, value string, repeated bo
         writer.write_length_prefixed_bytes(sub_writer.as_bytes())
     }`, value, keyWrite, valWrite)
 	case *schema.PointerType:
-		innerWrite := c.rustWriteValue(typ.Element, "inner", false)
-		return fmt.Sprintf(`if let Some(inner) = &%s {
+		// `as_deref` on Option<Box<T>> yields Option<&T>, so `inner`
+		// is `&T` regardless of whether T is Copy. Calling
+		// rustWriteValue with `*inner` then matches the same
+		// scalar / named-type / map / array branches as for a
+		// non-pointer field.
+		innerWrite := c.rustWriteValue(typ.Element, "*inner", false)
+		return fmt.Sprintf(`if let Some(inner) = %s.as_deref() {
         %s
     } else {
         Ok(())
@@ -427,7 +462,17 @@ func (c *rustContext) rustWriteValue(t schema.TypeRef, value string, repeated bo
 
 // rustReadField generates the code to read a field value.
 func (c *rustContext) rustReadField(f *schema.Field) string {
-	return c.rustReadValue(f.Type, f.Repeated)
+	expr := c.rustReadValue(f.Type, f.Repeated)
+	// `optional` non-pointer fields have Rust type `Option<T>`; wrap
+	// the decoded T in Some(...) before assignment. Repeated and
+	// pointer-typed fields already yield the correct shape from
+	// rustReadValue.
+	if f.Optional && !f.Repeated {
+		if _, isPtr := f.Type.(*schema.PointerType); !isPtr {
+			return fmt.Sprintf("Some(%s)", expr)
+		}
+	}
+	return expr
 }
 
 func (c *rustContext) rustReadValue(t schema.TypeRef, repeated bool) string {
@@ -454,9 +499,17 @@ func (c *rustContext) rustReadValue(t schema.TypeRef, repeated bool) string {
 		switch typ.Name {
 		case "bool":
 			return "reader.read_bool()?"
-		case "int8", "int16", "int32", "int":
+		case "int8":
+			return "reader.read_svarint()? as i8"
+		case "int16":
+			return "reader.read_svarint()? as i16"
+		case "int32", "int":
 			return "reader.read_svarint()?"
-		case "uint8", "uint16", "uint32", "uint":
+		case "uint8":
+			return "reader.read_varint()? as u8"
+		case "uint16":
+			return "reader.read_varint()? as u16"
+		case "uint32", "uint":
 			return "reader.read_varint()?"
 		case "int64":
 			return "reader.read_svarint64()?"
@@ -656,20 +709,29 @@ func (c *rustContext) jsonEncodeMap(t *schema.MapType, varName string) string {
 
 	// Get the actual key and value
 	keyType := t.Key.(*schema.ScalarType)
+	// `lookup` is the actual expression we'll pass to HashMap::get. For
+	// string keys we hand &str directly (HashMap<String, V> implements
+	// Borrow<str>); for numeric keys we pass &k (HashMap<u32, V>::get
+	// expects &u32).
+	var lookup string
 	switch keyType.Name {
 	case "string":
 		code.WriteString("            let k = key_str.as_str();\n")
+		lookup = "k"
 	case "int8", "int16", "int32", "int64", "int":
 		rustType := c.rustScalarType(keyType.Name)
 		code.WriteString(fmt.Sprintf("            let k: %s = key_str.parse().unwrap();\n", rustType))
+		lookup = "&k"
 	case "uint8", "uint16", "uint32", "uint64", "uint", "byte":
 		rustType := c.rustScalarType(keyType.Name)
 		code.WriteString(fmt.Sprintf("            let k: %s = key_str.parse().unwrap();\n", rustType))
+		lookup = "&k"
 	default:
 		code.WriteString("            let k = key_str.as_str();\n")
+		lookup = "k"
 	}
 
-	code.WriteString(fmt.Sprintf("            let v = %s.get(&k).unwrap();\n", varName))
+	code.WriteString(fmt.Sprintf("            let v = %s.get(%s).unwrap();\n", varName, lookup))
 
 	// Encode value
 	valueCode := c.jsonEncodeValue(t.Value, "(*v)", false, false)
@@ -723,10 +785,12 @@ func (c *rustContext) jsonDecodeValue(t schema.TypeRef, targetVar string, source
 	case *schema.MapType:
 		return c.jsonDecodeMap(typ, targetVar, sourceVar)
 	case *schema.PointerType:
-		// Handle Box<T>
+		// Handle Box<T>. Box must be `mut` because the inner decode
+		// writes through `*v`. Without `mut`, rustc rejects the
+		// assignment with E0594 "cannot assign to *v".
 		inner := c.jsonDecodeValue(typ.Element, "(*v)", sourceVar, false, false)
-		return fmt.Sprintf("        if %s.is_null() {\n            %s = None;\n        } else {\n            let v = Box::new(Default::default());\n        %s            %s = Some(v);\n        }\n",
-			sourceVar, targetVar, strings.ReplaceAll(inner, "        ", "            "), targetVar)
+		return fmt.Sprintf("        if %s.is_null() {\n            %s = None;\n        } else {\n            let mut v: Box<%s> = Box::new(Default::default());\n        %s            %s = Some(v);\n        }\n",
+			sourceVar, targetVar, c.rustType(typ.Element), strings.ReplaceAll(inner, "        ", "            "), targetVar)
 	default:
 		return "        // Unsupported type\n"
 	}
@@ -738,7 +802,7 @@ func (c *rustContext) jsonDecodeScalar(t *schema.ScalarType, targetVar string, s
 	case "bool":
 		return fmt.Sprintf("        %s = %s.as_bool().ok_or_else(|| \"expected boolean\".to_string())?;\n", targetVar, sourceVar)
 	case "int8", "int16":
-		return fmt.Sprintf("        %s = cramberry::json::parse_i32_from_json(%s)? as %s;\n", targetVar, sourceVar, t.Name)
+		return fmt.Sprintf("        %s = cramberry::json::parse_i32_from_json(%s)? as %s;\n", targetVar, sourceVar, c.rustScalarType(t.Name))
 	case "int32":
 		return fmt.Sprintf("        %s = cramberry::json::parse_i32_from_json(%s)?;\n", targetVar, sourceVar)
 	case "int64", "int":
@@ -816,10 +880,10 @@ func (c *rustContext) jsonDecodeMap(t *schema.MapType, targetVar string, sourceV
 		code.WriteString("        let k = key_str.to_string();\n")
 	case "int8", "int16", "int32", "int64", "int":
 		rustType := c.rustScalarType(keyType.Name)
-		code.WriteString(fmt.Sprintf("        let k: %s = key_str.parse().map_err(|e| format!(\"invalid key: {{}}\", e))?;\n", rustType))
+		code.WriteString(fmt.Sprintf("        let k: %s = key_str.parse().map_err(|e| format!(\"invalid key: {}\", e))?;\n", rustType))
 	case "uint8", "uint16", "uint32", "uint64", "uint", "byte":
 		rustType := c.rustScalarType(keyType.Name)
-		code.WriteString(fmt.Sprintf("        let k: %s = key_str.parse().map_err(|e| format!(\"invalid key: {{}}\", e))?;\n", rustType))
+		code.WriteString(fmt.Sprintf("        let k: %s = key_str.parse().map_err(|e| format!(\"invalid key: {}\", e))?;\n", rustType))
 	default:
 		code.WriteString("        let k = key_str.to_string();\n")
 	}
@@ -925,14 +989,14 @@ pub fn decode_{{toSnake $msg.Name}}(reader: &mut Reader) -> Result<{{rustMessage
 {{- end}}
 
     loop {
-        let (field_num, wire_type) = reader.read_tag()?;
-        if field_num == 0 { break; } // End marker
+        let tag = reader.read_tag()?;
+        if tag.field_number == 0 { break; } // End marker
 
-        match field_num {
+        match tag.field_number {
 {{- range $msg.Fields}}
             {{.Number}} => {{rustFieldName .}} = {{rustReadField .}},
 {{- end}}
-            _ => reader.skip_value(wire_type)?,
+            _ => reader.skip_value(tag.wire_type)?,
         }
     }
 
