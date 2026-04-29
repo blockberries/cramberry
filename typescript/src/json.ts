@@ -21,6 +21,7 @@ export function formatNumberToString(value: number): string {
 
 /**
  * Formats a float32 with 9 significant digits for deterministic JSON.
+ * Matches the output of Go's strconv.FormatFloat(v, 'g', 9, 32).
  * Throws error if the value is NaN or Infinity.
  */
 export function formatFloat32(value: number): string {
@@ -30,16 +31,18 @@ export function formatFloat32(value: number): string {
   if (!isFinite(value)) {
     throw new Error('cannot encode Infinity to JSON');
   }
-  // Normalize -0 to 0
   if (value === 0) {
     return '0';
   }
-  // Use toPrecision for fixed significant digits
-  return parseFloat(value.toPrecision(9)).toString();
+  // Narrow to f32 precision so the formatted bits match what Go would
+  // produce when given a float32. Math.fround returns the f64 closest to
+  // the f32 quantization of value.
+  return formatGoG(Math.fround(value), 9);
 }
 
 /**
  * Formats a float64 with 17 significant digits for deterministic JSON.
+ * Matches the output of Go's strconv.FormatFloat(v, 'g', 17, 64).
  * Throws error if the value is NaN or Infinity.
  */
 export function formatFloat64(value: number): string {
@@ -49,12 +52,78 @@ export function formatFloat64(value: number): string {
   if (!isFinite(value)) {
     throw new Error('cannot encode Infinity to JSON');
   }
-  // Normalize -0 to 0
   if (value === 0) {
     return '0';
   }
-  // Use toPrecision for fixed significant digits
-  return parseFloat(value.toPrecision(17)).toString();
+  return formatGoG(value, 17);
+}
+
+/**
+ * Formats a non-zero finite number using Go's strconv 'g' verb with the
+ * given precision (number of significant digits).
+ *
+ *   - Decimal form when -4 <= exponent < precision.
+ *   - Otherwise scientific: `mantissa "e" sign digits` with the exponent
+ *     always signed and at least two digits.
+ *   - Trailing zeros in the fractional part are stripped.
+ */
+function formatGoG(value: number, precision: number): string {
+  // toExponential(p) gives p digits after the decimal — i.e. p+1 significant
+  // digits total — using IEEE round-half-to-even, the same rule Go uses.
+  const exp = value.toExponential(precision - 1);
+  const match = /^(-?\d+(?:\.\d+)?)e([+-]?\d+)$/.exec(exp);
+  if (!match) {
+    throw new Error('toExponential produced unexpected format: ' + exp);
+  }
+  let mantissa = match[1];
+  const exponent = parseInt(match[2], 10);
+
+  // Strip trailing zeros from the fractional part of the mantissa.
+  if (mantissa.includes('.')) {
+    mantissa = mantissa.replace(/0+$/, '');
+    if (mantissa.endsWith('.')) mantissa = mantissa.slice(0, -1);
+  }
+
+  if (exponent >= -4 && exponent < precision) {
+    return decimalFromMantissaExp(mantissa, exponent);
+  }
+  const sign = exponent >= 0 ? '+' : '-';
+  const absExp = Math.abs(exponent);
+  const expStr = absExp < 10 ? '0' + absExp : String(absExp);
+  return mantissa + 'e' + sign + expStr;
+}
+
+/**
+ * Renders mantissa * 10^exp in plain decimal form, stripping trailing zeros
+ * from any fractional part.
+ */
+function decimalFromMantissaExp(mantissa: string, exp: number): string {
+  let sign = '';
+  if (mantissa.startsWith('-')) {
+    sign = '-';
+    mantissa = mantissa.slice(1);
+  }
+  const dotIdx = mantissa.indexOf('.');
+  const digits =
+    dotIdx < 0 ? mantissa : mantissa.slice(0, dotIdx) + mantissa.slice(dotIdx + 1);
+  const integerLen = dotIdx < 0 ? mantissa.length : dotIdx;
+  const newIntegerLen = integerLen + exp;
+
+  if (newIntegerLen <= 0) {
+    const padding = '0'.repeat(-newIntegerLen);
+    let result = '0.' + padding + digits;
+    result = result.replace(/0+$/, '');
+    if (result.endsWith('.')) result = result.slice(0, -1);
+    return sign + result;
+  }
+  if (newIntegerLen >= digits.length) {
+    const padding = '0'.repeat(newIntegerLen - digits.length);
+    return sign + digits + padding;
+  }
+  const intPart = digits.slice(0, newIntegerLen);
+  const fracPart = digits.slice(newIntegerLen).replace(/0+$/, '');
+  if (fracPart === '') return sign + intPart;
+  return sign + intPart + '.' + fracPart;
 }
 
 /**

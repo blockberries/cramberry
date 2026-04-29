@@ -35,10 +35,23 @@ describe('formatNumberToString', () => {
 });
 
 describe('formatFloat32', () => {
-  it('formats float32 with 9 significant digits', () => {
+  // Outputs must match Go's strconv.FormatFloat(v, 'g', 9, 32).
+  // Reference values come from pkg/cramberry/json_test.go::TestFormatFloat32.
+  it('formats zero', () => {
     expect(formatFloat32(0)).toBe('0');
-    expect(formatFloat32(3.14159)).toBe('3.14159');
-    expect(formatFloat32(-2.71828)).toBe('-2.71828');
+  });
+
+  it('formats finite values with f32 quantization', () => {
+    expect(formatFloat32(3.14159)).toBe('3.14159012');
+    expect(formatFloat32(-2.71828)).toBe('-2.71828008');
+  });
+
+  it('uses scientific notation for large values', () => {
+    expect(formatFloat32(1.23e10)).toBe('1.23000003e+10');
+  });
+
+  it('uses scientific notation for small values', () => {
+    expect(formatFloat32(0.0000001)).toBe('1.00000001e-07');
   });
 
   it('rejects NaN', () => {
@@ -56,9 +69,39 @@ describe('formatFloat32', () => {
 });
 
 describe('formatFloat64', () => {
-  it('formats float64 with 17 significant digits', () => {
+  // Outputs must match Go's strconv.FormatFloat(v, 'g', 17, 64).
+  // Reference values come from pkg/cramberry/json_test.go::TestFormatFloat64.
+  it('formats zero', () => {
     expect(formatFloat64(0)).toBe('0');
-    expect(formatFloat64(2.718281828459045)).toBe('2.718281828459045');
+  });
+
+  it('formats finite values with f64 precision', () => {
+    expect(formatFloat64(2.718281828459045)).toBe('2.7182818284590451');
+    expect(formatFloat64(-3.141592653589793)).toBe('-3.1415926535897931');
+  });
+
+  it('uses scientific notation for very large values', () => {
+    expect(formatFloat64(1.23e100)).toBe('1.2300000000000001e+100');
+  });
+
+  it('uses scientific notation for very small values', () => {
+    expect(formatFloat64(1e-100)).toBe('1e-100');
+  });
+
+  it('uses scientific for values with magnitude >= 10^17', () => {
+    expect(formatFloat64(1e20)).toBe('1e+20');
+  });
+
+  it('uses scientific for values with magnitude < 1e-4', () => {
+    // 1e-7 is not exactly representable in f64; Go's 17-digit form exposes the
+    // true bit pattern (slightly less than 1e-7).
+    expect(formatFloat64(1e-7)).toBe('9.9999999999999995e-08');
+    expect(formatFloat64(1e-5)).toBe('1.0000000000000001e-05');
+  });
+
+  it('uses decimal for values in [1e-4, 10^17)', () => {
+    expect(formatFloat64(1.5)).toBe('1.5');
+    expect(formatFloat64(0.0001)).toBe('0.0001');
   });
 
   it('rejects NaN', () => {

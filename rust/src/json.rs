@@ -45,7 +45,8 @@ pub fn format_u8_to_string(value: u8) -> String {
     value.to_string()
 }
 
-/// Formats a f32 with appropriate precision for deterministic JSON.
+/// Formats a f32 with 9 significant digits for deterministic JSON.
+/// Matches the output of Go's `strconv.FormatFloat(v, 'g', 9, 32)`.
 /// Returns error if the value is NaN or Infinity.
 pub fn format_f32(value: f32) -> Result<String, String> {
     if value.is_nan() {
@@ -54,13 +55,16 @@ pub fn format_f32(value: f32) -> Result<String, String> {
     if value.is_infinite() {
         return Err("cannot encode Infinity to JSON".to_string());
     }
-    // Normalize -0.0 to 0.0
-    let normalized = if value == 0.0 { 0.0 } else { value };
-    // Format with appropriate precision
-    Ok(format!("{:.9}", normalized).trim_end_matches('0').trim_end_matches('.').to_string())
+    if value == 0.0 {
+        return Ok("0".to_string());
+    }
+    // Widening to f64 preserves the f32 bit pattern exactly, so the 9-digit
+    // round in format_go_g produces the same output as Go's '%.9g' on a f32.
+    Ok(format_go_g(value as f64, 9))
 }
 
-/// Formats a f64 with appropriate precision for deterministic JSON.
+/// Formats a f64 with 17 significant digits for deterministic JSON.
+/// Matches the output of Go's `strconv.FormatFloat(v, 'g', 17, 64)`.
 /// Returns error if the value is NaN or Infinity.
 pub fn format_f64(value: f64) -> Result<String, String> {
     if value.is_nan() {
@@ -69,10 +73,89 @@ pub fn format_f64(value: f64) -> Result<String, String> {
     if value.is_infinite() {
         return Err("cannot encode Infinity to JSON".to_string());
     }
-    // Normalize -0.0 to 0.0
-    let normalized = if value == 0.0 { 0.0 } else { value };
-    // Format with appropriate precision
-    Ok(format!("{:.17}", normalized).trim_end_matches('0').trim_end_matches('.').to_string())
+    if value == 0.0 {
+        return Ok("0".to_string());
+    }
+    Ok(format_go_g(value, 17))
+}
+
+/// Formats a non-zero finite `f64` using Go's `strconv` 'g' verb with the
+/// given precision (number of significant digits).
+///
+///   - Decimal form when `-4 <= exponent < precision`.
+///   - Otherwise scientific: `mantissa "e" sign digits` with the exponent
+///     always signed and at least two digits.
+///   - Trailing zeros in the fractional part are stripped.
+fn format_go_g(value: f64, precision: usize) -> String {
+    // {:.p$e} formats with `p` digits after the decimal point — i.e. p+1
+    // significant digits total — using IEEE round-half-to-even, matching Go.
+    let raw = format!("{:.*e}", precision - 1, value);
+    let (mantissa_raw, exp_str) = match raw.find('e') {
+        Some(idx) => (&raw[..idx], &raw[idx + 1..]),
+        None => return raw,
+    };
+    let exponent: i32 = exp_str.parse().unwrap_or(0);
+
+    let mantissa = strip_fractional_trailing_zeros(mantissa_raw);
+
+    if exponent >= -4 && exponent < precision as i32 {
+        return decimal_from_mantissa_exp(&mantissa, exponent);
+    }
+    let sign = if exponent >= 0 { '+' } else { '-' };
+    let abs_exp = exponent.unsigned_abs();
+    if abs_exp < 10 {
+        format!("{}e{}0{}", mantissa, sign, abs_exp)
+    } else {
+        format!("{}e{}{}", mantissa, sign, abs_exp)
+    }
+}
+
+fn strip_fractional_trailing_zeros(s: &str) -> String {
+    if !s.contains('.') {
+        return s.to_string();
+    }
+    let trimmed = s.trim_end_matches('0').trim_end_matches('.');
+    trimmed.to_string()
+}
+
+/// Renders mantissa * 10^exp in plain decimal form, stripping trailing zeros
+/// from any fractional part.
+fn decimal_from_mantissa_exp(mantissa: &str, exp: i32) -> String {
+    let (sign, mantissa) = if let Some(rest) = mantissa.strip_prefix('-') {
+        ("-", rest)
+    } else {
+        ("", mantissa)
+    };
+
+    let (digits, integer_len) = match mantissa.find('.') {
+        Some(idx) => {
+            let mut s = String::with_capacity(mantissa.len() - 1);
+            s.push_str(&mantissa[..idx]);
+            s.push_str(&mantissa[idx + 1..]);
+            (s, idx as i32)
+        }
+        None => (mantissa.to_string(), mantissa.len() as i32),
+    };
+
+    let new_integer_len = integer_len + exp;
+
+    if new_integer_len <= 0 {
+        let padding = "0".repeat((-new_integer_len) as usize);
+        let raw = format!("0.{}{}", padding, digits);
+        let trimmed = raw.trim_end_matches('0').trim_end_matches('.');
+        return format!("{}{}", sign, trimmed);
+    }
+    if (new_integer_len as usize) >= digits.len() {
+        let padding = "0".repeat((new_integer_len as usize) - digits.len());
+        return format!("{}{}{}", sign, digits, padding);
+    }
+    let int_part = &digits[..new_integer_len as usize];
+    let frac_part = digits[new_integer_len as usize..].trim_end_matches('0');
+    if frac_part.is_empty() {
+        format!("{}{}", sign, int_part)
+    } else {
+        format!("{}{}.{}", sign, int_part, frac_part)
+    }
 }
 
 /// Validates that a float is encodable to JSON.
@@ -222,9 +305,14 @@ mod tests {
 
     #[test]
     fn test_format_f32() {
+        // Reference values come from pkg/cramberry/json_test.go::TestFormatFloat32.
+        // They must match Go's strconv.FormatFloat(v, 'g', 9, 32) byte-for-byte.
         assert_eq!(format_f32(0.0).unwrap(), "0");
-        // f32 precision
-        assert_eq!(format_f32(3.14159).unwrap(), "3.141590118");
+        assert_eq!(format_f32(-0.0).unwrap(), "0");
+        assert_eq!(format_f32(3.14159).unwrap(), "3.14159012");
+        assert_eq!(format_f32(-2.71828).unwrap(), "-2.71828008");
+        assert_eq!(format_f32(1.23e10).unwrap(), "1.23000003e+10");
+        assert_eq!(format_f32(0.0000001).unwrap(), "1.00000001e-07");
         assert!(format_f32(f32::NAN).is_err());
         assert!(format_f32(f32::INFINITY).is_err());
         assert!(format_f32(f32::NEG_INFINITY).is_err());
@@ -232,9 +320,17 @@ mod tests {
 
     #[test]
     fn test_format_f64() {
+        // Reference values come from pkg/cramberry/json_test.go::TestFormatFloat64.
         assert_eq!(format_f64(0.0).unwrap(), "0");
-        // f64 precision
-        assert_eq!(format_f64(2.718281828459045).unwrap(), "2.71828182845904509");
+        assert_eq!(format_f64(-0.0).unwrap(), "0");
+        assert_eq!(format_f64(2.718281828459045).unwrap(), "2.7182818284590451");
+        assert_eq!(format_f64(-3.141592653589793).unwrap(), "-3.1415926535897931");
+        assert_eq!(format_f64(1.23e100).unwrap(), "1.2300000000000001e+100");
+        assert_eq!(format_f64(1e-100).unwrap(), "1e-100");
+        assert_eq!(format_f64(1e20).unwrap(), "1e+20");
+        assert_eq!(format_f64(1.5).unwrap(), "1.5");
+        assert_eq!(format_f64(0.0001).unwrap(), "0.0001");
+        assert_eq!(format_f64(1e-7).unwrap(), "9.9999999999999995e-08");
         assert!(format_f64(f64::NAN).is_err());
         assert!(format_f64(f64::INFINITY).is_err());
         assert!(format_f64(f64::NEG_INFINITY).is_err());

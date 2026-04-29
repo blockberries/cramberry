@@ -63,6 +63,26 @@ number.
 - Optional fields: omitted when zero **only if** `Options.OmitEmpty=true`.
   (Per-field `omitempty` tag is currently ignored — see PLAN T1-10.)
 
+### JSON float formatting
+
+The deterministic JSON encoder formats floats using Go's `strconv.FormatFloat`
+with the `'g'` verb:
+
+- 9 significant digits for `float32`, 17 for `float64`.
+- Decimal form when the decimal exponent satisfies `-4 <= exp < precision`;
+  otherwise scientific.
+- Scientific form: `mantissa "e" sign digits` with a lowercase `e`, the
+  exponent always signed, and the exponent zero-padded to at least two
+  digits (e.g. `1e-07`, `1.23e+10`).
+- Trailing zeros in the fractional part of the mantissa are stripped.
+- `NaN` and `±Inf` are rejected with an error (they have no JSON spelling).
+- `-0.0` is normalized to `+0.0`.
+
+The TypeScript and Rust ports must produce byte-identical output. Reference
+values for cross-language conformance live in `pkg/cramberry/json_test.go`
+(authoritative); the same expected strings are duplicated in
+`typescript/src/json.test.ts` and `rust/src/json.rs` tests.
+
 ## Limits
 
 | Limit           | Default (`DefaultLimits`) | Secure (`SecureLimits`) |
