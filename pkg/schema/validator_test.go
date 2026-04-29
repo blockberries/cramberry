@@ -306,11 +306,17 @@ enum Status {
 	}
 
 	validator := NewValidator(schema)
-	validator.Validate()
-	warnings := validator.Warnings()
+	errs := validator.Validate()
 
-	if len(warnings) == 0 {
-		t.Error("expected warning about missing zero value")
+	found := false
+	for _, e := range errs {
+		if e.Severity == SeverityError && strings.Contains(e.Message, "zero value") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected error about missing zero value; got %v", errs)
 	}
 }
 
@@ -428,7 +434,7 @@ func TestValidateMapKeyType(t *testing.T) {
 	}{
 		{"string key", "map[string]int32", false},
 		{"int32 key", "map[int32]string", false},
-		{"bool key", "map[bool]string", false},
+		{"bool key", "map[bool]string", true},       // bool keys break codegen
 		{"bytes key", "map[bytes]string", true},     // bytes not comparable
 		{"float32 key", "map[float32]string", true}, // floats not comparable
 		{"float64 key", "map[float64]string", true},

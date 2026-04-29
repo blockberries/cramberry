@@ -736,7 +736,10 @@ func (r *Reader) ReadBytesNoCopy() ZeroCopyBytes {
 	if !r.ensure(n) {
 		return ZeroCopyBytes{}
 	}
-	result := r.data[r.pos : r.pos+n]
+	// Full-slice expression caps the returned slice's cap at its
+	// length. Without this, `append(zcb.Bytes(), ...)` could write
+	// past the logical end into bytes the Reader hasn't yet decoded.
+	result := r.data[r.pos : r.pos+n : r.pos+n]
 	r.pos += n
 	return ZeroCopyBytes{
 		b:          result,
@@ -773,7 +776,10 @@ func (r *Reader) ReadRawBytesNoCopy(n int) ZeroCopyBytes {
 	if !r.ensure(n) {
 		return ZeroCopyBytes{}
 	}
-	result := r.data[r.pos : r.pos+n]
+	// Full-slice expression caps the returned slice's cap at its
+	// length. Without this, `append(zcb.Bytes(), ...)` could write
+	// past the logical end into bytes the Reader hasn't yet decoded.
+	result := r.data[r.pos : r.pos+n : r.pos+n]
 	r.pos += n
 	return ZeroCopyBytes{
 		b:          result,

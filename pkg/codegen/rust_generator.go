@@ -273,6 +273,13 @@ func (c *rustContext) rustWriteField(f *schema.Field) string {
 // skip the surrounding `if`.
 func (c *rustContext) rustZeroCheck(f *schema.Field) string {
 	fieldName := "msg." + ToSnakeCase(f.Name)
+	// `optional` modifier wraps the rust type in Option<T>. The
+	// presence check (`is_some`) is sufficient: if the user set
+	// Some(""), encode the empty string — otherwise we'd lose the
+	// information that the field was explicitly set.
+	if f.Optional {
+		return fmt.Sprintf("%s.is_some()", fieldName)
+	}
 	if f.Repeated {
 		return fmt.Sprintf("!%s.is_empty()", fieldName)
 	}
@@ -950,7 +957,7 @@ pub fn unmarshal_{{toSnake $msg.Name}}(data: &[u8]) -> Result<{{rustMessageType 
 }
 
 /// Encodes a {{rustMessageType $msg}} to deterministic JSON format.
-pub fn to_json_{{toSnake $msg.Name}}(msg: &{{rustMessageType $msg}}) -> Result<String, String> {
+pub fn to_json_{{toSnake $msg.Name}}(msg: &{{rustMessageType $msg}}) -> std::result::Result<String, String> {
     let mut result = String::new();
     result.push_str("{");
 {{range $i, $f := $msg.Fields}}
@@ -961,7 +968,7 @@ pub fn to_json_{{toSnake $msg.Name}}(msg: &{{rustMessageType $msg}}) -> Result<S
 }
 
 /// Decodes a {{rustMessageType $msg}} from JSON format.
-pub fn from_json_{{toSnake $msg.Name}}(json: &str) -> Result<{{rustMessageType $msg}}, String> {
+pub fn from_json_{{toSnake $msg.Name}}(json: &str) -> std::result::Result<{{rustMessageType $msg}}, String> {
     let parsed: serde_json::Value = serde_json::from_str(json)
         .map_err(|e| format!("JSON parse error: {}", e))?;
 

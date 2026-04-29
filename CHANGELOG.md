@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (codegen)
+
+- **Rust JSON helpers now compile**. The generator emitted
+  `Result<String, String>` while `cramberry::Result<T>` (in scope from
+  the prelude `use`) is single-type-arg — every Rust target's JSON
+  path failed `cargo build`. JSON helpers now use
+  `std::result::Result<...>` qualified.
+- **Rust `optional` field encode now uses `is_some()`**, not
+  `is_empty()`. The previous `rustZeroCheck` fell through and
+  produced `!msg.foo.is_empty()` for `Option<String>` fields, which
+  doesn't typecheck. Same fix on the TS side: `optional` fields now
+  check presence only, not length.
+- **Validator rejects `map<bool, V>`**. Bool keys produced
+  uncompilable Go (the JSON template assumed string-or-numeric keys
+  and indexed `map[keyStr]` against a `map[bool]V`). Bool keys offer
+  no value (only two possible keys); the validator now refuses them.
+- **Validator requires a 0-valued enum variant** (was a warning).
+  Without one, the three runtimes disagreed on the default: Rust's
+  `#[default]` derive picks the first declared variant, Go's
+  `var x EnumType` is `0` (not a valid variant), TS leaves the field
+  at `0`. Requiring `UNKNOWN = 0` (or any 0 variant) keeps decode
+  defaults consistent across languages.
+
+### Fixed (memory safety)
+
+- **`ZeroCopyBytes` now uses a full-slice expression** so its cap
+  equals its len. The doc comment said "do not modify"; nothing
+  enforced it. With a full-cap slice into the Reader's data,
+  `append(zcb.Bytes(), 'x')` could overwrite bytes the reader hadn't
+  yet decoded, silently corrupting subsequent reads.
+- **`Writer.Reset` no longer aliases a frozen writer's `Bytes()`
+  result**. The previous flow — `b := w.Bytes(); w.Reset(); w.WriteX();
+  use(b)` — overwrote `b[0:N]` in place; `len(b)` was unchanged so
+  the user saw silently corrupted data. Reset on a frozen writer now
+  allocates a fresh backing array.
+
+### Fixed (docs)
+
+- `internal/bench/README.md` perf-ratio claims updated. The README
+  said "1.7-2.4x faster for encoding" while measured ratios are
+  ≈3x. Now phrased as "roughly 3x" with a note that users should
+  run the benchmarks locally.
+
 ### Fixed (extract round-trip)
 
 - **`[]byte` and `[N]byte` extracted as `repeated bytes`** — that's

@@ -275,7 +275,13 @@ func (v *Validator) validateEnum(enum *Enum) {
 		}
 	}
 	if !hasZero && len(enum.Values) > 0 {
-		v.addWarning(enum.Position, "enum %q should have a zero value (conventionally for unknown/default)", enum.Name)
+		// Without a 0-valued variant, the three runtimes disagree on
+		// the default: Rust's Default derive picks the first declared
+		// variant, Go's `var x EnumType` is 0 (not a valid variant),
+		// TS leaves the field at 0. A common 0 variant — typically
+		// UNKNOWN — keeps decode-default behavior consistent across
+		// languages.
+		v.addError(enum.Position, "enum %q must have a zero value (e.g. UNKNOWN = 0) for cross-language default consistency", enum.Name)
 	}
 
 	for _, val := range enum.Values {
@@ -402,15 +408,23 @@ func (v *Validator) validateTypeRef(typeRef TypeRef, msgName, fieldName string) 
 	}
 }
 
-// validateMapKeyType ensures map key types are valid (must be comparable).
+// validateMapKeyType ensures map key types are valid (must be comparable
+// AND consistently encodable across all three runtimes).
 func (v *Validator) validateMapKeyType(keyType TypeRef, msgName, fieldName string) {
 	switch t := keyType.(type) {
 	case *ScalarType:
-		// Most scalar types are valid keys
 		switch t.Name {
 		case "bytes", "float32", "float64", "complex64", "complex128":
 			v.addError(t.Position, "map key type %q is not comparable in field %s.%s",
 				t.Name, msgName, fieldName)
+		case "bool":
+			// Bool keys are technically comparable, but the codegen
+			// JSON path assumes string-or-numeric keys; bool keys
+			// produce uncompilable Go. They also offer no value
+			// (only two possible keys) and confuse cross-language
+			// users. Reject up front.
+			v.addError(t.Position, "map key type \"bool\" is not supported in field %s.%s; use a sentinel struct or two named fields instead",
+				msgName, fieldName)
 		}
 
 	case *NamedType:

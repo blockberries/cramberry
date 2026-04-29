@@ -89,8 +89,19 @@ func PutWriter(w *Writer) {
 }
 
 // Reset clears the writer for reuse.
+//
+// If the writer was frozen by a prior `Bytes()` call, a fresh backing
+// array is allocated so subsequent writes can't silently overwrite the
+// slice the caller is still holding. This trade-off (lose the buffer
+// reuse on a frozen Reset, in exchange for safety) matters because the
+// caller has no way to discover the aliasing otherwise — `len(b)`
+// stays unchanged while the underlying bytes mutate in place.
 func (w *Writer) Reset() {
-	w.buf = w.buf[:0]
+	if w.frozen {
+		w.buf = make([]byte, 0, cap(w.buf))
+	} else {
+		w.buf = w.buf[:0]
+	}
 	w.depth = 0
 	w.err = nil
 	w.frozen = false

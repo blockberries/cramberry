@@ -253,6 +253,12 @@ func (c *tsContext) tsWriteField(f *schema.Field) string {
 func (c *tsContext) tsZeroCheck(f *schema.Field) string {
 	fieldName := "msg." + ToCamelCase(f.Name)
 	presence := fmt.Sprintf("%s !== undefined && %s !== null", fieldName, fieldName)
+	// `optional` modifier yields `T | undefined` in TS — once we
+	// know it's defined, treat it as set; we don't want
+	// `Some("")` or `Some([])` to silently round-trip as None.
+	if f.Optional {
+		return presence
+	}
 	if f.Repeated {
 		return fmt.Sprintf("%s && %s.length > 0", presence, fieldName)
 	}
