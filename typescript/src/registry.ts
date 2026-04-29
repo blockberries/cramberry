@@ -87,6 +87,11 @@ export class Registry {
 
   /**
    * Encodes a polymorphic value with its type ID.
+   *
+   * Wire shape: [field tag (Bytes)] [typeID varint] [value bytes (length-prefixed)].
+   * The Bytes wire type is the canonical V2 carrier for variable-length
+   * payloads; the typeID + value-bytes pair forms the body that the matching
+   * `decodePolymorphic` reads.
    */
   encodePolymorphic<T>(writer: Writer, fieldNumber: number, name: string, value: T): void {
     const reg = this.byName.get(name);
@@ -94,17 +99,16 @@ export class Registry {
       throw new TypeNotRegisteredError(name);
     }
 
-    // Write field tag with TypeRef wire type
-    writer.writeTag(fieldNumber, WireType.TypeRef);
+    // Field tag: Bytes is the V2 wire type for length-prefixed payloads.
+    // (V1 had a dedicated TypeRef wire type at value 7; that surface was
+    // removed when the format collapsed to a single canonical V2.)
+    writer.writeTag(fieldNumber, WireType.Bytes);
 
-    // Write type ID
     writer.writeVarint(reg.typeId);
 
-    // Create a temporary writer for the value
     const tempWriter = new Writer();
     reg.encoder(tempWriter, value);
 
-    // Write length-prefixed value bytes
     writer.writeLengthPrefixedBytes(tempWriter.bytes());
   }
 

@@ -476,16 +476,19 @@ func (c *rustContext) jsonFieldName(f *schema.Field) string {
 	return ToSnakeCase(f.Name)
 }
 
-// jsonEncodeField generates JSON encoding code for a field.
-func (c *rustContext) jsonEncodeField(f *schema.Field) string {
+// jsonEncodeField generates JSON encoding code for a field. idx is the
+// field's position within the message (NOT its tag number) — only the
+// position-zero field skips the leading comma. Using f.Number here would
+// break for any schema whose first declared field doesn't happen to have
+// tag 1.
+func (c *rustContext) jsonEncodeField(idx int, f *schema.Field) string {
 	fieldName := ToSnakeCase(f.Name)
 	jsonName := ToSnakeCase(f.Name)
-	isFirst := f.Number == 1
 
 	var code strings.Builder
 
 	// Add comma if not first field
-	if !isFirst {
+	if idx > 0 {
 		code.WriteString("    result.push_str(\",\");\n")
 	}
 
@@ -909,8 +912,8 @@ pub fn unmarshal_{{toSnake $msg.Name}}(data: &[u8]) -> Result<{{rustMessageType 
 pub fn to_json_{{toSnake $msg.Name}}(msg: &{{rustMessageType $msg}}) -> Result<String, String> {
     let mut result = String::new();
     result.push_str("{");
-{{range $msg.Fields}}
-{{jsonEncodeField .}}
+{{range $i, $f := $msg.Fields}}
+{{jsonEncodeField $i $f}}
 {{- end}}
     result.push_str("}");
     Ok(result)

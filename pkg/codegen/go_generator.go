@@ -936,17 +936,20 @@ func (c *goContext) jsonFieldName(f *schema.Field) string {
 	return ToSnakeCase(f.Name)
 }
 
-// jsonEncodeField generates JSON encoding code for a field.
-func (c *goContext) jsonEncodeField(f *schema.Field, _ string) string {
+// jsonEncodeField generates JSON encoding code for a field. idx is the
+// field's position within the message (NOT its tag number) — only the
+// position-zero field skips the leading comma. Using f.Number here would
+// break for any schema whose first declared field doesn't happen to have
+// tag 1.
+func (c *goContext) jsonEncodeField(idx int, f *schema.Field, _ string) string {
 	fieldName := "m." + ToPascalCase(f.Name)
 	jsonName := ToSnakeCase(f.Name)
-	isFirst := f.Number == 1 // Check if this is the first field
 
 	// Build the field encoding
 	var code strings.Builder
 
 	// Add comma if not first field
-	if !isFirst {
+	if idx > 0 {
 		code.WriteString("\tbuf.WriteString(\",\")\n")
 	}
 
@@ -1072,15 +1075,22 @@ func (c *goContext) jsonEncodeMap(t *schema.MapType, varName string) string {
 	code.WriteString("\t\t\tbuf.WriteString(cramberry.EscapeJSONString(keyStr))\n")
 	code.WriteString("\t\t\tbuf.WriteString(\":\")\n")
 
-	// Get the actual key value
+	// Get the actual key value. We use cramberry.ParseInt64FromString and
+	// ParseUint64FromString instead of strconv directly so the generated
+	// file doesn't need to import "strconv" (the template's import block
+	// only adds cramberry/encoding/json/fmt/strings). The errors here are
+	// impossible — we just formatted these strings ourselves above — but
+	// we still propagate them through the existing return path on the
+	// outer ToJSON, since silent _ would mask a future bug if the format
+	// helpers ever change.
 	switch keyType.Name {
 	case "string":
 		code.WriteString("\t\t\tk := keyStr\n")
 	case "int8", "int16", "int32", "int64", "int":
-		code.WriteString(fmt.Sprintf("\t\t\tk, _ := strconv.ParseInt(keyStr, 10, 64)\n\t\t\tactualKey := %s(k)\n", c.goType(t.Key)))
+		code.WriteString(fmt.Sprintf("\t\t\tkInt, kErr := cramberry.ParseInt64FromString(keyStr)\n\t\t\tif kErr != nil { return \"\", kErr }\n\t\t\tactualKey := %s(kInt)\n", c.goType(t.Key)))
 		code.WriteString(fmt.Sprintf("\t\t\tv := %s[actualKey]\n", varName))
 	case "uint8", "uint16", "uint32", "uint64", "uint", "byte":
-		code.WriteString(fmt.Sprintf("\t\t\tk, _ := strconv.ParseUint(keyStr, 10, 64)\n\t\t\tactualKey := %s(k)\n", c.goType(t.Key)))
+		code.WriteString(fmt.Sprintf("\t\t\tkUint, kErr := cramberry.ParseUint64FromString(keyStr)\n\t\t\tif kErr != nil { return \"\", kErr }\n\t\t\tactualKey := %s(kUint)\n", c.goType(t.Key)))
 		code.WriteString(fmt.Sprintf("\t\t\tv := %s[actualKey]\n", varName))
 	default:
 		code.WriteString(fmt.Sprintf("\t\t\tv := %s[keyStr]\n", varName))
@@ -1489,8 +1499,8 @@ func (m *{{goMessageType $msg}}) ToJSON() (string, error) {
 
 	var buf strings.Builder
 	buf.WriteString("{")
-{{- range $msg.Fields}}
-{{jsonEncodeField . (goMessageType $msg)}}
+{{- range $i, $f := $msg.Fields}}
+{{jsonEncodeField $i $f (goMessageType $msg)}}
 {{- end}}
 	buf.WriteString("}")
 	return buf.String(), nil

@@ -173,6 +173,27 @@ describe('V2 compact tag encoding', () => {
     }
   });
 
+  it('roundtrips large field numbers above 2^28 without truncation', () => {
+    // 2^28 = 268435456. Anything from here up to MaxFieldNumber (2^29-1)
+    // overflowed the old `(b & 0x7f) << shift` (signed int32) accumulator
+    // and decoded to a negative or wrong number. Verify the BigInt path.
+    const big = (1 << 28) + 7; // 268435463
+    const encoded = encodeTag(big, WireType.Bytes);
+    const decoded = decodeTag(encoded);
+    expect(decoded.fieldNumber).toBe(big);
+    expect(decoded.wireType).toBe(WireType.Bytes);
+
+    const max = (1 << 29) - 1; // MaxFieldNumber = 536870911
+    const encodedMax = encodeTag(max, WireType.Varint);
+    const decodedMax = decodeTag(encodedMax);
+    expect(decodedMax.fieldNumber).toBe(max);
+  });
+
+  it('rejects field numbers above MaxFieldNumber on encode', () => {
+    const tooBig = (1 << 29); // 2^29 = 536870912, just above the limit
+    expect(encodeTag(tooBig, WireType.Bytes).length).toBe(0);
+  });
+
   it('decodes end marker', () => {
     const decoded = decodeTag(new Uint8Array([END_MARKER]));
     expect(decoded.fieldNumber).toBe(0);

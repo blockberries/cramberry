@@ -404,16 +404,19 @@ func (c *tsContext) jsonFieldName(f *schema.Field) string {
 	return ToSnakeCase(f.Name)
 }
 
-// jsonEncodeField generates JSON encoding code for a field.
-func (c *tsContext) jsonEncodeField(f *schema.Field) string {
+// jsonEncodeField generates JSON encoding code for a field. idx is the
+// field's position within the message (NOT its tag number) — only the
+// position-zero field skips the leading comma. Using f.Number here would
+// break for any schema whose first declared field doesn't happen to have
+// tag 1.
+func (c *tsContext) jsonEncodeField(idx int, f *schema.Field) string {
 	fieldName := ToCamelCase(f.Name)
 	jsonName := ToSnakeCase(f.Name)
-	isFirst := f.Number == 1
 
 	var code strings.Builder
 
 	// Add comma if not first field
-	if !isFirst {
+	if idx > 0 {
 		code.WriteString("  result += ',';\n")
 	}
 
@@ -885,8 +888,8 @@ export function unmarshal{{tsMessageType $msg}}(data: Uint8Array): {{tsMessageTy
 /** Encodes a {{tsMessageType $msg}} to deterministic JSON format. */
 export function toJSON_{{tsMessageType $msg}}(msg: {{tsMessageType $msg}}): string {
   let result = '{';
-{{range $msg.Fields}}
-{{jsonEncodeField .}}
+{{range $i, $f := $msg.Fields}}
+{{jsonEncodeField $i $f}}
 {{- end}}
   result += '}';
   return result;

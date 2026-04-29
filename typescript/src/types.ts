@@ -58,12 +58,21 @@ export const TAG_FIELD_NUM_SHIFT = 4;
 export const MAX_COMPACT_FIELD_NUM = 15;
 
 /**
+ * Maximum allowed field number (2^29 - 1, ~536 million).
+ * Matches the Go runtime's wire.MaxFieldNumber. Anything larger is rejected
+ * by both encoders and decoders.
+ */
+export const MAX_FIELD_NUMBER = (1n << 29n) - 1n;
+
+/**
  * Encode a field tag from field number and wire type.
- * Returns the encoded bytes.
+ * Returns the encoded bytes. Returns an empty array for invalid field
+ * numbers (0, negative, or above MAX_FIELD_NUMBER) so callers can detect
+ * the failure without throwing.
  */
 export function encodeTag(fieldNumber: number, wireType: WireType): Uint8Array {
-  if (fieldNumber <= 0) {
-    return new Uint8Array(0); // Invalid field number
+  if (fieldNumber <= 0 || BigInt(fieldNumber) > MAX_FIELD_NUMBER) {
+    return new Uint8Array(0);
   }
 
   if (fieldNumber <= MAX_COMPACT_FIELD_NUM) {
@@ -120,18 +129,23 @@ export function decodeTag(data: Uint8Array, offset: number = 0): TagResult {
     return { fieldNumber, wireType, bytesRead: 1 };
   }
 
-  // Extended format: read varint field number
-  let fieldNumber = 0;
-  let shift = 0;
+  // Extended format: read varint field number.
+  // BigInt accumulator prevents 32-bit truncation that would silently corrupt
+  // field numbers above 2^28 (JS bitwise `<<` truncates to int32).
+  let fieldNumber = 0n;
+  let shift = 0n;
   let pos = offset + 1;
 
-  for (let i = 0; i < 10 && pos < data.length; i++) {
+  for (let i = 0; i < 5 && pos < data.length; i++) {
     const b = data[pos++];
-    fieldNumber |= (b & 0x7f) << shift;
+    fieldNumber |= BigInt(b & 0x7f) << shift;
     if ((b & 0x80) === 0) {
-      return { fieldNumber, wireType, bytesRead: pos - offset };
+      if (fieldNumber > MAX_FIELD_NUMBER) {
+        return { fieldNumber: 0, wireType: 0, bytesRead: 0 };
+      }
+      return { fieldNumber: Number(fieldNumber), wireType, bytesRead: pos - offset };
     }
-    shift += 7;
+    shift += 7n;
   }
 
   // Invalid varint

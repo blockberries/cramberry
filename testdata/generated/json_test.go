@@ -737,6 +737,8 @@ func (m *RepeatedTypes) FromJSON(s string) error {
 type MapTypes struct {
 StringMap map[string]string `cramberry:"1" json:"string_map"`
 IntMap map[string]int64 `cramberry:"2" json:"int_map"`
+IntKeyed map[int32]string `cramberry:"3" json:"int_keyed"`
+UintKeyed map[uint64]string `cramberry:"4" json:"uint_keyed"`
 }
 
 // MarshalCramberry encodes the message to binary format using optimized V2 encoding.
@@ -776,6 +778,30 @@ func (m *MapTypes) EncodeTo(w *cramberry.Writer) {
 			v := m.IntMap[k]
 			w.WriteString(k)
 			w.WriteInt64(v)
+		}
+	}
+	}
+	if m.IntKeyed != nil {
+		w.WriteTag(3, cramberry.WireBytes)
+		{
+		__keys := cramberry.SortedMapKeys(m.IntKeyed)
+		w.WriteUvarint(uint64(len(__keys)))
+		for _, k := range __keys {
+			v := m.IntKeyed[k]
+			w.WriteInt32(k)
+			w.WriteString(v)
+		}
+	}
+	}
+	if m.UintKeyed != nil {
+		w.WriteTag(4, cramberry.WireBytes)
+		{
+		__keys := cramberry.SortedMapKeys(m.UintKeyed)
+		w.WriteUvarint(uint64(len(__keys)))
+		for _, k := range __keys {
+			v := m.UintKeyed[k]
+			w.WriteUint64(k)
+			w.WriteString(v)
 		}
 	}
 	}
@@ -823,6 +849,32 @@ func (m *MapTypes) DecodeFrom(r *cramberry.Reader) {
 			var v int64
 			v = r.ReadInt64()
 			m.IntMap[k] = v
+		}
+		case 3:
+			n := r.ReadMapHeader()
+		if r.Err() != nil {
+			return
+		}
+		m.IntKeyed = make(map[int32]string, n)
+		for i := 0; i < n; i++ {
+			var k int32
+			k = r.ReadInt32()
+			var v string
+			v = r.ReadString()
+			m.IntKeyed[k] = v
+		}
+		case 4:
+			n := r.ReadMapHeader()
+		if r.Err() != nil {
+			return
+		}
+		m.UintKeyed = make(map[uint64]string, n)
+		for i := 0; i < n; i++ {
+			var k uint64
+			k = r.ReadUint64()
+			var v string
+			v = r.ReadString()
+			m.UintKeyed[k] = v
 		}
 		default:
 			// Skip unknown field for forward compatibility
@@ -886,6 +938,54 @@ func (m *MapTypes) ToJSON() (string, error) {
 		buf.WriteString("}")
 	}
 
+	buf.WriteString(",")
+	buf.WriteString(`"int_keyed":`)
+	{
+		buf.WriteString("{")
+		keys := make([]string, 0, len(m.IntKeyed))
+		for k := range m.IntKeyed {
+			keys = append(keys, cramberry.FormatInt64ToString(int64(k)))
+		}
+		keys = cramberry.SortMapKeysLexicographic(keys)
+		for i, keyStr := range keys {
+			if i > 0 {
+				buf.WriteString(",")
+			}
+			buf.WriteString(cramberry.EscapeJSONString(keyStr))
+			buf.WriteString(":")
+			kInt, kErr := cramberry.ParseInt64FromString(keyStr)
+			if kErr != nil { return "", kErr }
+			actualKey := int32(kInt)
+			v := m.IntKeyed[actualKey]
+			buf.WriteString(cramberry.EscapeJSONString(v))
+		}
+		buf.WriteString("}")
+	}
+
+	buf.WriteString(",")
+	buf.WriteString(`"uint_keyed":`)
+	{
+		buf.WriteString("{")
+		keys := make([]string, 0, len(m.UintKeyed))
+		for k := range m.UintKeyed {
+			keys = append(keys, cramberry.FormatUint64ToString(uint64(k)))
+		}
+		keys = cramberry.SortMapKeysLexicographic(keys)
+		for i, keyStr := range keys {
+			if i > 0 {
+				buf.WriteString(",")
+			}
+			buf.WriteString(cramberry.EscapeJSONString(keyStr))
+			buf.WriteString(":")
+			kUint, kErr := cramberry.ParseUint64FromString(keyStr)
+			if kErr != nil { return "", kErr }
+			actualKey := uint64(kUint)
+			v := m.UintKeyed[actualKey]
+			buf.WriteString(cramberry.EscapeJSONString(v))
+		}
+		buf.WriteString("}")
+	}
+
 	buf.WriteString("}")
 	return buf.String(), nil
 }
@@ -903,6 +1003,8 @@ func (m *MapTypes) FromJSON(s string) error {
 	allowedFields := map[string]bool{
 		"string_map": true,
 		"int_map": true,
+		"int_keyed": true,
+		"uint_keyed": true,
 	}
 	for key := range raw {
 		if !allowedFields[key] {
@@ -950,6 +1052,48 @@ func (m *MapTypes) FromJSON(s string) error {
 				} else {
 						return fmt.Errorf("field %s: expected string or number", "m.IntMap[k]")
 				}
+		}
+	}
+
+	if rawValue, ok := raw["int_keyed"]; ok {
+		var mapRaw map[string]json.RawMessage
+		if err := json.Unmarshal(rawValue, &mapRaw); err != nil {
+			return fmt.Errorf("field %s: %w", "m.IntKeyed", err)
+		}
+		m.IntKeyed = make(map[int32]string, len(mapRaw))
+		for keyStr, valRaw := range mapRaw {
+			kInt, kErr := cramberry.ParseInt64FromString(keyStr)
+			if kErr != nil {
+				return fmt.Errorf("field %s: invalid map key %q: %w", "m.IntKeyed", keyStr, kErr)
+			}
+			k := int32(kInt)
+			rawValue = valRaw
+				var strVal string
+				if err := json.Unmarshal(rawValue, &strVal); err != nil {
+						return fmt.Errorf("field %s: %w", "m.IntKeyed[k]", err)
+				}
+				m.IntKeyed[k] = strVal
+		}
+	}
+
+	if rawValue, ok := raw["uint_keyed"]; ok {
+		var mapRaw map[string]json.RawMessage
+		if err := json.Unmarshal(rawValue, &mapRaw); err != nil {
+			return fmt.Errorf("field %s: %w", "m.UintKeyed", err)
+		}
+		m.UintKeyed = make(map[uint64]string, len(mapRaw))
+		for keyStr, valRaw := range mapRaw {
+			kUint, kErr := cramberry.ParseUint64FromString(keyStr)
+			if kErr != nil {
+				return fmt.Errorf("field %s: invalid map key %q: %w", "m.UintKeyed", keyStr, kErr)
+			}
+			k := uint64(kUint)
+			rawValue = valRaw
+				var strVal string
+				if err := json.Unmarshal(rawValue, &strVal); err != nil {
+						return fmt.Errorf("field %s: %w", "m.UintKeyed[k]", err)
+				}
+				m.UintKeyed[k] = strVal
 		}
 	}
 

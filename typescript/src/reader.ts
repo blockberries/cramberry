@@ -1,5 +1,5 @@
 import { BufferUnderflowError, InvalidWireTypeError, DecodeError } from "./errors";
-import { WireType, TypeID, FieldTag, decodeTag, zigzagDecode, zigzagDecode64, END_MARKER, TAG_EXTENDED_BIT, TAG_WIRE_TYPE_MASK, TAG_WIRE_TYPE_SHIFT, TAG_FIELD_NUM_SHIFT } from "./types";
+import { WireType, TypeID, FieldTag, decodeTag, zigzagDecode, zigzagDecode64, END_MARKER, TAG_EXTENDED_BIT, TAG_WIRE_TYPE_MASK, TAG_WIRE_TYPE_SHIFT, TAG_FIELD_NUM_SHIFT, MAX_FIELD_NUMBER } from "./types";
 
 // Module-level singleton to avoid repeated instantiation
 const textDecoder = new TextDecoder();
@@ -177,19 +177,29 @@ export class Reader {
       return { fieldNumber, wireType };
     }
 
-    // Extended format: read varint field number
+    // Extended format: read varint field number.
+    //
+    // Field numbers are bounded by MaxFieldNumber = 2^29 - 1, which fits in
+    // 5 varint bytes (35 bits of payload). We accumulate into BigInt because
+    // JavaScript's `<<` truncates to 32-bit signed; with shift >= 28 the
+    // result wraps to a negative Number, silently producing wrong field
+    // numbers above 2^28. Bounds-check after each byte (matching the
+    // overflow checks in readVarint) and reject anything > MaxFieldNumber.
     this.pos++; // Skip the marker byte
-    let fieldNumber = 0;
-    let shift = 0;
+    let fieldNumber = 0n;
+    let shift = 0n;
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 5; i++) {
       this.checkAvailable(1);
       const b = this.buffer[this.pos++];
-      fieldNumber |= (b & 0x7f) << shift;
+      fieldNumber |= BigInt(b & 0x7f) << shift;
       if ((b & 0x80) === 0) {
-        return { fieldNumber, wireType };
+        if (fieldNumber > MAX_FIELD_NUMBER) {
+          throw new DecodeError("Invalid compact tag: field number exceeds maximum");
+        }
+        return { fieldNumber: Number(fieldNumber), wireType };
       }
-      shift += 7;
+      shift += 7n;
     }
 
     throw new DecodeError("Invalid compact tag: varint overflow");

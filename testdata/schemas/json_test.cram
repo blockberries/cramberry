@@ -37,6 +37,10 @@ message RepeatedTypes {
 message MapTypes {
 	map[string]string string_map = 1;
 	map[string]int64 int_map = 2;
+	// Int-keyed maps exercise the strconv path in generated JSON code.
+	// Without proper imports this would have failed to compile.
+	map[int32]string int_keyed = 3;
+	map[uint64]string uint_keyed = 4;
 }
 
 // NestedMessage tests nested message encoding

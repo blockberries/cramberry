@@ -839,3 +839,61 @@ func TestGoGeneratorCrossPackageEnumWireType(t *testing.T) {
 		t.Errorf("status field unexpectedly encoded with WireBytes:\n%s", output)
 	}
 }
+
+// TestJSONCommaUsesPositionNotTag verifies the fix for the bug where the
+// JSON encoder used `f.Number == 1` to detect "first field". For a schema
+// whose first declared field has tag != 1, the old code emitted a leading
+// comma producing `{,"foo":...}` (invalid JSON).
+func TestJSONCommaUsesPositionNotTag(t *testing.T) {
+	// Two fields, neither with tag 1, declared in non-tag order to maximize
+	// the chance of catching a regression.
+	s := &schema.Schema{
+		Package: &schema.Package{Name: "test"},
+		Messages: []*schema.Message{
+			{
+				Name: "Sparse",
+				Fields: []*schema.Field{
+					{Name: "alpha", Number: 5, Type: &schema.ScalarType{Name: "string"}},
+					{Name: "beta", Number: 3, Type: &schema.ScalarType{Name: "int32"}},
+				},
+			},
+		},
+	}
+
+	gen := NewGoGenerator()
+	var buf bytes.Buffer
+	if err := gen.Generate(&buf, s, DefaultOptions()); err != nil {
+		t.Fatalf("generate error: %v", err)
+	}
+	out := buf.String()
+
+	// First field (alpha) must NOT emit a leading comma.
+	first := strings.Index(out, `"alpha":`)
+	if first < 0 {
+		t.Fatalf("alpha field name not found in generated code:\n%s", out)
+	}
+	// The 200 chars before the alpha emission must NOT contain a comma write.
+	// The previous emission would be `buf.WriteString("{")` then `buf.WriteString(",")`.
+	start := first - 300
+	if start < 0 {
+		start = 0
+	}
+	preamble := out[start:first]
+	if strings.Contains(preamble, `buf.WriteString(",")`) &&
+		!strings.Contains(preamble, `"beta":`) {
+		t.Errorf("first field emits a leading comma; preamble:\n%s", preamble)
+	}
+
+	// Second field (beta) MUST emit a leading comma.
+	second := strings.Index(out, `"beta":`)
+	if second < 0 {
+		t.Fatalf("beta field name not found")
+	}
+	betweenStart := first + len(`"alpha":`)
+	betweenStart += strings.Index(out[betweenStart:], "buf.WriteString")
+	between := out[betweenStart:second]
+	if !strings.Contains(between, `buf.WriteString(",")`) {
+		t.Errorf("second field missing leading comma; between:\n%s", between)
+	}
+}
+
