@@ -68,6 +68,7 @@ message RequiredFields {
 message OptionalPointer {
 	*string value = 1;
 	*int64 number = 2;
+	optional bytes blob = 3;
 }
 
 // EnumTest tests enum encoding as string names

@@ -73,67 +73,93 @@ pub struct ScalarTypes {
     pub bytes_val: Vec<u8>,
 }
 
-/// Encodes a ScalarTypes to the writer using V2 wire format.
+/// Encodes a ScalarTypes to the writer.
 pub fn encode_scalar_types(writer: &mut Writer, msg: &ScalarTypes) -> Result<()> {
 
     // Field 1: bool_val
-    writer.write_tag(1, WireType::Varint)?;
-    writer.write_bool(msg.bool_val)?;
+    if msg.bool_val {
+        writer.write_tag(1, WireType::Varint)?;
+        writer.write_bool(msg.bool_val)?;
+    }
 
     // Field 2: int8_val
-    writer.write_tag(2, WireType::SVarint)?;
-    writer.write_svarint(msg.int8_val)?;
+    if msg.int8_val != 0 as i8 {
+        writer.write_tag(2, WireType::SVarint)?;
+        writer.write_svarint(msg.int8_val as i32)?;
+    }
 
     // Field 3: int16_val
-    writer.write_tag(3, WireType::SVarint)?;
-    writer.write_svarint(msg.int16_val)?;
+    if msg.int16_val != 0 as i16 {
+        writer.write_tag(3, WireType::SVarint)?;
+        writer.write_svarint(msg.int16_val as i32)?;
+    }
 
     // Field 4: int32_val
-    writer.write_tag(4, WireType::SVarint)?;
-    writer.write_svarint(msg.int32_val)?;
+    if msg.int32_val != 0 as i32 {
+        writer.write_tag(4, WireType::SVarint)?;
+        writer.write_svarint(msg.int32_val)?;
+    }
 
     // Field 5: int64_val
-    writer.write_tag(5, WireType::SVarint)?;
-    writer.write_svarint64(msg.int64_val)?;
+    if msg.int64_val != 0 as i64 {
+        writer.write_tag(5, WireType::SVarint)?;
+        writer.write_svarint64(msg.int64_val)?;
+    }
 
     // Field 6: uint8_val
-    writer.write_tag(6, WireType::Varint)?;
-    writer.write_varint(msg.uint8_val)?;
+    if msg.uint8_val != 0 as u8 {
+        writer.write_tag(6, WireType::Varint)?;
+        writer.write_varint(msg.uint8_val as u32)?;
+    }
 
     // Field 7: uint16_val
-    writer.write_tag(7, WireType::Varint)?;
-    writer.write_varint(msg.uint16_val)?;
+    if msg.uint16_val != 0 as u16 {
+        writer.write_tag(7, WireType::Varint)?;
+        writer.write_varint(msg.uint16_val as u32)?;
+    }
 
     // Field 8: uint32_val
-    writer.write_tag(8, WireType::Varint)?;
-    writer.write_varint(msg.uint32_val)?;
+    if msg.uint32_val != 0 as u32 {
+        writer.write_tag(8, WireType::Varint)?;
+        writer.write_varint(msg.uint32_val)?;
+    }
 
     // Field 9: uint64_val
-    writer.write_tag(9, WireType::Varint)?;
-    writer.write_varint64(msg.uint64_val)?;
+    if msg.uint64_val != 0 as u64 {
+        writer.write_tag(9, WireType::Varint)?;
+        writer.write_varint64(msg.uint64_val)?;
+    }
 
     // Field 10: float32_val
-    writer.write_tag(10, WireType::Fixed32)?;
-    writer.write_float32(msg.float32_val)?;
+    if msg.float32_val != 0 as f32 {
+        writer.write_tag(10, WireType::Fixed32)?;
+        writer.write_float32(msg.float32_val)?;
+    }
 
     // Field 11: float64_val
-    writer.write_tag(11, WireType::Fixed64)?;
-    writer.write_float64(msg.float64_val)?;
+    if msg.float64_val != 0 as f64 {
+        writer.write_tag(11, WireType::Fixed64)?;
+        writer.write_float64(msg.float64_val)?;
+    }
 
     // Field 12: string_val
-    writer.write_tag(12, WireType::Bytes)?;
-    writer.write_string(&msg.string_val)?;
+    if !msg.string_val.is_empty() {
+        writer.write_tag(12, WireType::Bytes)?;
+        writer.write_string(&msg.string_val)?;
+    }
 
     // Field 13: bytes_val
-    writer.write_tag(13, WireType::Bytes)?;
-    writer.write_length_prefixed_bytes(&msg.bytes_val)?;
+    if !msg.bytes_val.is_empty() {
+        writer.write_tag(13, WireType::Bytes)?;
+        writer.write_length_prefixed_bytes(&msg.bytes_val)?;
+    }
 
     // End marker
     writer.write_end_marker()?;
     Ok(())
 }
 
-/// Decodes a ScalarTypes from the reader using V2 wire format.
+/// Decodes a ScalarTypes from the reader.
 pub fn decode_scalar_types(reader: &mut Reader) -> Result<ScalarTypes> {
     let mut bool_val: bool = Default::default();
     let mut int8_val: i8 = Default::default();
@@ -150,24 +176,24 @@ pub fn decode_scalar_types(reader: &mut Reader) -> Result<ScalarTypes> {
     let mut bytes_val: Vec<u8> = Default::default();
 
     loop {
-        let (field_num, wire_type) = reader.read_tag()?;
-        if field_num == 0 { break; } // End marker
+        let tag = reader.read_tag()?;
+        if tag.field_number == 0 { break; } // End marker
 
-        match field_num {
+        match tag.field_number {
             1 => bool_val = reader.read_bool()?,
-            2 => int8_val = reader.read_svarint()?,
-            3 => int16_val = reader.read_svarint()?,
+            2 => int8_val = reader.read_svarint()? as i8,
+            3 => int16_val = reader.read_svarint()? as i16,
             4 => int32_val = reader.read_svarint()?,
             5 => int64_val = reader.read_svarint64()?,
-            6 => uint8_val = reader.read_varint()?,
-            7 => uint16_val = reader.read_varint()?,
+            6 => uint8_val = reader.read_varint()? as u8,
+            7 => uint16_val = reader.read_varint()? as u16,
             8 => uint32_val = reader.read_varint()?,
             9 => uint64_val = reader.read_varint64()?,
             10 => float32_val = reader.read_float32()?,
             11 => float64_val = reader.read_float64()?,
             12 => string_val = reader.read_string()?.to_string(),
             13 => bytes_val = reader.read_length_prefixed_bytes()?.to_vec(),
-            _ => reader.skip_value(wire_type)?,
+            _ => reader.skip_value(tag.wire_type)?,
         }
     }
 
@@ -202,7 +228,7 @@ pub fn unmarshal_scalar_types(data: &[u8]) -> Result<ScalarTypes> {
 }
 
 /// Encodes a ScalarTypes to deterministic JSON format.
-pub fn to_json_scalar_types(msg: &ScalarTypes) -> Result<String, String> {
+pub fn to_json_scalar_types(msg: &ScalarTypes) -> std::result::Result<String, String> {
     let mut result = String::new();
     result.push_str("{");
 
@@ -280,7 +306,7 @@ pub fn to_json_scalar_types(msg: &ScalarTypes) -> Result<String, String> {
 }
 
 /// Decodes a ScalarTypes from JSON format.
-pub fn from_json_scalar_types(json: &str) -> Result<ScalarTypes, String> {
+pub fn from_json_scalar_types(json: &str) -> std::result::Result<ScalarTypes, String> {
     let parsed: serde_json::Value = serde_json::from_str(json)
         .map_err(|e| format!("JSON parse error: {}", e))?;
 
@@ -319,11 +345,11 @@ pub fn from_json_scalar_types(json: &str) -> Result<ScalarTypes, String> {
     }
 
     if let Some(value) = obj.get("int8_val") {
-        msg.int8_val = cramberry::json::parse_i32_from_json(value)? as int8;
+        msg.int8_val = cramberry::json::parse_i32_from_json(value)? as i8;
     }
 
     if let Some(value) = obj.get("int16_val") {
-        msg.int16_val = cramberry::json::parse_i32_from_json(value)? as int16;
+        msg.int16_val = cramberry::json::parse_i32_from_json(value)? as i16;
     }
 
     if let Some(value) = obj.get("int32_val") {
@@ -383,12 +409,13 @@ pub struct RepeatedTypes {
     pub bools: Vec<bool>,
 }
 
-/// Encodes a RepeatedTypes to the writer using V2 wire format.
+/// Encodes a RepeatedTypes to the writer.
 pub fn encode_repeated_types(writer: &mut Writer, msg: &RepeatedTypes) -> Result<()> {
 
     // Field 1: strings
-    writer.write_tag(1, WireType::Bytes)?;
-    {
+    if !msg.strings.is_empty() {
+        writer.write_tag(1, WireType::Bytes)?;
+        {
         let mut sub_writer = Writer::new();
         sub_writer.write_varint(msg.strings.len() as u32)?;
         for elem in &msg.strings {
@@ -396,10 +423,12 @@ pub fn encode_repeated_types(writer: &mut Writer, msg: &RepeatedTypes) -> Result
         }
         writer.write_length_prefixed_bytes(sub_writer.as_bytes())
     }?;
+    }
 
     // Field 2: ints
-    writer.write_tag(2, WireType::SVarint)?;
-    {
+    if !msg.ints.is_empty() {
+        writer.write_tag(2, WireType::Bytes)?;
+        {
         let mut sub_writer = Writer::new();
         sub_writer.write_varint(msg.ints.len() as u32)?;
         for elem in &msg.ints {
@@ -407,10 +436,12 @@ pub fn encode_repeated_types(writer: &mut Writer, msg: &RepeatedTypes) -> Result
         }
         writer.write_length_prefixed_bytes(sub_writer.as_bytes())
     }?;
+    }
 
     // Field 3: bools
-    writer.write_tag(3, WireType::Varint)?;
-    {
+    if !msg.bools.is_empty() {
+        writer.write_tag(3, WireType::Bytes)?;
+        {
         let mut sub_writer = Writer::new();
         sub_writer.write_varint(msg.bools.len() as u32)?;
         for elem in &msg.bools {
@@ -418,27 +449,28 @@ pub fn encode_repeated_types(writer: &mut Writer, msg: &RepeatedTypes) -> Result
         }
         writer.write_length_prefixed_bytes(sub_writer.as_bytes())
     }?;
+    }
 
     // End marker
     writer.write_end_marker()?;
     Ok(())
 }
 
-/// Decodes a RepeatedTypes from the reader using V2 wire format.
+/// Decodes a RepeatedTypes from the reader.
 pub fn decode_repeated_types(reader: &mut Reader) -> Result<RepeatedTypes> {
     let mut strings: Vec<String> = Default::default();
     let mut ints: Vec<i64> = Default::default();
     let mut bools: Vec<bool> = Default::default();
 
     loop {
-        let (field_num, wire_type) = reader.read_tag()?;
-        if field_num == 0 { break; } // End marker
+        let tag = reader.read_tag()?;
+        if tag.field_number == 0 { break; } // End marker
 
-        match field_num {
+        match tag.field_number {
             1 => strings = {
-            let data = reader.read_length_prefixed_bytes()?;
-            let mut sub_reader = Reader::new(data);
-            let len = sub_reader.read_varint()? as usize;
+            let __data = reader.read_length_prefixed_bytes()?;
+            let mut reader = Reader::new(__data);
+            let len = reader.read_varint()? as usize;
             let mut result = Vec::with_capacity(len);
             for _ in 0..len {
                 result.push(reader.read_string()?.to_string());
@@ -446,9 +478,9 @@ pub fn decode_repeated_types(reader: &mut Reader) -> Result<RepeatedTypes> {
             result
         },
             2 => ints = {
-            let data = reader.read_length_prefixed_bytes()?;
-            let mut sub_reader = Reader::new(data);
-            let len = sub_reader.read_varint()? as usize;
+            let __data = reader.read_length_prefixed_bytes()?;
+            let mut reader = Reader::new(__data);
+            let len = reader.read_varint()? as usize;
             let mut result = Vec::with_capacity(len);
             for _ in 0..len {
                 result.push(reader.read_svarint64()?);
@@ -456,16 +488,16 @@ pub fn decode_repeated_types(reader: &mut Reader) -> Result<RepeatedTypes> {
             result
         },
             3 => bools = {
-            let data = reader.read_length_prefixed_bytes()?;
-            let mut sub_reader = Reader::new(data);
-            let len = sub_reader.read_varint()? as usize;
+            let __data = reader.read_length_prefixed_bytes()?;
+            let mut reader = Reader::new(__data);
+            let len = reader.read_varint()? as usize;
             let mut result = Vec::with_capacity(len);
             for _ in 0..len {
                 result.push(reader.read_bool()?);
             }
             result
         },
-            _ => reader.skip_value(wire_type)?,
+            _ => reader.skip_value(tag.wire_type)?,
         }
     }
 
@@ -490,7 +522,7 @@ pub fn unmarshal_repeated_types(data: &[u8]) -> Result<RepeatedTypes> {
 }
 
 /// Encodes a RepeatedTypes to deterministic JSON format.
-pub fn to_json_repeated_types(msg: &RepeatedTypes) -> Result<String, String> {
+pub fn to_json_repeated_types(msg: &RepeatedTypes) -> std::result::Result<String, String> {
     let mut result = String::new();
     result.push_str("{");
 
@@ -527,7 +559,7 @@ pub fn to_json_repeated_types(msg: &RepeatedTypes) -> Result<String, String> {
 }
 
 /// Decodes a RepeatedTypes from JSON format.
-pub fn from_json_repeated_types(json: &str) -> Result<RepeatedTypes, String> {
+pub fn from_json_repeated_types(json: &str) -> std::result::Result<RepeatedTypes, String> {
     let parsed: serde_json::Value = serde_json::from_str(json)
         .map_err(|e| format!("JSON parse error: {}", e))?;
 
@@ -593,17 +625,24 @@ pub struct MapTypes {
     pub string_map: std::collections::HashMap<String, String>,
     #[serde(rename = "int_map")]
     pub int_map: std::collections::HashMap<String, i64>,
+    #[serde(rename = "int_keyed")]
+    pub int_keyed: std::collections::HashMap<i32, String>,
+    #[serde(rename = "uint_keyed")]
+    pub uint_keyed: std::collections::HashMap<u64, String>,
 }
 
-/// Encodes a MapTypes to the writer using V2 wire format.
+/// Encodes a MapTypes to the writer.
 pub fn encode_map_types(writer: &mut Writer, msg: &MapTypes) -> Result<()> {
 
     // Field 1: string_map
     writer.write_tag(1, WireType::Bytes)?;
     {
+        use cramberry::CompareKeys;
+        let mut __entries: Vec<_> = msg.string_map.iter().collect();
+        __entries.sort_by(|a, b| a.0.cramberry_cmp(b.0));
         let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.string_map.len() as u32)?;
-        for (k, v) in &msg.string_map {
+        sub_writer.write_varint(__entries.len() as u32)?;
+        for (k, v) in __entries {
             sub_writer.write_string(k)?;
             sub_writer.write_string(v)?;
         }
@@ -613,11 +652,44 @@ pub fn encode_map_types(writer: &mut Writer, msg: &MapTypes) -> Result<()> {
     // Field 2: int_map
     writer.write_tag(2, WireType::Bytes)?;
     {
+        use cramberry::CompareKeys;
+        let mut __entries: Vec<_> = msg.int_map.iter().collect();
+        __entries.sort_by(|a, b| a.0.cramberry_cmp(b.0));
         let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.int_map.len() as u32)?;
-        for (k, v) in &msg.int_map {
+        sub_writer.write_varint(__entries.len() as u32)?;
+        for (k, v) in __entries {
             sub_writer.write_string(k)?;
             sub_writer.write_svarint64(*v)?;
+        }
+        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+    }?;
+
+    // Field 3: int_keyed
+    writer.write_tag(3, WireType::Bytes)?;
+    {
+        use cramberry::CompareKeys;
+        let mut __entries: Vec<_> = msg.int_keyed.iter().collect();
+        __entries.sort_by(|a, b| a.0.cramberry_cmp(b.0));
+        let mut sub_writer = Writer::new();
+        sub_writer.write_varint(__entries.len() as u32)?;
+        for (k, v) in __entries {
+            sub_writer.write_svarint(*k)?;
+            sub_writer.write_string(v)?;
+        }
+        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+    }?;
+
+    // Field 4: uint_keyed
+    writer.write_tag(4, WireType::Bytes)?;
+    {
+        use cramberry::CompareKeys;
+        let mut __entries: Vec<_> = msg.uint_keyed.iter().collect();
+        __entries.sort_by(|a, b| a.0.cramberry_cmp(b.0));
+        let mut sub_writer = Writer::new();
+        sub_writer.write_varint(__entries.len() as u32)?;
+        for (k, v) in __entries {
+            sub_writer.write_varint64(*k)?;
+            sub_writer.write_string(v)?;
         }
         writer.write_length_prefixed_bytes(sub_writer.as_bytes())
     }?;
@@ -627,20 +699,22 @@ pub fn encode_map_types(writer: &mut Writer, msg: &MapTypes) -> Result<()> {
     Ok(())
 }
 
-/// Decodes a MapTypes from the reader using V2 wire format.
+/// Decodes a MapTypes from the reader.
 pub fn decode_map_types(reader: &mut Reader) -> Result<MapTypes> {
     let mut string_map: std::collections::HashMap<String, String> = Default::default();
     let mut int_map: std::collections::HashMap<String, i64> = Default::default();
+    let mut int_keyed: std::collections::HashMap<i32, String> = Default::default();
+    let mut uint_keyed: std::collections::HashMap<u64, String> = Default::default();
 
     loop {
-        let (field_num, wire_type) = reader.read_tag()?;
-        if field_num == 0 { break; } // End marker
+        let tag = reader.read_tag()?;
+        if tag.field_number == 0 { break; } // End marker
 
-        match field_num {
+        match tag.field_number {
             1 => string_map = {
-            let data = reader.read_length_prefixed_bytes()?;
-            let mut sub_reader = Reader::new(data);
-            let len = sub_reader.read_varint()? as usize;
+            let __data = reader.read_length_prefixed_bytes()?;
+            let mut reader = Reader::new(__data);
+            let len = reader.read_varint()? as usize;
             let mut result = std::collections::HashMap::with_capacity(len);
             for _ in 0..len {
                 let k = reader.read_string()?.to_string();
@@ -650,9 +724,9 @@ pub fn decode_map_types(reader: &mut Reader) -> Result<MapTypes> {
             result
         },
             2 => int_map = {
-            let data = reader.read_length_prefixed_bytes()?;
-            let mut sub_reader = Reader::new(data);
-            let len = sub_reader.read_varint()? as usize;
+            let __data = reader.read_length_prefixed_bytes()?;
+            let mut reader = Reader::new(__data);
+            let len = reader.read_varint()? as usize;
             let mut result = std::collections::HashMap::with_capacity(len);
             for _ in 0..len {
                 let k = reader.read_string()?.to_string();
@@ -661,13 +735,39 @@ pub fn decode_map_types(reader: &mut Reader) -> Result<MapTypes> {
             }
             result
         },
-            _ => reader.skip_value(wire_type)?,
+            3 => int_keyed = {
+            let __data = reader.read_length_prefixed_bytes()?;
+            let mut reader = Reader::new(__data);
+            let len = reader.read_varint()? as usize;
+            let mut result = std::collections::HashMap::with_capacity(len);
+            for _ in 0..len {
+                let k = reader.read_svarint()?;
+                let v = reader.read_string()?.to_string();
+                result.insert(k, v);
+            }
+            result
+        },
+            4 => uint_keyed = {
+            let __data = reader.read_length_prefixed_bytes()?;
+            let mut reader = Reader::new(__data);
+            let len = reader.read_varint()? as usize;
+            let mut result = std::collections::HashMap::with_capacity(len);
+            for _ in 0..len {
+                let k = reader.read_varint64()?;
+                let v = reader.read_string()?.to_string();
+                result.insert(k, v);
+            }
+            result
+        },
+            _ => reader.skip_value(tag.wire_type)?,
         }
     }
 
     Ok(MapTypes {
         string_map,
         int_map,
+        int_keyed,
+        uint_keyed,
     })
 }
 
@@ -685,7 +785,7 @@ pub fn unmarshal_map_types(data: &[u8]) -> Result<MapTypes> {
 }
 
 /// Encodes a MapTypes to deterministic JSON format.
-pub fn to_json_map_types(msg: &MapTypes) -> Result<String, String> {
+pub fn to_json_map_types(msg: &MapTypes) -> std::result::Result<String, String> {
     let mut result = String::new();
     result.push_str("{");
 
@@ -699,7 +799,7 @@ pub fn to_json_map_types(msg: &MapTypes) -> Result<String, String> {
             result.push_str(&cramberry::json::escape_json_string(key_str));
             result.push_str(":");
             let k = key_str.as_str();
-            let v = msg.string_map.get(&k).unwrap();
+            let v = msg.string_map.get(k).unwrap();
             result.push_str(&cramberry::json::escape_json_string(&(*v)));
         }
         result.push_str("}");
@@ -716,10 +816,44 @@ pub fn to_json_map_types(msg: &MapTypes) -> Result<String, String> {
             result.push_str(&cramberry::json::escape_json_string(key_str));
             result.push_str(":");
             let k = key_str.as_str();
-            let v = msg.int_map.get(&k).unwrap();
+            let v = msg.int_map.get(k).unwrap();
             result.push_str("\"");
             result.push_str(&cramberry::json::format_i64_to_string((*v)));
             result.push_str("\"");
+        }
+        result.push_str("}");
+    }
+
+    result.push_str(",");
+    result.push_str("\"int_keyed\":");
+    {
+        result.push_str("{");
+        let mut keys: Vec<String> = msg.int_keyed.keys().map(|k| k.to_string()).collect();
+        cramberry::json::sort_map_keys_lexicographic(&mut keys);
+        for (i, key_str) in keys.iter().enumerate() {
+            if i > 0 { result.push_str(","); }
+            result.push_str(&cramberry::json::escape_json_string(key_str));
+            result.push_str(":");
+            let k: i32 = key_str.parse().unwrap();
+            let v = msg.int_keyed.get(&k).unwrap();
+            result.push_str(&cramberry::json::escape_json_string(&(*v)));
+        }
+        result.push_str("}");
+    }
+
+    result.push_str(",");
+    result.push_str("\"uint_keyed\":");
+    {
+        result.push_str("{");
+        let mut keys: Vec<String> = msg.uint_keyed.keys().map(|k| k.to_string()).collect();
+        cramberry::json::sort_map_keys_lexicographic(&mut keys);
+        for (i, key_str) in keys.iter().enumerate() {
+            if i > 0 { result.push_str(","); }
+            result.push_str(&cramberry::json::escape_json_string(key_str));
+            result.push_str(":");
+            let k: u64 = key_str.parse().unwrap();
+            let v = msg.uint_keyed.get(&k).unwrap();
+            result.push_str(&cramberry::json::escape_json_string(&(*v)));
         }
         result.push_str("}");
     }
@@ -729,7 +863,7 @@ pub fn to_json_map_types(msg: &MapTypes) -> Result<String, String> {
 }
 
 /// Decodes a MapTypes from JSON format.
-pub fn from_json_map_types(json: &str) -> Result<MapTypes, String> {
+pub fn from_json_map_types(json: &str) -> std::result::Result<MapTypes, String> {
     let parsed: serde_json::Value = serde_json::from_str(json)
         .map_err(|e| format!("JSON parse error: {}", e))?;
 
@@ -740,6 +874,8 @@ pub fn from_json_map_types(json: &str) -> Result<MapTypes, String> {
     let allowed_fields: std::collections::HashSet<&str> = [
         "string_map",
         "int_map",
+        "int_keyed",
+        "uint_keyed",
     ].iter().copied().collect();
 
     for key in obj.keys() {
@@ -774,6 +910,28 @@ pub fn from_json_map_types(json: &str) -> Result<MapTypes, String> {
     }
     }
 
+    if let Some(value) = obj.get("int_keyed") {
+    let map_obj = value.as_object().ok_or_else(|| "expected object".to_string())?;
+    msg.int_keyed = std::collections::HashMap::new();
+    for (key_str, val) in map_obj {
+        let k: i32 = key_str.parse().map_err(|e| format!("invalid key: {}", e))?;
+        let mut v: String = Default::default();
+        v = val.as_str().ok_or_else(|| "expected string".to_string())?.to_string();
+        msg.int_keyed.insert(k, v);
+    }
+    }
+
+    if let Some(value) = obj.get("uint_keyed") {
+    let map_obj = value.as_object().ok_or_else(|| "expected object".to_string())?;
+    msg.uint_keyed = std::collections::HashMap::new();
+    for (key_str, val) in map_obj {
+        let k: u64 = key_str.parse().map_err(|e| format!("invalid key: {}", e))?;
+        let mut v: String = Default::default();
+        v = val.as_str().ok_or_else(|| "expected string".to_string())?.to_string();
+        msg.uint_keyed.insert(k, v);
+    }
+    }
+
 
     Ok(msg)
 }
@@ -790,41 +948,47 @@ pub struct Address {
     pub zip: String,
 }
 
-/// Encodes a Address to the writer using V2 wire format.
+/// Encodes a Address to the writer.
 pub fn encode_address(writer: &mut Writer, msg: &Address) -> Result<()> {
 
     // Field 1: street
-    writer.write_tag(1, WireType::Bytes)?;
-    writer.write_string(&msg.street)?;
+    if !msg.street.is_empty() {
+        writer.write_tag(1, WireType::Bytes)?;
+        writer.write_string(&msg.street)?;
+    }
 
     // Field 2: city
-    writer.write_tag(2, WireType::Bytes)?;
-    writer.write_string(&msg.city)?;
+    if !msg.city.is_empty() {
+        writer.write_tag(2, WireType::Bytes)?;
+        writer.write_string(&msg.city)?;
+    }
 
     // Field 3: zip
-    writer.write_tag(3, WireType::Bytes)?;
-    writer.write_string(&msg.zip)?;
+    if !msg.zip.is_empty() {
+        writer.write_tag(3, WireType::Bytes)?;
+        writer.write_string(&msg.zip)?;
+    }
 
     // End marker
     writer.write_end_marker()?;
     Ok(())
 }
 
-/// Decodes a Address from the reader using V2 wire format.
+/// Decodes a Address from the reader.
 pub fn decode_address(reader: &mut Reader) -> Result<Address> {
     let mut street: String = Default::default();
     let mut city: String = Default::default();
     let mut zip: String = Default::default();
 
     loop {
-        let (field_num, wire_type) = reader.read_tag()?;
-        if field_num == 0 { break; } // End marker
+        let tag = reader.read_tag()?;
+        if tag.field_number == 0 { break; } // End marker
 
-        match field_num {
+        match tag.field_number {
             1 => street = reader.read_string()?.to_string(),
             2 => city = reader.read_string()?.to_string(),
             3 => zip = reader.read_string()?.to_string(),
-            _ => reader.skip_value(wire_type)?,
+            _ => reader.skip_value(tag.wire_type)?,
         }
     }
 
@@ -849,7 +1013,7 @@ pub fn unmarshal_address(data: &[u8]) -> Result<Address> {
 }
 
 /// Encodes a Address to deterministic JSON format.
-pub fn to_json_address(msg: &Address) -> Result<String, String> {
+pub fn to_json_address(msg: &Address) -> std::result::Result<String, String> {
     let mut result = String::new();
     result.push_str("{");
 
@@ -869,7 +1033,7 @@ pub fn to_json_address(msg: &Address) -> Result<String, String> {
 }
 
 /// Decodes a Address from JSON format.
-pub fn from_json_address(json: &str) -> Result<Address, String> {
+pub fn from_json_address(json: &str) -> std::result::Result<Address, String> {
     let parsed: serde_json::Value = serde_json::from_str(json)
         .map_err(|e| format!("JSON parse error: {}", e))?;
 
@@ -923,24 +1087,33 @@ pub struct Person {
     pub emails: Vec<String>,
 }
 
-/// Encodes a Person to the writer using V2 wire format.
+/// Encodes a Person to the writer.
 pub fn encode_person(writer: &mut Writer, msg: &Person) -> Result<()> {
 
     // Field 1: name
-    writer.write_tag(1, WireType::Bytes)?;
-    writer.write_string(&msg.name)?;
+    if !msg.name.is_empty() {
+        writer.write_tag(1, WireType::Bytes)?;
+        writer.write_string(&msg.name)?;
+    }
 
     // Field 2: age
-    writer.write_tag(2, WireType::SVarint)?;
-    writer.write_svarint(msg.age)?;
+    if msg.age != 0 as i32 {
+        writer.write_tag(2, WireType::SVarint)?;
+        writer.write_svarint(msg.age)?;
+    }
 
     // Field 3: address
     writer.write_tag(3, WireType::Bytes)?;
-    encode_address(writer, &msg.address)?;
+    {
+        let mut __sub = Writer::new();
+        encode_address(&mut __sub, &msg.address)?;
+        writer.write_length_prefixed_bytes(__sub.as_bytes())
+    }?;
 
     // Field 4: emails
-    writer.write_tag(4, WireType::Bytes)?;
-    {
+    if !msg.emails.is_empty() {
+        writer.write_tag(4, WireType::Bytes)?;
+        {
         let mut sub_writer = Writer::new();
         sub_writer.write_varint(msg.emails.len() as u32)?;
         for elem in &msg.emails {
@@ -948,13 +1121,14 @@ pub fn encode_person(writer: &mut Writer, msg: &Person) -> Result<()> {
         }
         writer.write_length_prefixed_bytes(sub_writer.as_bytes())
     }?;
+    }
 
     // End marker
     writer.write_end_marker()?;
     Ok(())
 }
 
-/// Decodes a Person from the reader using V2 wire format.
+/// Decodes a Person from the reader.
 pub fn decode_person(reader: &mut Reader) -> Result<Person> {
     let mut name: String = Default::default();
     let mut age: i32 = Default::default();
@@ -962,24 +1136,28 @@ pub fn decode_person(reader: &mut Reader) -> Result<Person> {
     let mut emails: Vec<String> = Default::default();
 
     loop {
-        let (field_num, wire_type) = reader.read_tag()?;
-        if field_num == 0 { break; } // End marker
+        let tag = reader.read_tag()?;
+        if tag.field_number == 0 { break; } // End marker
 
-        match field_num {
+        match tag.field_number {
             1 => name = reader.read_string()?.to_string(),
             2 => age = reader.read_svarint()?,
-            3 => address = decode_address(reader)?,
+            3 => address = {
+            let __data = reader.read_length_prefixed_bytes()?;
+            let mut __sub = Reader::new(__data);
+            decode_address(&mut __sub)?
+        },
             4 => emails = {
-            let data = reader.read_length_prefixed_bytes()?;
-            let mut sub_reader = Reader::new(data);
-            let len = sub_reader.read_varint()? as usize;
+            let __data = reader.read_length_prefixed_bytes()?;
+            let mut reader = Reader::new(__data);
+            let len = reader.read_varint()? as usize;
             let mut result = Vec::with_capacity(len);
             for _ in 0..len {
                 result.push(reader.read_string()?.to_string());
             }
             result
         },
-            _ => reader.skip_value(wire_type)?,
+            _ => reader.skip_value(tag.wire_type)?,
         }
     }
 
@@ -1005,7 +1183,7 @@ pub fn unmarshal_person(data: &[u8]) -> Result<Person> {
 }
 
 /// Encodes a Person to deterministic JSON format.
-pub fn to_json_person(msg: &Person) -> Result<String, String> {
+pub fn to_json_person(msg: &Person) -> std::result::Result<String, String> {
     let mut result = String::new();
     result.push_str("{");
 
@@ -1020,7 +1198,7 @@ pub fn to_json_person(msg: &Person) -> Result<String, String> {
 
     result.push_str(",");
     result.push_str("\"address\":");
-    result.push_str(&msg.address.to_json().map_err(|e| e.to_string())?);
+    result.push_str(&to_json_address(&msg.address)?);
 
     result.push_str(",");
     result.push_str("\"emails\":");
@@ -1036,7 +1214,7 @@ pub fn to_json_person(msg: &Person) -> Result<String, String> {
 }
 
 /// Decodes a Person from JSON format.
-pub fn from_json_person(json: &str) -> Result<Person, String> {
+pub fn from_json_person(json: &str) -> std::result::Result<Person, String> {
     let parsed: serde_json::Value = serde_json::from_str(json)
         .map_err(|e| format!("JSON parse error: {}", e))?;
 
@@ -1099,41 +1277,47 @@ pub struct RequiredFields {
     pub optional_field: String,
 }
 
-/// Encodes a RequiredFields to the writer using V2 wire format.
+/// Encodes a RequiredFields to the writer.
 pub fn encode_required_fields(writer: &mut Writer, msg: &RequiredFields) -> Result<()> {
 
     // Field 1: id
-    writer.write_tag(1, WireType::SVarint)?;
-    writer.write_svarint64(msg.id)?;
+    if msg.id != 0 as i64 {
+        writer.write_tag(1, WireType::SVarint)?;
+        writer.write_svarint64(msg.id)?;
+    }
 
     // Field 2: name
-    writer.write_tag(2, WireType::Bytes)?;
-    writer.write_string(&msg.name)?;
+    if !msg.name.is_empty() {
+        writer.write_tag(2, WireType::Bytes)?;
+        writer.write_string(&msg.name)?;
+    }
 
     // Field 3: optional_field
-    writer.write_tag(3, WireType::Bytes)?;
-    writer.write_string(&msg.optional_field)?;
+    if !msg.optional_field.is_empty() {
+        writer.write_tag(3, WireType::Bytes)?;
+        writer.write_string(&msg.optional_field)?;
+    }
 
     // End marker
     writer.write_end_marker()?;
     Ok(())
 }
 
-/// Decodes a RequiredFields from the reader using V2 wire format.
+/// Decodes a RequiredFields from the reader.
 pub fn decode_required_fields(reader: &mut Reader) -> Result<RequiredFields> {
     let mut id: i64 = Default::default();
     let mut name: String = Default::default();
     let mut optional_field: String = Default::default();
 
     loop {
-        let (field_num, wire_type) = reader.read_tag()?;
-        if field_num == 0 { break; } // End marker
+        let tag = reader.read_tag()?;
+        if tag.field_number == 0 { break; } // End marker
 
-        match field_num {
+        match tag.field_number {
             1 => id = reader.read_svarint64()?,
             2 => name = reader.read_string()?.to_string(),
             3 => optional_field = reader.read_string()?.to_string(),
-            _ => reader.skip_value(wire_type)?,
+            _ => reader.skip_value(tag.wire_type)?,
         }
     }
 
@@ -1158,7 +1342,7 @@ pub fn unmarshal_required_fields(data: &[u8]) -> Result<RequiredFields> {
 }
 
 /// Encodes a RequiredFields to deterministic JSON format.
-pub fn to_json_required_fields(msg: &RequiredFields) -> Result<String, String> {
+pub fn to_json_required_fields(msg: &RequiredFields) -> std::result::Result<String, String> {
     let mut result = String::new();
     result.push_str("{");
 
@@ -1180,7 +1364,7 @@ pub fn to_json_required_fields(msg: &RequiredFields) -> Result<String, String> {
 }
 
 /// Decodes a RequiredFields from JSON format.
-pub fn from_json_required_fields(json: &str) -> Result<RequiredFields, String> {
+pub fn from_json_required_fields(json: &str) -> std::result::Result<RequiredFields, String> {
     let parsed: serde_json::Value = serde_json::from_str(json)
         .map_err(|e| format!("JSON parse error: {}", e))?;
 
@@ -1228,51 +1412,69 @@ pub struct OptionalPointer {
     pub value: Option<Box<String>>,
     #[serde(rename = "number")]
     pub number: Option<Box<i64>>,
+    #[serde(rename = "blob")]
+    pub blob: Option<Vec<u8>>,
 }
 
-/// Encodes a OptionalPointer to the writer using V2 wire format.
+/// Encodes a OptionalPointer to the writer.
 pub fn encode_optional_pointer(writer: &mut Writer, msg: &OptionalPointer) -> Result<()> {
 
     // Field 1: value
-    writer.write_tag(1, WireType::Bytes)?;
-    if let Some(inner) = &msg.value {
-        writer.write_string(&inner)
+    if msg.value.is_some() {
+        writer.write_tag(1, WireType::Bytes)?;
+        if let Some(inner) = msg.value.as_deref() {
+        writer.write_string(&*inner)
     } else {
         Ok(())
     }?;
+    }
 
     // Field 2: number
-    writer.write_tag(2, WireType::Bytes)?;
-    if let Some(inner) = &msg.number {
-        writer.write_svarint64(inner)
+    if msg.number.is_some() {
+        writer.write_tag(2, WireType::Bytes)?;
+        if let Some(inner) = msg.number.as_deref() {
+        writer.write_svarint64(*inner)
     } else {
         Ok(())
     }?;
+    }
+
+    // Field 3: blob
+    if msg.blob.is_some() {
+        writer.write_tag(3, WireType::Bytes)?;
+        {
+        let __inner = msg.blob.as_ref().unwrap();
+        writer.write_length_prefixed_bytes(&(*__inner))
+    }?;
+    }
 
     // End marker
     writer.write_end_marker()?;
     Ok(())
 }
 
-/// Decodes a OptionalPointer from the reader using V2 wire format.
+/// Decodes a OptionalPointer from the reader.
 pub fn decode_optional_pointer(reader: &mut Reader) -> Result<OptionalPointer> {
     let mut value: Option<Box<String>> = Default::default();
     let mut number: Option<Box<i64>> = Default::default();
+    let mut blob: Option<Vec<u8>> = Default::default();
 
     loop {
-        let (field_num, wire_type) = reader.read_tag()?;
-        if field_num == 0 { break; } // End marker
+        let tag = reader.read_tag()?;
+        if tag.field_number == 0 { break; } // End marker
 
-        match field_num {
+        match tag.field_number {
             1 => value = Some(Box::new(reader.read_string()?.to_string())),
             2 => number = Some(Box::new(reader.read_svarint64()?)),
-            _ => reader.skip_value(wire_type)?,
+            3 => blob = Some(reader.read_length_prefixed_bytes()?.to_vec()),
+            _ => reader.skip_value(tag.wire_type)?,
         }
     }
 
     Ok(OptionalPointer {
         value,
         number,
+        blob,
     })
 }
 
@@ -1290,7 +1492,7 @@ pub fn unmarshal_optional_pointer(data: &[u8]) -> Result<OptionalPointer> {
 }
 
 /// Encodes a OptionalPointer to deterministic JSON format.
-pub fn to_json_optional_pointer(msg: &OptionalPointer) -> Result<String, String> {
+pub fn to_json_optional_pointer(msg: &OptionalPointer) -> std::result::Result<String, String> {
     let mut result = String::new();
     result.push_str("{");
 
@@ -1311,12 +1513,22 @@ pub fn to_json_optional_pointer(msg: &OptionalPointer) -> Result<String, String>
         result.push_str("null");
     }
 
+    result.push_str(",");
+    result.push_str("\"blob\":");
+    if let Some(v) = &msg.blob {
+            result.push_str("\"");
+        result.push_str(&cramberry::json::encode_base64(&v));
+        result.push_str("\"");
+    } else {
+        result.push_str("null");
+    }
+
     result.push_str("}");
     Ok(result)
 }
 
 /// Decodes a OptionalPointer from JSON format.
-pub fn from_json_optional_pointer(json: &str) -> Result<OptionalPointer, String> {
+pub fn from_json_optional_pointer(json: &str) -> std::result::Result<OptionalPointer, String> {
     let parsed: serde_json::Value = serde_json::from_str(json)
         .map_err(|e| format!("JSON parse error: {}", e))?;
 
@@ -1327,6 +1539,7 @@ pub fn from_json_optional_pointer(json: &str) -> Result<OptionalPointer, String>
     let allowed_fields: std::collections::HashSet<&str> = [
         "value",
         "number",
+        "blob",
     ].iter().copied().collect();
 
     for key in obj.keys() {
@@ -1343,7 +1556,7 @@ pub fn from_json_optional_pointer(json: &str) -> Result<OptionalPointer, String>
         if value.is_null() {
             msg.value = None;
         } else {
-            let v = Box::new(Default::default());
+            let mut v: Box<String> = Box::new(Default::default());
                     (*v) = value.as_str().ok_or_else(|| "expected string".to_string())?.to_string();
             msg.value = Some(v);
         }
@@ -1353,9 +1566,20 @@ pub fn from_json_optional_pointer(json: &str) -> Result<OptionalPointer, String>
         if value.is_null() {
             msg.number = None;
         } else {
-            let v = Box::new(Default::default());
+            let mut v: Box<i64> = Box::new(Default::default());
                     (*v) = cramberry::json::parse_i64_from_json(value)?;
             msg.number = Some(v);
+        }
+    }
+
+    if let Some(value) = obj.get("blob") {
+        if value.is_null() {
+            msg.blob = None;
+        } else {
+            let mut v: Vec<u8> = Default::default();
+                    let s = value.as_str().ok_or_else(|| "expected string".to_string())?;
+            v = cramberry::json::decode_base64(s).map_err(|e| e.to_string())?;
+            msg.blob = Some(v);
         }
     }
 
@@ -1373,7 +1597,7 @@ pub struct EnumTest {
     pub statuses: Vec<Status>,
 }
 
-/// Encodes a EnumTest to the writer using V2 wire format.
+/// Encodes a EnumTest to the writer.
 pub fn encode_enum_test(writer: &mut Writer, msg: &EnumTest) -> Result<()> {
 
     // Field 1: status
@@ -1381,8 +1605,9 @@ pub fn encode_enum_test(writer: &mut Writer, msg: &EnumTest) -> Result<()> {
     writer.write_svarint(msg.status as i32)?;
 
     // Field 2: statuses
-    writer.write_tag(2, WireType::SVarint)?;
-    {
+    if !msg.statuses.is_empty() {
+        writer.write_tag(2, WireType::Bytes)?;
+        {
         let mut sub_writer = Writer::new();
         sub_writer.write_varint(msg.statuses.len() as u32)?;
         for elem in &msg.statuses {
@@ -1390,34 +1615,35 @@ pub fn encode_enum_test(writer: &mut Writer, msg: &EnumTest) -> Result<()> {
         }
         writer.write_length_prefixed_bytes(sub_writer.as_bytes())
     }?;
+    }
 
     // End marker
     writer.write_end_marker()?;
     Ok(())
 }
 
-/// Decodes a EnumTest from the reader using V2 wire format.
+/// Decodes a EnumTest from the reader.
 pub fn decode_enum_test(reader: &mut Reader) -> Result<EnumTest> {
     let mut status: Status = Default::default();
     let mut statuses: Vec<Status> = Default::default();
 
     loop {
-        let (field_num, wire_type) = reader.read_tag()?;
-        if field_num == 0 { break; } // End marker
+        let tag = reader.read_tag()?;
+        if tag.field_number == 0 { break; } // End marker
 
-        match field_num {
+        match tag.field_number {
             1 => status = Status::from_i32(reader.read_svarint()?).unwrap_or(Status::Unknown),
             2 => statuses = {
-            let data = reader.read_length_prefixed_bytes()?;
-            let mut sub_reader = Reader::new(data);
-            let len = sub_reader.read_varint()? as usize;
+            let __data = reader.read_length_prefixed_bytes()?;
+            let mut reader = Reader::new(__data);
+            let len = reader.read_varint()? as usize;
             let mut result = Vec::with_capacity(len);
             for _ in 0..len {
                 result.push(Status::from_i32(reader.read_svarint()?).unwrap_or(Status::Unknown));
             }
             result
         },
-            _ => reader.skip_value(wire_type)?,
+            _ => reader.skip_value(tag.wire_type)?,
         }
     }
 
@@ -1441,7 +1667,7 @@ pub fn unmarshal_enum_test(data: &[u8]) -> Result<EnumTest> {
 }
 
 /// Encodes a EnumTest to deterministic JSON format.
-pub fn to_json_enum_test(msg: &EnumTest) -> Result<String, String> {
+pub fn to_json_enum_test(msg: &EnumTest) -> std::result::Result<String, String> {
     let mut result = String::new();
     result.push_str("{");
 
@@ -1478,7 +1704,7 @@ pub fn to_json_enum_test(msg: &EnumTest) -> Result<String, String> {
 }
 
 /// Decodes a EnumTest from JSON format.
-pub fn from_json_enum_test(json: &str) -> Result<EnumTest, String> {
+pub fn from_json_enum_test(json: &str) -> std::result::Result<EnumTest, String> {
     let parsed: serde_json::Value = serde_json::from_str(json)
         .map_err(|e| format!("JSON parse error: {}", e))?;
 
@@ -1539,7 +1765,7 @@ pub fn from_json_enum_test(json: &str) -> Result<EnumTest, String> {
 pub struct EmptyMessage {
 }
 
-/// Encodes a EmptyMessage to the writer using V2 wire format.
+/// Encodes a EmptyMessage to the writer.
 pub fn encode_empty_message(writer: &mut Writer, msg: &EmptyMessage) -> Result<()> {
 
     // End marker
@@ -1547,15 +1773,15 @@ pub fn encode_empty_message(writer: &mut Writer, msg: &EmptyMessage) -> Result<(
     Ok(())
 }
 
-/// Decodes a EmptyMessage from the reader using V2 wire format.
+/// Decodes a EmptyMessage from the reader.
 pub fn decode_empty_message(reader: &mut Reader) -> Result<EmptyMessage> {
 
     loop {
-        let (field_num, wire_type) = reader.read_tag()?;
-        if field_num == 0 { break; } // End marker
+        let tag = reader.read_tag()?;
+        if tag.field_number == 0 { break; } // End marker
 
-        match field_num {
-            _ => reader.skip_value(wire_type)?,
+        match tag.field_number {
+            _ => reader.skip_value(tag.wire_type)?,
         }
     }
 
@@ -1577,7 +1803,7 @@ pub fn unmarshal_empty_message(data: &[u8]) -> Result<EmptyMessage> {
 }
 
 /// Encodes a EmptyMessage to deterministic JSON format.
-pub fn to_json_empty_message(msg: &EmptyMessage) -> Result<String, String> {
+pub fn to_json_empty_message(msg: &EmptyMessage) -> std::result::Result<String, String> {
     let mut result = String::new();
     result.push_str("{");
 
@@ -1586,7 +1812,7 @@ pub fn to_json_empty_message(msg: &EmptyMessage) -> Result<String, String> {
 }
 
 /// Decodes a EmptyMessage from JSON format.
-pub fn from_json_empty_message(json: &str) -> Result<EmptyMessage, String> {
+pub fn from_json_empty_message(json: &str) -> std::result::Result<EmptyMessage, String> {
     let parsed: serde_json::Value = serde_json::from_str(json)
         .map_err(|e| format!("JSON parse error: {}", e))?;
 
@@ -1625,24 +1851,31 @@ pub struct AllZeroValues {
     pub empty_array: Vec<String>,
 }
 
-/// Encodes a AllZeroValues to the writer using V2 wire format.
+/// Encodes a AllZeroValues to the writer.
 pub fn encode_all_zero_values(writer: &mut Writer, msg: &AllZeroValues) -> Result<()> {
 
     // Field 1: zero_int
-    writer.write_tag(1, WireType::SVarint)?;
-    writer.write_svarint64(msg.zero_int)?;
+    if msg.zero_int != 0 as i64 {
+        writer.write_tag(1, WireType::SVarint)?;
+        writer.write_svarint64(msg.zero_int)?;
+    }
 
     // Field 2: zero_string
-    writer.write_tag(2, WireType::Bytes)?;
-    writer.write_string(&msg.zero_string)?;
+    if !msg.zero_string.is_empty() {
+        writer.write_tag(2, WireType::Bytes)?;
+        writer.write_string(&msg.zero_string)?;
+    }
 
     // Field 3: zero_bool
-    writer.write_tag(3, WireType::Varint)?;
-    writer.write_bool(msg.zero_bool)?;
+    if msg.zero_bool {
+        writer.write_tag(3, WireType::Varint)?;
+        writer.write_bool(msg.zero_bool)?;
+    }
 
     // Field 4: empty_array
-    writer.write_tag(4, WireType::Bytes)?;
-    {
+    if !msg.empty_array.is_empty() {
+        writer.write_tag(4, WireType::Bytes)?;
+        {
         let mut sub_writer = Writer::new();
         sub_writer.write_varint(msg.empty_array.len() as u32)?;
         for elem in &msg.empty_array {
@@ -1650,13 +1883,14 @@ pub fn encode_all_zero_values(writer: &mut Writer, msg: &AllZeroValues) -> Resul
         }
         writer.write_length_prefixed_bytes(sub_writer.as_bytes())
     }?;
+    }
 
     // End marker
     writer.write_end_marker()?;
     Ok(())
 }
 
-/// Decodes a AllZeroValues from the reader using V2 wire format.
+/// Decodes a AllZeroValues from the reader.
 pub fn decode_all_zero_values(reader: &mut Reader) -> Result<AllZeroValues> {
     let mut zero_int: i64 = Default::default();
     let mut zero_string: String = Default::default();
@@ -1664,24 +1898,24 @@ pub fn decode_all_zero_values(reader: &mut Reader) -> Result<AllZeroValues> {
     let mut empty_array: Vec<String> = Default::default();
 
     loop {
-        let (field_num, wire_type) = reader.read_tag()?;
-        if field_num == 0 { break; } // End marker
+        let tag = reader.read_tag()?;
+        if tag.field_number == 0 { break; } // End marker
 
-        match field_num {
+        match tag.field_number {
             1 => zero_int = reader.read_svarint64()?,
             2 => zero_string = reader.read_string()?.to_string(),
             3 => zero_bool = reader.read_bool()?,
             4 => empty_array = {
-            let data = reader.read_length_prefixed_bytes()?;
-            let mut sub_reader = Reader::new(data);
-            let len = sub_reader.read_varint()? as usize;
+            let __data = reader.read_length_prefixed_bytes()?;
+            let mut reader = Reader::new(__data);
+            let len = reader.read_varint()? as usize;
             let mut result = Vec::with_capacity(len);
             for _ in 0..len {
                 result.push(reader.read_string()?.to_string());
             }
             result
         },
-            _ => reader.skip_value(wire_type)?,
+            _ => reader.skip_value(tag.wire_type)?,
         }
     }
 
@@ -1707,7 +1941,7 @@ pub fn unmarshal_all_zero_values(data: &[u8]) -> Result<AllZeroValues> {
 }
 
 /// Encodes a AllZeroValues to deterministic JSON format.
-pub fn to_json_all_zero_values(msg: &AllZeroValues) -> Result<String, String> {
+pub fn to_json_all_zero_values(msg: &AllZeroValues) -> std::result::Result<String, String> {
     let mut result = String::new();
     result.push_str("{");
 
@@ -1738,7 +1972,7 @@ pub fn to_json_all_zero_values(msg: &AllZeroValues) -> Result<String, String> {
 }
 
 /// Decodes a AllZeroValues from JSON format.
-pub fn from_json_all_zero_values(json: &str) -> Result<AllZeroValues, String> {
+pub fn from_json_all_zero_values(json: &str) -> std::result::Result<AllZeroValues, String> {
     let parsed: serde_json::Value = serde_json::from_str(json)
         .map_err(|e| format!("JSON parse error: {}", e))?;
 

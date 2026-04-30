@@ -84,8 +84,8 @@ const TestData = {
   } as AllFieldNumbers,
 };
 
-// Encoder functions for each message type using V2 format
-// V2 uses end markers instead of field counts, and SVarint wire type for signed ints
+// Encoder functions for each message type.
+// Format uses an end marker (no field count) and SVarint wire type for signed ints.
 function encodeNestedMessage(writer: Writer, msg: NestedMessage): void {
   // Field 1: name (string)
   writer.writeTag(1, WireType.Bytes);
@@ -100,7 +100,7 @@ function encodeNestedMessage(writer: Writer, msg: NestedMessage): void {
 }
 
 function encodeScalarTypes(writer: Writer, msg: ScalarTypes): void {
-  // V2 format: no field count prefix, uses end marker
+  // No field count prefix; messages terminate with an end marker.
 
   // Field 1: boolVal
   writer.writeTag(1, WireType.Varint);
@@ -143,7 +143,7 @@ function encodeScalarTypes(writer: Writer, msg: ScalarTypes): void {
 }
 
 function encodeRepeatedTypes(writer: Writer, msg: RepeatedTypes): void {
-  // V2 format: no field count prefix, uses end marker
+  // No field count prefix; messages terminate with an end marker.
 
   // Field 1: int32List
   writer.writeTag(1, WireType.Bytes);
@@ -177,7 +177,7 @@ function encodeRepeatedTypes(writer: Writer, msg: RepeatedTypes): void {
 }
 
 function encodeEdgeCases(writer: Writer, msg: EdgeCases): void {
-  // V2 format: no field count prefix, uses end marker
+  // No field count prefix; messages terminate with an end marker.
   // Only encode non-zero/non-empty fields to match Go's omitempty behavior
 
   // Field 2: negativeOne - uses SVarint wire type
@@ -217,7 +217,7 @@ function encodeEdgeCases(writer: Writer, msg: EdgeCases): void {
 }
 
 function encodeAllFieldNumbers(writer: Writer, msg: AllFieldNumbers): void {
-  // V2 format: no field count prefix, uses end marker
+  // No field count prefix; messages terminate with an end marker.
   // All int32 fields use SVarint wire type
 
   writer.writeTag(1, WireType.SVarint);
@@ -242,7 +242,7 @@ function encodeAllFieldNumbers(writer: Writer, msg: AllFieldNumbers): void {
   writer.writeEndMarker();
 }
 
-// Decoder functions - V2 format uses end marker (fieldNumber === 0) instead of field count
+// Decoder functions - end marker (fieldNumber === 0) terminates each message
 function decodeNestedMessage(reader: Reader): NestedMessage {
   const result: Partial<NestedMessage> = {};
 
@@ -410,7 +410,7 @@ describe('TypeScript Interoperability Tests', () => {
 
       console.log('AllFieldNumbers encoded:', toHex(encoded));
 
-      // Decode - V2 format uses end marker
+      // Decode - end marker terminates the message
       const reader = new Reader(encoded);
       const decoded: Partial<AllFieldNumbers> = {};
 
@@ -446,7 +446,7 @@ describe('TypeScript Interoperability Tests', () => {
 
       console.log('Golden AllFieldNumbers hex:', toHex(golden));
 
-      // Decode - V2 format uses end marker
+      // Decode - end marker terminates the message
       const reader = new Reader(golden);
       const decoded: Partial<AllFieldNumbers> = {};
 

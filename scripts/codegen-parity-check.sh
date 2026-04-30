@@ -21,7 +21,7 @@ WORK="$(mktemp -d -t cramberry-parity.XXXXXX)"
 trap 'rm -rf "$WORK"' EXIT
 
 mkdir -p "$WORK/go" "$WORK/rust/src"
-"$BIN" generate -lang go -json=false -out "$WORK/go" "$SCHEMA" >/dev/null
+"$BIN" generate -lang go                -out "$WORK/go" "$SCHEMA" >/dev/null
 "$BIN" generate -lang rust              -out "$WORK/rust/src" "$SCHEMA" >/dev/null
 
 # --- Go side ---
@@ -46,6 +46,7 @@ package $genpkg
 import (
 	"encoding/hex"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/blockberries/cramberry/pkg/cramberry"
@@ -94,6 +95,9 @@ func fixture() *Sample {
 			100: "hundred",
 		},
 		Office: office,
+		Ratings: []int64{1, -2, 1000000},
+		LongString: strings.Repeat("X", 20000),
+		Pet: &Dog{Name: "Rex"},
 		Forest: Tree{
 			Label: "root",
 			Children: []Tree{
@@ -118,14 +122,40 @@ func CodegenBytes() string {
 	return hex.EncodeToString(w.BytesCopy())
 }
 
-// ReflectionBytes encodes via the reflection marshaller.
+// CodegenJSON encodes via the codegen-emitted ToJSON method.
+func CodegenJSON() string {
+	s := fixture()
+	out, err := s.ToJSON()
+	if err != nil {
+		panic(fmt.Sprintf("codegen JSON encode err: %v", err))
+	}
+	return out
+}
+
+// ReflectionBytes encodes via the reflection marshaller. Polymorphic
+// fields (Animal) require type-id registration on the default registry
+// — codegen knows the TypeIDs from the schema directly, but reflection
+// needs them at runtime via cramberry.RegisterTypeWithID.
 func ReflectionBytes() string {
+	if err := cramberry.DefaultRegistry.RegisterTypeWithID(reflectType((*Dog)(nil)), 130); err != nil {
+		panic(err)
+	}
+	if err := cramberry.DefaultRegistry.RegisterTypeWithID(reflectType((*Cat)(nil)), 131); err != nil {
+		panic(err)
+	}
 	s := fixture()
 	data, err := cramberry.Marshal(s)
 	if err != nil {
 		panic(fmt.Sprintf("reflection encode err: %v", err))
 	}
 	return hex.EncodeToString(data)
+}
+
+// reflectType is a tiny helper so the registration calls don't need a
+// reflect import in the probe (cramberry.RegisterTypeWithID takes a
+// reflect.Type but the wrapper does the unwrap for us).
+func reflectType(p any) reflect.Type {
+	return reflect.TypeOf(p).Elem()
 }
 EOF
 
@@ -142,13 +172,15 @@ import (
 func main() {
 	fmt.Println("CODEGEN", parity.CodegenBytes())
 	fmt.Println("REFLECT", parity.ReflectionBytes())
+	fmt.Println("CODEGEN_JSON", parity.CodegenJSON())
 }
 EOF
 
 (cd "$WORK/go" && go mod tidy >/dev/null 2>&1 && go build -o probe ./cmd >/dev/null)
 GO_OUT="$("$WORK/go/probe")"
-GO_CODEGEN_BYTES="$(echo "$GO_OUT" | awk '/^CODEGEN/ {print $2}')"
-GO_REFLECT_BYTES="$(echo "$GO_OUT" | awk '/^REFLECT/ {print $2}')"
+GO_CODEGEN_BYTES="$(echo "$GO_OUT" | awk '/^CODEGEN / {print $2}')"
+GO_REFLECT_BYTES="$(echo "$GO_OUT" | awk '/^REFLECT / {print $2}')"
+GO_CODEGEN_JSON="$(echo "$GO_OUT" | awk '/^CODEGEN_JSON / { $1=""; sub(/^ /, ""); print }')"
 
 # --- Rust side ---
 cat > "$WORK/rust/Cargo.toml" <<EOF
@@ -239,15 +271,22 @@ fn main() {
                 Tree { label: "right".to_string(), children: vec![] },
             ],
         },
+        ratings: vec![1, -2, 1000000],
+        long_string: "X".repeat(20000),
+        pet: Animal::Dog(Dog { name: "Rex".to_string() }),
     };
     let mut w = Writer::new();
     encode_sample(&mut w, &s).unwrap();
-    println!("{}", hex::encode(w.as_bytes()));
+    println!("BYTES {}", hex::encode(w.as_bytes()));
+    let json = to_json_sample(&s).unwrap();
+    println!("JSON {}", json);
 }
 EOF
 
-(cd "$WORK/rust" && cargo build --bin probe --quiet)
-RUST_BYTES="$("$WORK/rust/target/debug/probe")"
+(cd "$WORK/rust" && RUSTFLAGS="-A unused_imports -A unused_mut -A unused_variables -A unused_assignments -A unreachable_patterns -A unused_parens" cargo build --bin probe --quiet)
+RUST_OUT="$("$WORK/rust/target/debug/probe")"
+RUST_BYTES="$(echo "$RUST_OUT" | awk '/^BYTES / {print $2}')"
+RUST_JSON="$(echo "$RUST_OUT" | awk '/^JSON / { $1=""; sub(/^ /, ""); print }')"
 
 # --- TypeScript side ---
 # The TS generator emits `from '@cramberry/runtime'`. Node's ESM
@@ -281,7 +320,7 @@ genstem="$(basename "$genfile" .ts)"
 
 cat > "$WORK/ts/probe.mjs" <<EOF
 import { Writer } from '@cramberry/runtime';
-import { encodeSample, Status } from './$genstem.ts';
+import { encodeSample, toJSON_Sample, Status, Animal } from './$genstem.ts';
 
 const s = {
     active: true,
@@ -329,43 +368,79 @@ const s = {
             { label: "right", children: [] },
         ],
     },
+    ratings: [1n, -2n, 1000000n],
+    longString: "X".repeat(20000),
+    pet: Animal.dog({ name: "Rex" }),
+    // Empty/zero fields: the wire-format encoder skips these via
+    // tsZeroCheck presence guards, but the JSON encoder accesses
+    // them directly. TS object literals omit fields and read them
+    // back as undefined, so explicitly set the zero value here.
+    emptyStr: "",
+    emptyList: [],
+    emptyBytes: new Uint8Array(0),
+    zeroCount: 0n,
+    zeroRatio: 0.0,
 };
 const w = new Writer();
 encodeSample(w, s);
 const bytes = w.bytes();
-console.log(Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(''));
+console.log("BYTES " + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(''));
+console.log("JSON " + toJSON_Sample(s));
 EOF
 
 # Use tsx (provided by the typescript/ workspace's installed deps) so
 # the .ts import resolves and Node finds @cramberry/runtime via the
 # package's "exports". The local node_modules linkage gives us dist/.
-TS_BYTES="$(cd "$WORK/ts" && npx --no -- tsx probe.mjs 2>/dev/null)"
+TS_OUT="$(cd "$WORK/ts" && npx --no -- tsx probe.mjs 2>/dev/null)"
+TS_BYTES="$(echo "$TS_OUT" | awk '/^BYTES / {print $2}')"
+TS_JSON="$(echo "$TS_OUT" | awk '/^JSON / { $1=""; sub(/^ /, ""); print }')"
 
 if [[ -z "$TS_BYTES" ]]; then
     echo "skip (TS): probe produced no output (likely missing tsx in PATH)" >&2
     TS_BYTES="(skipped)"
+    TS_JSON="(skipped)"
 fi
 
-# --- Compare ---
+# --- Compare wire-format bytes ---
 fail=0
 if [[ "$GO_REFLECT_BYTES" != "$GO_CODEGEN_BYTES" ]]; then
-    echo "FAIL  Go reflection != Go codegen" >&2
-    echo "  reflection: $GO_REFLECT_BYTES"   >&2
-    echo "  codegen:    $GO_CODEGEN_BYTES"   >&2
+    echo "FAIL  Go reflection != Go codegen (binary)" >&2
+    echo "  reflection: $GO_REFLECT_BYTES"            >&2
+    echo "  codegen:    $GO_CODEGEN_BYTES"            >&2
     fail=1
 fi
 if [[ "$GO_CODEGEN_BYTES" != "$RUST_BYTES" ]]; then
-    echo "FAIL  Go codegen != Rust codegen" >&2
-    echo "  Go:   $GO_CODEGEN_BYTES"         >&2
-    echo "  Rust: $RUST_BYTES"               >&2
+    echo "FAIL  Go codegen != Rust codegen (binary)" >&2
+    echo "  Go:   $GO_CODEGEN_BYTES"                 >&2
+    echo "  Rust: $RUST_BYTES"                       >&2
     fail=1
 fi
 if [[ "$TS_BYTES" != "(skipped)" ]] && [[ "$GO_CODEGEN_BYTES" != "$TS_BYTES" ]]; then
-    echo "FAIL  Go codegen != TS codegen"   >&2
-    echo "  Go: $GO_CODEGEN_BYTES"           >&2
-    echo "  TS: $TS_BYTES"                   >&2
+    echo "FAIL  Go codegen != TS codegen (binary)"   >&2
+    echo "  Go: $GO_CODEGEN_BYTES"                   >&2
+    echo "  TS: $TS_BYTES"                           >&2
     fail=1
 fi
+
+# --- Compare JSON output ---
+# JSON parity is tested alongside the wire format because the same
+# divergence classes (numeric formatting, sort order, polymorphic
+# discriminator placement) can affect each path independently. Round 7
+# caught a Rust-specific bug where the polymorphic JSON helper used
+# serde_json (numbers) while Go/TS used codegen (integers-as-strings).
+if [[ "$GO_CODEGEN_JSON" != "$RUST_JSON" ]]; then
+    echo "FAIL  Go codegen != Rust codegen (JSON)" >&2
+    echo "  Go:   $GO_CODEGEN_JSON"                >&2
+    echo "  Rust: $RUST_JSON"                      >&2
+    fail=1
+fi
+if [[ "$TS_JSON" != "(skipped)" ]] && [[ "$GO_CODEGEN_JSON" != "$TS_JSON" ]]; then
+    echo "FAIL  Go codegen != TS codegen (JSON)" >&2
+    echo "  Go: $GO_CODEGEN_JSON"                >&2
+    echo "  TS: $TS_JSON"                        >&2
+    fail=1
+fi
+
 if [[ $fail -eq 0 ]]; then
     if [[ "$TS_BYTES" == "(skipped)" ]]; then
         echo "  OK  Go reflection == Go codegen == Rust codegen (TS skipped)"
@@ -373,5 +448,6 @@ if [[ $fail -eq 0 ]]; then
         echo "  OK  Go reflection == Go codegen == Rust codegen == TS codegen"
     fi
     echo "      bytes: $GO_CODEGEN_BYTES"
+    echo "      json:  $GO_CODEGEN_JSON"
 fi
 exit $fail

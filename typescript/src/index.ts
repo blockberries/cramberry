@@ -61,6 +61,7 @@ export {
   EndOfStreamError,
   MessageSizeExceededError,
   StreamClosedError,
+  DuplicateTypeRegistrationError,
 } from "./errors";
 
 // Streaming support
@@ -77,8 +78,9 @@ import { Writer } from "./writer";
 export { Writer };
 
 // Reader
-import { Reader } from "./reader";
-export { Reader };
+import { Reader, DEFAULT_LIMITS, SECURE_LIMITS } from "./reader";
+export { Reader, DEFAULT_LIMITS, SECURE_LIMITS };
+export type { Limits, ReaderOptions } from "./reader";
 
 // Registry
 export {

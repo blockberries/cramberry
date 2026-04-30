@@ -490,7 +490,7 @@ func TestMarshalDeterminism(t *testing.T) {
 	}
 
 	var encodings [][]byte
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		data, err := Marshal(original)
 		if err != nil {
 			t.Fatalf("Marshal error: %v", err)
@@ -962,4 +962,66 @@ func TestPerFieldOmitEmpty(t *testing.T) {
 			t.Fatalf("roundtrip mismatch: got %+v", got)
 		}
 	})
+}
+
+// Regression test: Unmarshal of a map field used to MERGE into an
+// existing non-nil map (preserving entries not present in the wire),
+// which broke the determinism contract that decode(encode(x)) == x
+// when the destination was reused. Slices already replaced; maps now
+// replace too.
+func TestUnmarshal_MapFieldReplacesExistingEntries(t *testing.T) {
+	type Holder struct {
+		M map[string]int32 `cramberry:"1"`
+	}
+
+	// First, encode a full map.
+	first := Holder{M: map[string]int32{"a": 1, "b": 2}}
+	data1, err := Marshal(first)
+	if err != nil {
+		t.Fatalf("Marshal first: %v", err)
+	}
+
+	// Decode into a destination that already has stale entries.
+	dst := Holder{M: map[string]int32{"stale": 99, "a": 7}}
+	if err := Unmarshal(data1, &dst); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+
+	// Wire only carried "a" and "b". The stale entry MUST be gone.
+	if _, ok := dst.M["stale"]; ok {
+		t.Errorf("stale entry survived decode: %v", dst.M)
+	}
+	if dst.M["a"] != 1 {
+		t.Errorf("M[\"a\"] = %d, want 1 (decode should overwrite, not merge)", dst.M["a"])
+	}
+	if dst.M["b"] != 2 {
+		t.Errorf("M[\"b\"] = %d, want 2", dst.M["b"])
+	}
+	if len(dst.M) != 2 {
+		t.Errorf("len(M) = %d, want 2 (decoded had exactly 2 keys)", len(dst.M))
+	}
+}
+
+// And verify slice fields also replace (they always have, but lock it
+// in alongside the map fix).
+func TestUnmarshal_SliceFieldReplacesExistingEntries(t *testing.T) {
+	type Holder struct {
+		S []int32 `cramberry:"1"`
+	}
+
+	first := Holder{S: []int32{1, 2, 3}}
+	data, err := Marshal(first)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	dst := Holder{S: []int32{99, 99, 99, 99, 99}}
+	if err := Unmarshal(data, &dst); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if len(dst.S) != 3 {
+		t.Errorf("len(S) = %d, want 3", len(dst.S))
+	}
+	if dst.S[0] != 1 || dst.S[1] != 2 || dst.S[2] != 3 {
+		t.Errorf("S = %v, want [1 2 3]", dst.S)
+	}
 }

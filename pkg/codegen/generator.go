@@ -4,7 +4,7 @@ package codegen
 import (
 	"fmt"
 	"io"
-	"sort"
+	"slices"
 	"strings"
 
 	"golang.org/x/text/cases"
@@ -128,7 +128,7 @@ func Languages() []Language {
 	for lang := range registry {
 		langs = append(langs, lang)
 	}
-	sort.Slice(langs, func(i, j int) bool { return langs[i] < langs[j] })
+	slices.Sort(langs)
 	return langs
 }
 
@@ -164,6 +164,40 @@ func ResolveNamedEnum(local *schema.Schema, imports map[string]*schema.Schema, t
 // IsNamedEnum is a convenience wrapper around ResolveNamedEnum.
 func IsNamedEnum(local *schema.Schema, imports map[string]*schema.Schema, typ *schema.NamedType) bool {
 	_, ok := ResolveNamedEnum(local, imports, typ)
+	return ok
+}
+
+// ResolveNamedInterface returns the schema.Interface for a NamedType if
+// it refers to an interface (rather than a message or enum), looking in
+// both the local schema and any imported schemas.
+//
+// Shared across Go/Rust/TS generators so dispatch decisions stay
+// consistent: a field whose type is a NamedType-pointing-at-Interface
+// must invoke the polymorphic encoder/decoder, not the per-message one.
+func ResolveNamedInterface(local *schema.Schema, imports map[string]*schema.Schema, typ *schema.NamedType) (*schema.Interface, bool) {
+	if typ.Package == "" {
+		for _, iface := range local.Interfaces {
+			if iface.Name == typ.Name {
+				return iface, true
+			}
+		}
+		return nil, false
+	}
+	if imports != nil {
+		if imported, ok := imports[typ.Package]; ok && imported != nil {
+			for _, iface := range imported.Interfaces {
+				if iface.Name == typ.Name {
+					return iface, true
+				}
+			}
+		}
+	}
+	return nil, false
+}
+
+// IsNamedInterface is a convenience wrapper around ResolveNamedInterface.
+func IsNamedInterface(local *schema.Schema, imports map[string]*schema.Schema, typ *schema.NamedType) bool {
+	_, ok := ResolveNamedInterface(local, imports, typ)
 	return ok
 }
 

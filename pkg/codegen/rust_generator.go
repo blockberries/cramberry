@@ -216,9 +216,19 @@ func (c *rustContext) rustComment(text string) string {
 	return strings.Join(result, "\n")
 }
 
-// rustWireType returns the V2 wire type constant for a field type.
-// This matches Go's V2 wire format for cross-runtime compatibility.
+// rustWireType returns the wire type constant for a field type.
+//
+// Repeated fields are always emitted as a length-prefixed payload
+// (count + elements), so their tag carries WireType::Bytes regardless
+// of the element scalar's underlying wire type. Without this, the
+// generated tag for `repeated int64 collaborators` claimed SVarint
+// while the body was Bytes — Go's codegen and Rust's decoder both
+// special-case the field number, so self-decoding worked, but the
+// wire-type byte diverged from the Go encoder's output.
 func (c *rustContext) rustWireType(f *schema.Field) string {
+	if f.Repeated {
+		return "WireType::Bytes"
+	}
 	return c.rustWireTypeForType(f.Type)
 }
 
@@ -262,7 +272,7 @@ func (c *rustContext) rustWireTypeForType(t schema.TypeRef) string {
 // The outer `if rustZeroCheck { ... }` guard ensures we only enter
 // this block when the Option is Some.
 func (c *rustContext) rustWriteField(f *schema.Field) string {
-	fieldName := "msg." + ToSnakeCase(f.Name)
+	fieldName := "msg." + c.rustFieldName(f)
 	_, isPtr := f.Type.(*schema.PointerType)
 	if f.Optional && !isPtr && !f.Repeated {
 		// `as_ref().unwrap()` is sound because rustZeroCheck emits
@@ -289,7 +299,7 @@ func (c *rustContext) rustWriteField(f *schema.Field) string {
 // The empty string returned for "always emit" tells the template to
 // skip the surrounding `if`.
 func (c *rustContext) rustZeroCheck(f *schema.Field) string {
-	fieldName := "msg." + ToSnakeCase(f.Name)
+	fieldName := "msg." + c.rustFieldName(f)
 	// `optional` modifier wraps the rust type in Option<T>. The
 	// presence check (`is_some`) is sufficient: if the user set
 	// Some(""), encode the empty string — otherwise we'd lose the
@@ -482,10 +492,22 @@ func (c *rustContext) rustReadValue(t schema.TypeRef, repeated bool) string {
 			elemType = arr.Element
 		}
 		elemRead := c.rustReadValue(elemType, false)
+		// Inside a repeated body, message elements are concatenated as
+		// `body 0x00 body 0x00 ...` — only the outer field has a
+		// length prefix. Override the single-message decode (which
+		// expects `length body 0x00`) to call the per-message decoder
+		// directly on the shadowed reader.
+		if nt, ok := elemType.(*schema.NamedType); ok && !c.isNamedEnum(nt) {
+			elemRead = fmt.Sprintf("decode_%s(&mut reader)?", ToSnakeCase(nt.Name))
+		}
+		// Shadow the outer `reader` so `elemRead` (which textually
+		// refers to `reader.read_*()?`) reads from the sub-buffer.
+		// Without this shadow, the loop reads N elements from the
+		// outer stream and walks past the next field's tag.
 		return fmt.Sprintf(`{
-            let data = reader.read_length_prefixed_bytes()?;
-            let mut sub_reader = Reader::new(data);
-            let len = sub_reader.read_varint()? as usize;
+            let __data = reader.read_length_prefixed_bytes()?;
+            let mut reader = Reader::new(__data);
+            let len = reader.read_varint()? as usize;
             let mut result = Vec::with_capacity(len);
             for _ in 0..len {
                 result.push(%s);
@@ -542,10 +564,12 @@ func (c *rustContext) rustReadValue(t schema.TypeRef, repeated bool) string {
 	case *schema.MapType:
 		keyRead := c.rustReadValue(typ.Key, false)
 		valRead := c.rustReadValue(typ.Value, false)
+		// Shadow `reader` so `keyRead`/`valRead` consume from the
+		// length-prefixed sub-buffer rather than the outer stream.
 		return fmt.Sprintf(`{
-            let data = reader.read_length_prefixed_bytes()?;
-            let mut sub_reader = Reader::new(data);
-            let len = sub_reader.read_varint()? as usize;
+            let __data = reader.read_length_prefixed_bytes()?;
+            let mut reader = Reader::new(__data);
+            let len = reader.read_varint()? as usize;
             let mut result = std::collections::HashMap::with_capacity(len);
             for _ in 0..len {
                 let k = %s;
@@ -575,7 +599,7 @@ func (c *rustContext) jsonFieldName(f *schema.Field) string {
 // break for any schema whose first declared field doesn't happen to have
 // tag 1.
 func (c *rustContext) jsonEncodeField(idx int, f *schema.Field) string {
-	fieldName := ToSnakeCase(f.Name)
+	fieldName := c.rustFieldName(f)
 	jsonName := ToSnakeCase(f.Name)
 
 	var code strings.Builder
@@ -586,7 +610,7 @@ func (c *rustContext) jsonEncodeField(idx int, f *schema.Field) string {
 	}
 
 	// Write field name
-	code.WriteString(fmt.Sprintf("    result.push_str(\"\\\"%s\\\":\");\n", jsonName))
+	fmt.Fprintf(&code, "    result.push_str(\"\\\"%s\\\":\");\n", jsonName)
 
 	// Generate value encoding
 	valueCode := c.jsonEncodeValue(f.Type, "msg."+fieldName, f.Repeated, f.Optional)
@@ -662,7 +686,7 @@ func (c *rustContext) jsonEncodeEnum(e *schema.Enum, varName string) string {
 	for _, v := range e.Values {
 		enumType := ToPascalCase(e.Name)
 		enumValue := ToPascalCase(v.Name)
-		code.WriteString(fmt.Sprintf("        %s::%s => \"%s\",\n", enumType, enumValue, v.Name))
+		fmt.Fprintf(&code, "        %s::%s => \"%s\",\n", enumType, enumValue, v.Name)
 	}
 	code.WriteString("        _ => \"UNKNOWN\",\n")
 	code.WriteString("    });\n")
@@ -683,7 +707,7 @@ func (c *rustContext) jsonEncodeMessage(typ *schema.NamedType, varName string) s
 func (c *rustContext) jsonEncodeArray(elemType schema.TypeRef, varName string) string {
 	var code strings.Builder
 	code.WriteString("    result.push_str(\"[\");\n")
-	code.WriteString(fmt.Sprintf("    for (i, elem) in %s.iter().enumerate() {\n", varName))
+	fmt.Fprintf(&code, "    for (i, elem) in %s.iter().enumerate() {\n", varName)
 	code.WriteString("        if i > 0 { result.push_str(\",\"); }\n")
 
 	// Generate element encoding
@@ -700,7 +724,7 @@ func (c *rustContext) jsonEncodeMap(t *schema.MapType, varName string) string {
 	var code strings.Builder
 	code.WriteString("    {\n")
 	code.WriteString("        result.push_str(\"{\");\n")
-	code.WriteString(fmt.Sprintf("        let mut keys: Vec<String> = %s.keys().map(|k| k.to_string()).collect();\n", varName))
+	fmt.Fprintf(&code, "        let mut keys: Vec<String> = %s.keys().map(|k| k.to_string()).collect();\n", varName)
 	code.WriteString("        cramberry::json::sort_map_keys_lexicographic(&mut keys);\n")
 	code.WriteString("        for (i, key_str) in keys.iter().enumerate() {\n")
 	code.WriteString("            if i > 0 { result.push_str(\",\"); }\n")
@@ -720,18 +744,18 @@ func (c *rustContext) jsonEncodeMap(t *schema.MapType, varName string) string {
 		lookup = "k"
 	case "int8", "int16", "int32", "int64", "int":
 		rustType := c.rustScalarType(keyType.Name)
-		code.WriteString(fmt.Sprintf("            let k: %s = key_str.parse().unwrap();\n", rustType))
+		fmt.Fprintf(&code, "            let k: %s = key_str.parse().unwrap();\n", rustType)
 		lookup = "&k"
 	case "uint8", "uint16", "uint32", "uint64", "uint", "byte":
 		rustType := c.rustScalarType(keyType.Name)
-		code.WriteString(fmt.Sprintf("            let k: %s = key_str.parse().unwrap();\n", rustType))
+		fmt.Fprintf(&code, "            let k: %s = key_str.parse().unwrap();\n", rustType)
 		lookup = "&k"
 	default:
 		code.WriteString("            let k = key_str.as_str();\n")
 		lookup = "k"
 	}
 
-	code.WriteString(fmt.Sprintf("            let v = %s.get(%s).unwrap();\n", varName, lookup))
+	fmt.Fprintf(&code, "            let v = %s.get(%s).unwrap();\n", varName, lookup)
 
 	// Encode value
 	valueCode := c.jsonEncodeValue(t.Value, "(*v)", false, false)
@@ -745,11 +769,11 @@ func (c *rustContext) jsonEncodeMap(t *schema.MapType, varName string) string {
 
 // jsonDecodeField generates JSON decoding code for a field.
 func (c *rustContext) jsonDecodeField(f *schema.Field) string {
-	fieldName := ToSnakeCase(f.Name)
+	fieldName := c.rustFieldName(f)
 	jsonName := ToSnakeCase(f.Name)
 
 	var code strings.Builder
-	code.WriteString(fmt.Sprintf("    if let Some(value) = obj.get(\"%s\") {\n", jsonName))
+	fmt.Fprintf(&code, "    if let Some(value) = obj.get(\"%s\") {\n", jsonName)
 
 	// Generate decoding based on type
 	decodeCode := c.jsonDecodeValue(f.Type, "msg."+fieldName, "value", f.Repeated, f.Optional)
@@ -829,10 +853,10 @@ func (c *rustContext) jsonDecodeEnum(e *schema.Enum, targetVar string, sourceVar
 	var code strings.Builder
 	enumType := ToPascalCase(e.Name)
 
-	code.WriteString(fmt.Sprintf("        let str_val = %s.as_str().ok_or_else(|| \"expected string for enum\".to_string())?;\n", sourceVar))
+	fmt.Fprintf(&code, "        let str_val = %s.as_str().ok_or_else(|| \"expected string for enum\".to_string())?;\n", sourceVar)
 	code.WriteString("        " + targetVar + " = match str_val {\n")
 	for _, v := range e.Values {
-		code.WriteString(fmt.Sprintf("            \"%s\" => %s::%s,\n", v.Name, enumType, ToPascalCase(v.Name)))
+		fmt.Fprintf(&code, "            \"%s\" => %s::%s,\n", v.Name, enumType, ToPascalCase(v.Name))
 	}
 	code.WriteString("            _ => return Err(format!(\"unknown enum value: {}\", str_val)),\n")
 	code.WriteString("        };\n")
@@ -850,16 +874,16 @@ func (c *rustContext) jsonDecodeMessage(t *schema.NamedType, targetVar string, s
 func (c *rustContext) jsonDecodeArray(elemType schema.TypeRef, targetVar string, sourceVar string) string {
 	var code strings.Builder
 
-	code.WriteString(fmt.Sprintf("    let arr = %s.as_array().ok_or_else(|| \"expected array\".to_string())?;\n", sourceVar))
-	code.WriteString(fmt.Sprintf("    %s = Vec::new();\n", targetVar))
+	fmt.Fprintf(&code, "    let arr = %s.as_array().ok_or_else(|| \"expected array\".to_string())?;\n", sourceVar)
+	fmt.Fprintf(&code, "    %s = Vec::new();\n", targetVar)
 	code.WriteString("    for elem in arr {\n")
-	code.WriteString(fmt.Sprintf("        let mut decoded: %s = Default::default();\n", c.rustType(elemType)))
+	fmt.Fprintf(&code, "        let mut decoded: %s = Default::default();\n", c.rustType(elemType))
 
 	// Decode element
 	elemCode := c.jsonDecodeValue(elemType, "decoded", "elem", false, false)
 	code.WriteString(elemCode)
 
-	code.WriteString(fmt.Sprintf("        %s.push(decoded);\n", targetVar))
+	fmt.Fprintf(&code, "        %s.push(decoded);\n", targetVar)
 	code.WriteString("    }\n")
 
 	return code.String()
@@ -869,8 +893,8 @@ func (c *rustContext) jsonDecodeArray(elemType schema.TypeRef, targetVar string,
 func (c *rustContext) jsonDecodeMap(t *schema.MapType, targetVar string, sourceVar string) string {
 	var code strings.Builder
 
-	code.WriteString(fmt.Sprintf("    let map_obj = %s.as_object().ok_or_else(|| \"expected object\".to_string())?;\n", sourceVar))
-	code.WriteString(fmt.Sprintf("    %s = std::collections::HashMap::new();\n", targetVar))
+	fmt.Fprintf(&code, "    let map_obj = %s.as_object().ok_or_else(|| \"expected object\".to_string())?;\n", sourceVar)
+	fmt.Fprintf(&code, "    %s = std::collections::HashMap::new();\n", targetVar)
 	code.WriteString("    for (key_str, val) in map_obj {\n")
 
 	// Convert string key to actual key type
@@ -880,15 +904,15 @@ func (c *rustContext) jsonDecodeMap(t *schema.MapType, targetVar string, sourceV
 		code.WriteString("        let k = key_str.to_string();\n")
 	case "int8", "int16", "int32", "int64", "int":
 		rustType := c.rustScalarType(keyType.Name)
-		code.WriteString(fmt.Sprintf("        let k: %s = key_str.parse().map_err(|e| format!(\"invalid key: {}\", e))?;\n", rustType))
+		fmt.Fprintf(&code, "        let k: %s = key_str.parse().map_err(|e| format!(\"invalid key: {}\", e))?;\n", rustType)
 	case "uint8", "uint16", "uint32", "uint64", "uint", "byte":
 		rustType := c.rustScalarType(keyType.Name)
-		code.WriteString(fmt.Sprintf("        let k: %s = key_str.parse().map_err(|e| format!(\"invalid key: {}\", e))?;\n", rustType))
+		fmt.Fprintf(&code, "        let k: %s = key_str.parse().map_err(|e| format!(\"invalid key: {}\", e))?;\n", rustType)
 	default:
 		code.WriteString("        let k = key_str.to_string();\n")
 	}
 
-	code.WriteString(fmt.Sprintf("        let mut v: %s = Default::default();\n", c.rustType(t.Value)))
+	fmt.Fprintf(&code, "        let mut v: %s = Default::default();\n", c.rustType(t.Value))
 
 	// Decode value
 	valueCode := c.jsonDecodeValue(t.Value, "v", "val", false, false)
@@ -962,7 +986,7 @@ impl {{rustEnumType $enum}} {
 {{- end}}
 }
 {{if generateMarshal}}
-/// Encodes a {{rustMessageType $msg}} to the writer using V2 wire format.
+/// Encodes a {{rustMessageType $msg}} to the writer.
 pub fn encode_{{toSnake $msg.Name}}(writer: &mut Writer, msg: &{{rustMessageType $msg}}) -> Result<()> {
 {{range $msg.Fields}}
     // Field {{.Number}}: {{.Name}}
@@ -982,7 +1006,7 @@ pub fn encode_{{toSnake $msg.Name}}(writer: &mut Writer, msg: &{{rustMessageType
     Ok(())
 }
 
-/// Decodes a {{rustMessageType $msg}} from the reader using V2 wire format.
+/// Decodes a {{rustMessageType $msg}} from the reader.
 pub fn decode_{{toSnake $msg.Name}}(reader: &mut Reader) -> Result<{{rustMessageType $msg}}> {
 {{- range $msg.Fields}}
     let mut {{rustFieldName .}}: {{rustFieldType .}} = Default::default();
@@ -1085,5 +1109,102 @@ impl {{rustInterfaceType $iface}} {
     }
 }
 
+impl Default for {{rustInterfaceType $iface}} {
+    fn default() -> Self {
+        // The first registered implementation acts as the default;
+        // pattern is consistent with the codegen-emitted message
+        // Default impls and lets fields of this type implement
+        // Default themselves.
+{{- range $i, $impl := $iface.Implementations}}
+{{- if eq $i 0}}
+        Self::{{.Type.Name}}({{.Type.Name}}::default())
+{{- end}}
+{{- end}}
+    }
+}
+
+/// Encodes a polymorphic {{rustInterfaceType $iface}} to the writer.
+///
+/// Wire layout inside the surrounding length-prefix:
+/// [type_id varint] [concrete-type body terminated by end-marker].
+/// Mirrors the Go reflection marshaller's encodeInterface so all
+/// runtimes produce byte-identical output for the same logical input.
+pub fn encode_{{toSnake $iface.Name}}(writer: &mut Writer, msg: &{{rustInterfaceType $iface}}) -> Result<()> {
+    match msg {
+{{- range $iface.Implementations}}
+        {{rustInterfaceType $iface}}::{{.Type.Name}}(__inner) => {
+            writer.write_varint({{.TypeID}})?;
+            encode_{{toSnake .Type.Name}}(writer, __inner)?;
+        }
+{{- end}}
+    }
+    Ok(())
+}
+
+/// Decodes a polymorphic {{rustInterfaceType $iface}} from the reader.
+/// Returns an error for an unknown type id (forward-compat gap that the
+/// caller is allowed to propagate or skip).
+pub fn decode_{{toSnake $iface.Name}}(reader: &mut Reader) -> Result<{{rustInterfaceType $iface}}> {
+    let id = reader.read_varint()?;
+    match id {
+{{- range $iface.Implementations}}
+        {{.TypeID}} => {
+            let inner = decode_{{toSnake .Type.Name}}(reader)?;
+            Ok({{rustInterfaceType $iface}}::{{.Type.Name}}(inner))
+        }
+{{- end}}
+        _ => Err(cramberry::Error::custom(format!(
+            "unknown type id {} for interface {{rustInterfaceType $iface}}", id
+        ))),
+    }
+}
+
+{{if hasSerde}}
+/// Encodes a polymorphic {{rustInterfaceType $iface}} as a tagged JSON
+/// object: {"_type": "Variant", ...inner-fields-flat}. Dispatches to
+/// the per-variant codegen-emitted to_json_<type> helpers so the
+/// output respects cramberry's deterministic JSON rules (integers as
+/// strings, base64 bytes, sorted map keys) — serde_json's default
+/// formats integers as numbers, which would diverge from Go/TS.
+pub fn to_json_{{toSnake $iface.Name}}(msg: &{{rustInterfaceType $iface}}) -> std::result::Result<String, String> {
+    match msg {
+{{- range $iface.Implementations}}
+        {{rustInterfaceType $iface}}::{{.Type.Name}}(__inner) => {
+            let __body = to_json_{{toSnake .Type.Name}}(__inner)?;
+            if __body == "{}" {
+                Ok("{\"_type\":\"{{.Type.Name}}\"}".to_string())
+            } else {
+                Ok("{\"_type\":\"{{.Type.Name}}\",".to_string() + &__body[1..])
+            }
+        }
+{{- end}}
+    }
+}
+
+/// Decodes a tagged JSON object into a polymorphic {{rustInterfaceType $iface}}.
+/// Strips "_type" before delegating to the concrete impl's strict-mode
+/// from_json_<type> helper.
+pub fn from_json_{{toSnake $iface.Name}}(json: &str) -> std::result::Result<{{rustInterfaceType $iface}}, String> {
+    let mut value: serde_json::Value = serde_json::from_str(json)
+        .map_err(|e| e.to_string())?;
+    let obj = value.as_object_mut()
+        .ok_or_else(|| "expected JSON object for {{rustInterfaceType $iface}}".to_string())?;
+    let type_value = obj.remove("_type")
+        .ok_or_else(|| "missing \"_type\" field for {{rustInterfaceType $iface}}".to_string())?;
+    let type_name = type_value.as_str()
+        .ok_or_else(|| "\"_type\" must be a string for {{rustInterfaceType $iface}}".to_string())?
+        .to_string();
+    let inner_json = serde_json::to_string(&value).map_err(|e| e.to_string())?;
+    match type_name.as_str() {
+{{- range $iface.Implementations}}
+        "{{.Type.Name}}" => {
+            let inner = from_json_{{toSnake .Type.Name}}(&inner_json)?;
+            Ok({{rustInterfaceType $iface}}::{{.Type.Name}}(inner))
+        }
+{{- end}}
+        other => Err(format!("unknown _type {} for {{rustInterfaceType $iface}}", other)),
+    }
+}
+{{end}}
 {{end}}
 `

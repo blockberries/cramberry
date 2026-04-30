@@ -1,8 +1,8 @@
 //! Wire format types and utilities.
 
-/// Wire types used in the Cramberry V2 encoding format.
+/// Wire types used in the Cramberry encoding format.
 ///
-/// V2 uses a compact 3-bit wire type encoding:
+/// 3-bit wire type encoding:
 /// - 0: Varint (unsigned LEB128)
 /// - 1: Fixed64 (8 bytes, little-endian)
 /// - 2: Bytes (length-prefixed)
@@ -38,7 +38,7 @@ impl WireType {
     }
 }
 
-/// V2 compact tag format constants.
+/// Compact tag format constants.
 /// Tag format: [field_num:4][wire_type:3][ext:1]
 /// For fields 1-15: single byte tag
 /// For fields 16+: ext bit set, followed by varint field number
@@ -68,7 +68,7 @@ impl FieldTag {
         }
     }
 
-    /// Encodes the field tag to V2 compact format bytes.
+    /// Encodes the field tag to compact format bytes.
     /// Returns a Vec<u8> containing 1-6 bytes depending on field number.
     pub fn encode_compact(&self) -> Vec<u8> {
         if self.field_number == 0 {
@@ -94,24 +94,9 @@ impl FieldTag {
         }
     }
 
-    /// Encodes the field tag to a u32 (legacy format, deprecated).
-    #[deprecated(note = "Use encode_compact for V2 format")]
-    pub fn encode(&self) -> u32 {
-        (self.field_number << 3) | (self.wire_type as u32)
-    }
-
-    /// Decodes a u32 to a field tag (legacy format, deprecated).
-    #[deprecated(note = "Use decode_compact for V2 format")]
-    pub fn decode(value: u32) -> Option<Self> {
-        let wire_type = WireType::from_u8((value & 0x07) as u8)?;
-        Some(Self {
-            field_number: value >> 3,
-            wire_type,
-        })
-    }
 }
 
-/// Result of decoding a V2 compact tag.
+/// Result of decoding a compact tag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TagResult {
     pub field_number: u32,
@@ -119,7 +104,7 @@ pub struct TagResult {
     pub bytes_read: usize,
 }
 
-/// Decodes a V2 compact tag from a byte slice.
+/// Decodes a compact tag from a byte slice.
 /// Returns None if the buffer is empty or the wire type is invalid.
 pub fn decode_tag(data: &[u8]) -> Option<TagResult> {
     if data.is_empty() {

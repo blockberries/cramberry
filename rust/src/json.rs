@@ -244,7 +244,11 @@ pub fn parse_u32_from_json(value: &serde_json::Value) -> Result<u32, String> {
 
 /// Sorts map keys lexicographically by UTF-8 byte order.
 /// This ensures deterministic JSON output for maps.
-pub fn sort_map_keys_lexicographic(keys: &mut Vec<String>) {
+///
+/// Accepts `&mut [String]` so the codegen-emitted callers passing
+/// `&mut keys` (where `keys: Vec<String>`) auto-deref without requiring
+/// the helper to own the vector type.
+pub fn sort_map_keys_lexicographic(keys: &mut [String]) {
     keys.sort();
 }
 
@@ -304,6 +308,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::approx_constant)] // literals are reference values matched against Go output, not π/e
     fn test_format_f32() {
         // Reference values come from pkg/cramberry/json_test.go::TestFormatFloat32.
         // They must match Go's strconv.FormatFloat(v, 'g', 9, 32) byte-for-byte.
@@ -319,6 +324,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::approx_constant)] // literals are reference values matched against Go output, not π/e
     fn test_format_f64() {
         // Reference values come from pkg/cramberry/json_test.go::TestFormatFloat64.
         assert_eq!(format_f64(0.0).unwrap(), "0");

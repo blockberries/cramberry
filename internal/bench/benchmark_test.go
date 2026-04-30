@@ -1,5 +1,7 @@
 // Package bench provides comprehensive performance comparisons between
 // Cramberry, Protocol Buffers, and JSON serialization formats.
+//
+//lint:file-ignore ST1003 JSON-comparison structs mirror cramberry/protobuf-generated field names (Id/Url/etc.) so size and shape stay directly comparable.
 package bench
 
 import (
@@ -173,7 +175,7 @@ func makeCramberryEvent() *cramgen.Event {
 
 func makeCramberryBatchRequest(size int) *cramgen.BatchRequest {
 	items := make([]cramgen.SmallMessage, size)
-	for i := 0; i < size; i++ {
+	for i := range size {
 		items[i] = cramgen.SmallMessage{
 			Id:     int64(i),
 			Name:   "batch-item",
@@ -354,7 +356,7 @@ func makeProtobufEvent() *pb.Event {
 // code, not a measurement artifact.
 func makeProtobufBatchRequest(size int) *pb.BatchRequest {
 	items := make([]*pb.SmallMessage, size)
-	for i := 0; i < size; i++ {
+	for i := range size {
 		items[i] = &pb.SmallMessage{
 			Id:     int64(i),
 			Name:   "batch-item",
@@ -656,7 +658,7 @@ func makeJSONEvent() *JSONEvent {
 
 func makeJSONBatchRequest(size int) *JSONBatchRequest {
 	items := make([]JSONSmallMessage, size)
-	for i := 0; i < size; i++ {
+	for i := range size {
 		items[i] = JSONSmallMessage{
 			Id:     int64(i),
 			Name:   "batch-item",
@@ -681,9 +683,9 @@ func makeJSONBatchRequest(size int) *JSONBatchRequest {
 
 func BenchmarkSmallMessage_Cramberry_Encode(b *testing.B) {
 	msg := makeCramberrySmallMessage()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = msg.MarshalCramberry()
 	}
 }
@@ -691,9 +693,9 @@ func BenchmarkSmallMessage_Cramberry_Encode(b *testing.B) {
 func BenchmarkSmallMessage_Cramberry_Decode(b *testing.B) {
 	msg := makeCramberrySmallMessage()
 	data, _ := msg.MarshalCramberry()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result cramgen.SmallMessage
 		_ = result.UnmarshalCramberry(data)
 	}
@@ -701,9 +703,9 @@ func BenchmarkSmallMessage_Cramberry_Decode(b *testing.B) {
 
 func BenchmarkSmallMessage_Protobuf_Encode(b *testing.B) {
 	msg := makeProtobufSmallMessage()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = proto.Marshal(msg)
 	}
 }
@@ -711,9 +713,9 @@ func BenchmarkSmallMessage_Protobuf_Encode(b *testing.B) {
 func BenchmarkSmallMessage_Protobuf_Decode(b *testing.B) {
 	msg := makeProtobufSmallMessage()
 	data, _ := proto.Marshal(msg)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result pb.SmallMessage
 		_ = proto.Unmarshal(data, &result)
 	}
@@ -721,9 +723,9 @@ func BenchmarkSmallMessage_Protobuf_Decode(b *testing.B) {
 
 func BenchmarkSmallMessage_JSON_Encode(b *testing.B) {
 	msg := makeJSONSmallMessage()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = json.Marshal(msg)
 	}
 }
@@ -731,9 +733,9 @@ func BenchmarkSmallMessage_JSON_Encode(b *testing.B) {
 func BenchmarkSmallMessage_JSON_Decode(b *testing.B) {
 	msg := makeJSONSmallMessage()
 	data, _ := json.Marshal(msg)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result JSONSmallMessage
 		_ = json.Unmarshal(data, &result)
 	}
@@ -745,9 +747,9 @@ func BenchmarkSmallMessage_JSON_Decode(b *testing.B) {
 
 func BenchmarkMetrics_Cramberry_Encode(b *testing.B) {
 	msg := makeCramberryMetrics()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = msg.MarshalCramberry()
 	}
 }
@@ -755,9 +757,9 @@ func BenchmarkMetrics_Cramberry_Encode(b *testing.B) {
 func BenchmarkMetrics_Cramberry_Decode(b *testing.B) {
 	msg := makeCramberryMetrics()
 	data, _ := msg.MarshalCramberry()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result cramgen.Metrics
 		_ = result.UnmarshalCramberry(data)
 	}
@@ -765,9 +767,9 @@ func BenchmarkMetrics_Cramberry_Decode(b *testing.B) {
 
 func BenchmarkMetrics_Protobuf_Encode(b *testing.B) {
 	msg := makeProtobufMetrics()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = proto.Marshal(msg)
 	}
 }
@@ -775,9 +777,9 @@ func BenchmarkMetrics_Protobuf_Encode(b *testing.B) {
 func BenchmarkMetrics_Protobuf_Decode(b *testing.B) {
 	msg := makeProtobufMetrics()
 	data, _ := proto.Marshal(msg)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result pb.Metrics
 		_ = proto.Unmarshal(data, &result)
 	}
@@ -785,9 +787,9 @@ func BenchmarkMetrics_Protobuf_Decode(b *testing.B) {
 
 func BenchmarkMetrics_JSON_Encode(b *testing.B) {
 	msg := makeJSONMetrics()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = json.Marshal(msg)
 	}
 }
@@ -795,9 +797,9 @@ func BenchmarkMetrics_JSON_Encode(b *testing.B) {
 func BenchmarkMetrics_JSON_Decode(b *testing.B) {
 	msg := makeJSONMetrics()
 	data, _ := json.Marshal(msg)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result JSONMetrics
 		_ = json.Unmarshal(data, &result)
 	}
@@ -809,9 +811,9 @@ func BenchmarkMetrics_JSON_Decode(b *testing.B) {
 
 func BenchmarkPerson_Cramberry_Encode(b *testing.B) {
 	msg := makeCramberryPerson()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = msg.MarshalCramberry()
 	}
 }
@@ -819,9 +821,9 @@ func BenchmarkPerson_Cramberry_Encode(b *testing.B) {
 func BenchmarkPerson_Cramberry_Decode(b *testing.B) {
 	msg := makeCramberryPerson()
 	data, _ := msg.MarshalCramberry()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result cramgen.Person
 		_ = result.UnmarshalCramberry(data)
 	}
@@ -829,9 +831,9 @@ func BenchmarkPerson_Cramberry_Decode(b *testing.B) {
 
 func BenchmarkPerson_Protobuf_Encode(b *testing.B) {
 	msg := makeProtobufPerson()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = proto.Marshal(msg)
 	}
 }
@@ -839,9 +841,9 @@ func BenchmarkPerson_Protobuf_Encode(b *testing.B) {
 func BenchmarkPerson_Protobuf_Decode(b *testing.B) {
 	msg := makeProtobufPerson()
 	data, _ := proto.Marshal(msg)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result pb.Person
 		_ = proto.Unmarshal(data, &result)
 	}
@@ -849,9 +851,9 @@ func BenchmarkPerson_Protobuf_Decode(b *testing.B) {
 
 func BenchmarkPerson_JSON_Encode(b *testing.B) {
 	msg := makeJSONPerson()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = json.Marshal(msg)
 	}
 }
@@ -859,9 +861,9 @@ func BenchmarkPerson_JSON_Encode(b *testing.B) {
 func BenchmarkPerson_JSON_Decode(b *testing.B) {
 	msg := makeJSONPerson()
 	data, _ := json.Marshal(msg)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result JSONPerson
 		_ = json.Unmarshal(data, &result)
 	}
@@ -873,9 +875,9 @@ func BenchmarkPerson_JSON_Decode(b *testing.B) {
 
 func BenchmarkDocument_Cramberry_Encode(b *testing.B) {
 	msg := makeCramberryDocument()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = msg.MarshalCramberry()
 	}
 }
@@ -883,9 +885,9 @@ func BenchmarkDocument_Cramberry_Encode(b *testing.B) {
 func BenchmarkDocument_Cramberry_Decode(b *testing.B) {
 	msg := makeCramberryDocument()
 	data, _ := msg.MarshalCramberry()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result cramgen.Document
 		_ = result.UnmarshalCramberry(data)
 	}
@@ -893,9 +895,9 @@ func BenchmarkDocument_Cramberry_Decode(b *testing.B) {
 
 func BenchmarkDocument_Protobuf_Encode(b *testing.B) {
 	msg := makeProtobufDocument()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = proto.Marshal(msg)
 	}
 }
@@ -903,9 +905,9 @@ func BenchmarkDocument_Protobuf_Encode(b *testing.B) {
 func BenchmarkDocument_Protobuf_Decode(b *testing.B) {
 	msg := makeProtobufDocument()
 	data, _ := proto.Marshal(msg)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result pb.Document
 		_ = proto.Unmarshal(data, &result)
 	}
@@ -913,9 +915,9 @@ func BenchmarkDocument_Protobuf_Decode(b *testing.B) {
 
 func BenchmarkDocument_JSON_Encode(b *testing.B) {
 	msg := makeJSONDocument()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = json.Marshal(msg)
 	}
 }
@@ -923,9 +925,9 @@ func BenchmarkDocument_JSON_Encode(b *testing.B) {
 func BenchmarkDocument_JSON_Decode(b *testing.B) {
 	msg := makeJSONDocument()
 	data, _ := json.Marshal(msg)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result JSONDocument
 		_ = json.Unmarshal(data, &result)
 	}
@@ -937,9 +939,9 @@ func BenchmarkDocument_JSON_Decode(b *testing.B) {
 
 func BenchmarkEvent_Cramberry_Encode(b *testing.B) {
 	msg := makeCramberryEvent()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = msg.MarshalCramberry()
 	}
 }
@@ -947,9 +949,9 @@ func BenchmarkEvent_Cramberry_Encode(b *testing.B) {
 func BenchmarkEvent_Cramberry_Decode(b *testing.B) {
 	msg := makeCramberryEvent()
 	data, _ := msg.MarshalCramberry()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result cramgen.Event
 		_ = result.UnmarshalCramberry(data)
 	}
@@ -957,9 +959,9 @@ func BenchmarkEvent_Cramberry_Decode(b *testing.B) {
 
 func BenchmarkEvent_Protobuf_Encode(b *testing.B) {
 	msg := makeProtobufEvent()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = proto.Marshal(msg)
 	}
 }
@@ -967,9 +969,9 @@ func BenchmarkEvent_Protobuf_Encode(b *testing.B) {
 func BenchmarkEvent_Protobuf_Decode(b *testing.B) {
 	msg := makeProtobufEvent()
 	data, _ := proto.Marshal(msg)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result pb.Event
 		_ = proto.Unmarshal(data, &result)
 	}
@@ -977,9 +979,9 @@ func BenchmarkEvent_Protobuf_Decode(b *testing.B) {
 
 func BenchmarkEvent_JSON_Encode(b *testing.B) {
 	msg := makeJSONEvent()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = json.Marshal(msg)
 	}
 }
@@ -987,9 +989,9 @@ func BenchmarkEvent_JSON_Encode(b *testing.B) {
 func BenchmarkEvent_JSON_Decode(b *testing.B) {
 	msg := makeJSONEvent()
 	data, _ := json.Marshal(msg)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result JSONEvent
 		_ = json.Unmarshal(data, &result)
 	}
@@ -1001,9 +1003,9 @@ func BenchmarkEvent_JSON_Decode(b *testing.B) {
 
 func BenchmarkBatch100_Cramberry_Encode(b *testing.B) {
 	msg := makeCramberryBatchRequest(100)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = msg.MarshalCramberry()
 	}
 }
@@ -1011,9 +1013,9 @@ func BenchmarkBatch100_Cramberry_Encode(b *testing.B) {
 func BenchmarkBatch100_Cramberry_Decode(b *testing.B) {
 	msg := makeCramberryBatchRequest(100)
 	data, _ := msg.MarshalCramberry()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result cramgen.BatchRequest
 		_ = result.UnmarshalCramberry(data)
 	}
@@ -1021,9 +1023,9 @@ func BenchmarkBatch100_Cramberry_Decode(b *testing.B) {
 
 func BenchmarkBatch100_Protobuf_Encode(b *testing.B) {
 	msg := makeProtobufBatchRequest(100)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = proto.Marshal(msg)
 	}
 }
@@ -1031,9 +1033,9 @@ func BenchmarkBatch100_Protobuf_Encode(b *testing.B) {
 func BenchmarkBatch100_Protobuf_Decode(b *testing.B) {
 	msg := makeProtobufBatchRequest(100)
 	data, _ := proto.Marshal(msg)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result pb.BatchRequest
 		_ = proto.Unmarshal(data, &result)
 	}
@@ -1041,9 +1043,9 @@ func BenchmarkBatch100_Protobuf_Decode(b *testing.B) {
 
 func BenchmarkBatch100_JSON_Encode(b *testing.B) {
 	msg := makeJSONBatchRequest(100)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = json.Marshal(msg)
 	}
 }
@@ -1051,9 +1053,9 @@ func BenchmarkBatch100_JSON_Encode(b *testing.B) {
 func BenchmarkBatch100_JSON_Decode(b *testing.B) {
 	msg := makeJSONBatchRequest(100)
 	data, _ := json.Marshal(msg)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result JSONBatchRequest
 		_ = json.Unmarshal(data, &result)
 	}
@@ -1061,9 +1063,9 @@ func BenchmarkBatch100_JSON_Decode(b *testing.B) {
 
 func BenchmarkBatch1000_Cramberry_Encode(b *testing.B) {
 	msg := makeCramberryBatchRequest(1000)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = msg.MarshalCramberry()
 	}
 }
@@ -1071,9 +1073,9 @@ func BenchmarkBatch1000_Cramberry_Encode(b *testing.B) {
 func BenchmarkBatch1000_Cramberry_Decode(b *testing.B) {
 	msg := makeCramberryBatchRequest(1000)
 	data, _ := msg.MarshalCramberry()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result cramgen.BatchRequest
 		_ = result.UnmarshalCramberry(data)
 	}
@@ -1081,9 +1083,9 @@ func BenchmarkBatch1000_Cramberry_Decode(b *testing.B) {
 
 func BenchmarkBatch1000_Protobuf_Encode(b *testing.B) {
 	msg := makeProtobufBatchRequest(1000)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = proto.Marshal(msg)
 	}
 }
@@ -1091,9 +1093,9 @@ func BenchmarkBatch1000_Protobuf_Encode(b *testing.B) {
 func BenchmarkBatch1000_Protobuf_Decode(b *testing.B) {
 	msg := makeProtobufBatchRequest(1000)
 	data, _ := proto.Marshal(msg)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result pb.BatchRequest
 		_ = proto.Unmarshal(data, &result)
 	}
@@ -1101,9 +1103,9 @@ func BenchmarkBatch1000_Protobuf_Decode(b *testing.B) {
 
 func BenchmarkBatch1000_JSON_Encode(b *testing.B) {
 	msg := makeJSONBatchRequest(1000)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = json.Marshal(msg)
 	}
 }
@@ -1111,9 +1113,9 @@ func BenchmarkBatch1000_JSON_Encode(b *testing.B) {
 func BenchmarkBatch1000_JSON_Decode(b *testing.B) {
 	msg := makeJSONBatchRequest(1000)
 	data, _ := json.Marshal(msg)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result JSONBatchRequest
 		_ = json.Unmarshal(data, &result)
 	}
@@ -1128,9 +1130,9 @@ func BenchmarkBatch1000_JSON_Decode(b *testing.B) {
 
 func BenchmarkSmallMessage_Reflection_Encode(b *testing.B) {
 	msg := makeCramberrySmallMessage()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = cramberry.Marshal(msg)
 	}
 }
@@ -1138,9 +1140,9 @@ func BenchmarkSmallMessage_Reflection_Encode(b *testing.B) {
 func BenchmarkSmallMessage_Reflection_Decode(b *testing.B) {
 	msg := makeCramberrySmallMessage()
 	data, _ := cramberry.Marshal(msg)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result cramgen.SmallMessage
 		_ = cramberry.Unmarshal(data, &result)
 	}
@@ -1148,9 +1150,9 @@ func BenchmarkSmallMessage_Reflection_Decode(b *testing.B) {
 
 func BenchmarkMetrics_Reflection_Encode(b *testing.B) {
 	msg := makeCramberryMetrics()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = cramberry.Marshal(msg)
 	}
 }
@@ -1158,9 +1160,9 @@ func BenchmarkMetrics_Reflection_Encode(b *testing.B) {
 func BenchmarkMetrics_Reflection_Decode(b *testing.B) {
 	msg := makeCramberryMetrics()
 	data, _ := cramberry.Marshal(msg)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result cramgen.Metrics
 		_ = cramberry.Unmarshal(data, &result)
 	}
@@ -1168,9 +1170,9 @@ func BenchmarkMetrics_Reflection_Decode(b *testing.B) {
 
 func BenchmarkPerson_Reflection_Encode(b *testing.B) {
 	msg := makeCramberryPerson()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = cramberry.Marshal(msg)
 	}
 }
@@ -1178,9 +1180,9 @@ func BenchmarkPerson_Reflection_Encode(b *testing.B) {
 func BenchmarkPerson_Reflection_Decode(b *testing.B) {
 	msg := makeCramberryPerson()
 	data, _ := cramberry.Marshal(msg)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result cramgen.Person
 		_ = cramberry.Unmarshal(data, &result)
 	}
@@ -1188,9 +1190,9 @@ func BenchmarkPerson_Reflection_Decode(b *testing.B) {
 
 func BenchmarkDocument_Reflection_Encode(b *testing.B) {
 	msg := makeCramberryDocument()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = cramberry.Marshal(msg)
 	}
 }
@@ -1198,9 +1200,9 @@ func BenchmarkDocument_Reflection_Encode(b *testing.B) {
 func BenchmarkDocument_Reflection_Decode(b *testing.B) {
 	msg := makeCramberryDocument()
 	data, _ := cramberry.Marshal(msg)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result cramgen.Document
 		_ = cramberry.Unmarshal(data, &result)
 	}
@@ -1208,9 +1210,9 @@ func BenchmarkDocument_Reflection_Decode(b *testing.B) {
 
 func BenchmarkEvent_Reflection_Encode(b *testing.B) {
 	msg := makeCramberryEvent()
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = cramberry.Marshal(msg)
 	}
 }
@@ -1218,9 +1220,9 @@ func BenchmarkEvent_Reflection_Encode(b *testing.B) {
 func BenchmarkEvent_Reflection_Decode(b *testing.B) {
 	msg := makeCramberryEvent()
 	data, _ := cramberry.Marshal(msg)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result cramgen.Event
 		_ = cramberry.Unmarshal(data, &result)
 	}
@@ -1228,9 +1230,9 @@ func BenchmarkEvent_Reflection_Decode(b *testing.B) {
 
 func BenchmarkBatch100_Reflection_Encode(b *testing.B) {
 	msg := makeCramberryBatchRequest(100)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = cramberry.Marshal(msg)
 	}
 }
@@ -1238,9 +1240,9 @@ func BenchmarkBatch100_Reflection_Encode(b *testing.B) {
 func BenchmarkBatch100_Reflection_Decode(b *testing.B) {
 	msg := makeCramberryBatchRequest(100)
 	data, _ := cramberry.Marshal(msg)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result cramgen.BatchRequest
 		_ = cramberry.Unmarshal(data, &result)
 	}
@@ -1248,9 +1250,9 @@ func BenchmarkBatch100_Reflection_Decode(b *testing.B) {
 
 func BenchmarkBatch1000_Reflection_Encode(b *testing.B) {
 	msg := makeCramberryBatchRequest(1000)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = cramberry.Marshal(msg)
 	}
 }
@@ -1258,9 +1260,9 @@ func BenchmarkBatch1000_Reflection_Encode(b *testing.B) {
 func BenchmarkBatch1000_Reflection_Decode(b *testing.B) {
 	msg := makeCramberryBatchRequest(1000)
 	data, _ := cramberry.Marshal(msg)
-	b.ResetTimer()
+
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		var result cramgen.BatchRequest
 		_ = cramberry.Unmarshal(data, &result)
 	}

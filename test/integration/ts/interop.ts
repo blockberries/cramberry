@@ -15,7 +15,8 @@ import {
   parseNumberFromJSON,
   sortMapKeysLexicographic,
   escapeJSONString,
-} from '../../../typescript/src';
+} from '@cramberry/runtime';
+import type { ReaderOptions } from '@cramberry/runtime';
 
 // Helper functions for encoding/decoding
 function writeArray<T>(writer: Writer, arr: T[], writeElem: (w: Writer, v: T) => void): void {
@@ -29,8 +30,9 @@ function writeArray<T>(writer: Writer, arr: T[], writeElem: (w: Writer, v: T) =>
 
 function readArray<T>(reader: Reader, readElem: (r: Reader) => T): T[] {
   const data = reader.readLengthPrefixedBytes();
-  const subReader = new Reader(data);
+  const subReader = new Reader(data, { limits: reader.getLimits(), validateUtf8: reader.getValidateUtf8() });
   const len = subReader.readVarint();
+  subReader.checkArrayLimit(len);
   const result: T[] = [];
   for (let i = 0; i < len; i++) {
     result.push(readElem(subReader));
@@ -86,8 +88,9 @@ function writeMap<K, V>(writer: Writer, map: Map<K, V> | Record<string, V>, writ
 
 function readMap<K, V>(reader: Reader, readKey: (r: Reader) => K, readVal: (r: Reader) => V): Map<K, V> {
   const data = reader.readLengthPrefixedBytes();
-  const subReader = new Reader(data);
+  const subReader = new Reader(data, { limits: reader.getLimits(), validateUtf8: reader.getValidateUtf8() });
   const len = subReader.readVarint();
+  subReader.checkMapLimit(len);
   const result = new Map<K, V>();
   for (let i = 0; i < len; i++) {
     const k = readKey(subReader);
@@ -122,59 +125,59 @@ stringVal: string;
 bytesVal: Uint8Array;
 }
 
-/** Encodes a ScalarTypes to the writer using V2 wire format. */
+/** Encodes a ScalarTypes to the writer. */
 export function encodeScalarTypes(writer: Writer, msg: ScalarTypes): void {
 
   // Field 1: bool_val
-  if (msg.boolVal !== undefined && msg.boolVal !== null) {
+  if (msg.boolVal !== undefined && msg.boolVal !== null && msg.boolVal) {
     writer.writeTag(1, WireType.Varint);
     writer.writeBool(msg.boolVal);
   }
 
   // Field 2: int32_val
-  if (msg.int32Val !== undefined && msg.int32Val !== null) {
+  if (msg.int32Val !== undefined && msg.int32Val !== null && msg.int32Val !== 0) {
     writer.writeTag(2, WireType.SVarint);
     writer.writeSVarint(msg.int32Val);
   }
 
   // Field 3: int64_val
-  if (msg.int64Val !== undefined && msg.int64Val !== null) {
+  if (msg.int64Val !== undefined && msg.int64Val !== null && msg.int64Val !== 0n) {
     writer.writeTag(3, WireType.SVarint);
     writer.writeSVarint64(msg.int64Val);
   }
 
   // Field 4: uint32_val
-  if (msg.uint32Val !== undefined && msg.uint32Val !== null) {
+  if (msg.uint32Val !== undefined && msg.uint32Val !== null && msg.uint32Val !== 0) {
     writer.writeTag(4, WireType.Varint);
     writer.writeVarint(msg.uint32Val);
   }
 
   // Field 5: uint64_val
-  if (msg.uint64Val !== undefined && msg.uint64Val !== null) {
+  if (msg.uint64Val !== undefined && msg.uint64Val !== null && msg.uint64Val !== 0n) {
     writer.writeTag(5, WireType.Varint);
     writer.writeVarint64(msg.uint64Val);
   }
 
   // Field 6: float32_val
-  if (msg.float32Val !== undefined && msg.float32Val !== null) {
+  if (msg.float32Val !== undefined && msg.float32Val !== null && msg.float32Val !== 0) {
     writer.writeTag(6, WireType.Fixed32);
     writer.writeFloat32(msg.float32Val);
   }
 
   // Field 7: float64_val
-  if (msg.float64Val !== undefined && msg.float64Val !== null) {
+  if (msg.float64Val !== undefined && msg.float64Val !== null && msg.float64Val !== 0) {
     writer.writeTag(7, WireType.Fixed64);
     writer.writeFloat64(msg.float64Val);
   }
 
   // Field 8: string_val
-  if (msg.stringVal !== undefined && msg.stringVal !== null) {
+  if (msg.stringVal !== undefined && msg.stringVal !== null && msg.stringVal.length > 0) {
     writer.writeTag(8, WireType.Bytes);
     writer.writeString(msg.stringVal);
   }
 
   // Field 9: bytes_val
-  if (msg.bytesVal !== undefined && msg.bytesVal !== null) {
+  if (msg.bytesVal !== undefined && msg.bytesVal !== null && msg.bytesVal.length > 0) {
     writer.writeTag(9, WireType.Bytes);
     writer.writeLengthPrefixedBytes(msg.bytesVal);
   }
@@ -182,7 +185,7 @@ export function encodeScalarTypes(writer: Writer, msg: ScalarTypes): void {
   writer.writeEndMarker();
 }
 
-/** Decodes a ScalarTypes from the reader using V2 wire format. */
+/** Decodes a ScalarTypes from the reader. */
 export function decodeScalarTypes(reader: Reader): ScalarTypes {
   const result: Partial<ScalarTypes> = {};
 
@@ -234,8 +237,8 @@ export function marshalScalarTypes(msg: ScalarTypes): Uint8Array {
 }
 
 /** Unmarshals a ScalarTypes from bytes. */
-export function unmarshalScalarTypes(data: Uint8Array): ScalarTypes {
-  const reader = new Reader(data);
+export function unmarshalScalarTypes(data: Uint8Array, opts?: ReaderOptions): ScalarTypes {
+  const reader = new Reader(data, opts);
   return decodeScalarTypes(reader);
 }
 
@@ -289,8 +292,10 @@ export function fromJSON_ScalarTypes(json: string): ScalarTypes {
     throw new Error('expected JSON object');
   }
 
-  // Check for unknown fields (strict mode)
-  const allowedFields = new Set([
+  // Check for unknown fields (strict mode). Explicit string type
+  // arg keeps tsc --strict happy when the message has zero fields
+  // (otherwise the empty array literal infers as never[]).
+  const allowedFields = new Set<string>([
     'bool_val',
     'int32_val',
     'int64_val',
@@ -318,22 +323,22 @@ export function fromJSON_ScalarTypes(json: string): ScalarTypes {
 
   if ('int32_val' in obj) {
     const value = obj['int32_val'];
-    msg.int32Val = parseNumberFromJSON(value);
+    msg.int32Val = parseNumberFromJSON(value as string | number);
   }
 
   if ('int64_val' in obj) {
     const value = obj['int64_val'];
-    msg.int64Val = parseBigIntFromJSON(value);
+    msg.int64Val = parseBigIntFromJSON(value as string | number);
   }
 
   if ('uint32_val' in obj) {
     const value = obj['uint32_val'];
-    msg.uint32Val = parseNumberFromJSON(value);
+    msg.uint32Val = parseNumberFromJSON(value as string | number);
   }
 
   if ('uint64_val' in obj) {
     const value = obj['uint64_val'];
-    msg.uint64Val = parseBigIntFromJSON(value);
+    msg.uint64Val = parseBigIntFromJSON(value as string | number);
   }
 
   if ('float32_val' in obj) {
@@ -368,23 +373,23 @@ stringList: string[];
 bytesList: Uint8Array[];
 }
 
-/** Encodes a RepeatedTypes to the writer using V2 wire format. */
+/** Encodes a RepeatedTypes to the writer. */
 export function encodeRepeatedTypes(writer: Writer, msg: RepeatedTypes): void {
 
   // Field 1: int32_list
-  if (msg.int32List !== undefined && msg.int32List !== null) {
-    writer.writeTag(1, WireType.SVarint);
+  if (msg.int32List !== undefined && msg.int32List !== null && msg.int32List.length > 0) {
+    writer.writeTag(1, WireType.Bytes);
     writeArray(writer, msg.int32List, (w, v) => { w.writeSVarint(v) });
   }
 
   // Field 2: string_list
-  if (msg.stringList !== undefined && msg.stringList !== null) {
+  if (msg.stringList !== undefined && msg.stringList !== null && msg.stringList.length > 0) {
     writer.writeTag(2, WireType.Bytes);
     writeArray(writer, msg.stringList, (w, v) => { w.writeString(v) });
   }
 
   // Field 3: bytes_list
-  if (msg.bytesList !== undefined && msg.bytesList !== null) {
+  if (msg.bytesList !== undefined && msg.bytesList !== null && msg.bytesList.length > 0) {
     writer.writeTag(3, WireType.Bytes);
     writeArray(writer, msg.bytesList, (w, v) => { w.writeLengthPrefixedBytes(v) });
   }
@@ -392,7 +397,7 @@ export function encodeRepeatedTypes(writer: Writer, msg: RepeatedTypes): void {
   writer.writeEndMarker();
 }
 
-/** Decodes a RepeatedTypes from the reader using V2 wire format. */
+/** Decodes a RepeatedTypes from the reader. */
 export function decodeRepeatedTypes(reader: Reader): RepeatedTypes {
   const result: Partial<RepeatedTypes> = {};
 
@@ -426,8 +431,8 @@ export function marshalRepeatedTypes(msg: RepeatedTypes): Uint8Array {
 }
 
 /** Unmarshals a RepeatedTypes from bytes. */
-export function unmarshalRepeatedTypes(data: Uint8Array): RepeatedTypes {
-  const reader = new Reader(data);
+export function unmarshalRepeatedTypes(data: Uint8Array, opts?: ReaderOptions): RepeatedTypes {
+  const reader = new Reader(data, opts);
   return decodeRepeatedTypes(reader);
 }
 
@@ -475,8 +480,10 @@ export function fromJSON_RepeatedTypes(json: string): RepeatedTypes {
     throw new Error('expected JSON object');
   }
 
-  // Check for unknown fields (strict mode)
-  const allowedFields = new Set([
+  // Check for unknown fields (strict mode). Explicit string type
+  // arg keeps tsc --strict happy when the message has zero fields
+  // (otherwise the empty array literal infers as never[]).
+  const allowedFields = new Set<string>([
     'int32_list',
     'string_list',
     'bytes_list',
@@ -497,7 +504,7 @@ export function fromJSON_RepeatedTypes(json: string): RepeatedTypes {
     msg.int32List = [];
     for (const elem of value) {
       let decoded: number;
-      decoded = parseNumberFromJSON(elem);
+      decoded = parseNumberFromJSON(elem as string | number);
       msg.int32List.push(decoded);
     }
   }
@@ -535,17 +542,17 @@ name: string;
 value: number;
 }
 
-/** Encodes a NestedMessage to the writer using V2 wire format. */
+/** Encodes a NestedMessage to the writer. */
 export function encodeNestedMessage(writer: Writer, msg: NestedMessage): void {
 
   // Field 1: name
-  if (msg.name !== undefined && msg.name !== null) {
+  if (msg.name !== undefined && msg.name !== null && msg.name.length > 0) {
     writer.writeTag(1, WireType.Bytes);
     writer.writeString(msg.name);
   }
 
   // Field 2: value
-  if (msg.value !== undefined && msg.value !== null) {
+  if (msg.value !== undefined && msg.value !== null && msg.value !== 0) {
     writer.writeTag(2, WireType.SVarint);
     writer.writeSVarint(msg.value);
   }
@@ -553,7 +560,7 @@ export function encodeNestedMessage(writer: Writer, msg: NestedMessage): void {
   writer.writeEndMarker();
 }
 
-/** Decodes a NestedMessage from the reader using V2 wire format. */
+/** Decodes a NestedMessage from the reader. */
 export function decodeNestedMessage(reader: Reader): NestedMessage {
   const result: Partial<NestedMessage> = {};
 
@@ -584,8 +591,8 @@ export function marshalNestedMessage(msg: NestedMessage): Uint8Array {
 }
 
 /** Unmarshals a NestedMessage from bytes. */
-export function unmarshalNestedMessage(data: Uint8Array): NestedMessage {
-  const reader = new Reader(data);
+export function unmarshalNestedMessage(data: Uint8Array, opts?: ReaderOptions): NestedMessage {
+  const reader = new Reader(data, opts);
   return decodeNestedMessage(reader);
 }
 
@@ -611,8 +618,10 @@ export function fromJSON_NestedMessage(json: string): NestedMessage {
     throw new Error('expected JSON object');
   }
 
-  // Check for unknown fields (strict mode)
-  const allowedFields = new Set([
+  // Check for unknown fields (strict mode). Explicit string type
+  // arg keeps tsc --strict happy when the message has zero fields
+  // (otherwise the empty array literal infers as never[]).
+  const allowedFields = new Set<string>([
     'name',
     'value',
   ]);
@@ -633,7 +642,7 @@ export function fromJSON_NestedMessage(json: string): NestedMessage {
 
   if ('value' in obj) {
     const value = obj['value'];
-    msg.value = parseNumberFromJSON(value);
+    msg.value = parseNumberFromJSON(value as string | number);
   }
 
 
@@ -651,14 +660,12 @@ stringIntMap: Map<string, number>;
 intStringMap: Map<number, string>;
 }
 
-/** Encodes a ComplexTypes to the writer using V2 wire format. */
+/** Encodes a ComplexTypes to the writer. */
 export function encodeComplexTypes(writer: Writer, msg: ComplexTypes): void {
 
   // Field 1: status
-  if (msg.status !== undefined && msg.status !== null) {
-    writer.writeTag(1, WireType.SVarint);
-    writer.writeSVarint(msg.status);
-  }
+  writer.writeTag(1, WireType.SVarint);
+  writer.writeSVarint(msg.status);
 
   // Field 2: optional_nested
   if (msg.optionalNested !== undefined && msg.optionalNested !== null) {
@@ -667,33 +674,27 @@ export function encodeComplexTypes(writer: Writer, msg: ComplexTypes): void {
   }
 
   // Field 3: required_nested
-  if (msg.requiredNested !== undefined && msg.requiredNested !== null) {
-    writer.writeTag(3, WireType.Bytes);
-    { const __sub = new Writer(); encodeNestedMessage(__sub, msg.requiredNested); writer.writeLengthPrefixedBytes(__sub.bytes()); };
-  }
+  writer.writeTag(3, WireType.Bytes);
+  { const __sub = new Writer(); encodeNestedMessage(__sub, msg.requiredNested); writer.writeLengthPrefixedBytes(__sub.bytes()); };
 
   // Field 4: nested_list
-  if (msg.nestedList !== undefined && msg.nestedList !== null) {
+  if (msg.nestedList !== undefined && msg.nestedList !== null && msg.nestedList.length > 0) {
     writer.writeTag(4, WireType.Bytes);
     writeArray(writer, msg.nestedList, (w, v) => { encodeNestedMessage(w, v) });
   }
 
   // Field 5: string_int_map
-  if (msg.stringIntMap !== undefined && msg.stringIntMap !== null) {
-    writer.writeTag(5, WireType.Bytes);
-    writeMap(writer, msg.stringIntMap, (w, k) => { w.writeString(k) }, (w, v) => { w.writeSVarint(v) });
-  }
+  writer.writeTag(5, WireType.Bytes);
+  writeMap(writer, msg.stringIntMap, (w, k) => { w.writeString(k) }, (w, v) => { w.writeSVarint(v) });
 
   // Field 6: int_string_map
-  if (msg.intStringMap !== undefined && msg.intStringMap !== null) {
-    writer.writeTag(6, WireType.Bytes);
-    writeMap(writer, msg.intStringMap, (w, k) => { w.writeSVarint(k) }, (w, v) => { w.writeString(v) });
-  }
+  writer.writeTag(6, WireType.Bytes);
+  writeMap(writer, msg.intStringMap, (w, k) => { w.writeSVarint(k) }, (w, v) => { w.writeString(v) });
 // End marker
   writer.writeEndMarker();
 }
 
-/** Decodes a ComplexTypes from the reader using V2 wire format. */
+/** Decodes a ComplexTypes from the reader. */
 export function decodeComplexTypes(reader: Reader): ComplexTypes {
   const result: Partial<ComplexTypes> = {};
 
@@ -706,10 +707,10 @@ export function decodeComplexTypes(reader: Reader): ComplexTypes {
         result.status = reader.readSVarint();
         break;
       case 2:
-        result.optionalNested = (() => { const __data = reader.readLengthPrefixedBytes(); return decodeNestedMessage(new Reader(__data)); })();
+        result.optionalNested = (() => { reader.enterNested(); try { const __data = reader.readLengthPrefixedBytes(); return decodeNestedMessage(new Reader(__data, { limits: reader.getLimits(), validateUtf8: reader.getValidateUtf8() })); } finally { reader.exitNested(); } })();
         break;
       case 3:
-        result.requiredNested = (() => { const __data = reader.readLengthPrefixedBytes(); return decodeNestedMessage(new Reader(__data)); })();
+        result.requiredNested = (() => { reader.enterNested(); try { const __data = reader.readLengthPrefixedBytes(); return decodeNestedMessage(new Reader(__data, { limits: reader.getLimits(), validateUtf8: reader.getValidateUtf8() })); } finally { reader.exitNested(); } })();
         break;
       case 4:
         result.nestedList = readArray(reader, (r) => decodeNestedMessage(r));
@@ -736,8 +737,8 @@ export function marshalComplexTypes(msg: ComplexTypes): Uint8Array {
 }
 
 /** Unmarshals a ComplexTypes from bytes. */
-export function unmarshalComplexTypes(data: Uint8Array): ComplexTypes {
-  const reader = new Reader(data);
+export function unmarshalComplexTypes(data: Uint8Array, opts?: ReaderOptions): ComplexTypes {
+  const reader = new Reader(data, opts);
   return decodeComplexTypes(reader);
 }
 
@@ -746,7 +747,13 @@ export function toJSON_ComplexTypes(msg: ComplexTypes): string {
   let result = '{';
 
   result += '"status":';
-  result += '"' + msg.status.toString() + '"';
+  result += '"' + (() => { switch (msg.status) {
+    case Status.Unknown: return "UNKNOWN";
+    case Status.Active: return "ACTIVE";
+    case Status.Inactive: return "INACTIVE";
+    case Status.Pending: return "PENDING";
+    default: return 'UNKNOWN';
+  } })() + '"';
 
   result += ',';
   result += '"optional_nested":';
@@ -813,8 +820,10 @@ export function fromJSON_ComplexTypes(json: string): ComplexTypes {
     throw new Error('expected JSON object');
   }
 
-  // Check for unknown fields (strict mode)
-  const allowedFields = new Set([
+  // Check for unknown fields (strict mode). Explicit string type
+  // arg keeps tsc --strict happy when the message has zero fields
+  // (otherwise the empty array literal infers as never[]).
+  const allowedFields = new Set<string>([
     'status',
     'optional_nested',
     'required_nested',
@@ -885,7 +894,7 @@ export function fromJSON_ComplexTypes(json: string): ComplexTypes {
     for (const [keyStr, val] of Object.entries(value)) {
       const k = keyStr;
       let v: number;
-      v = parseNumberFromJSON(val);
+      v = parseNumberFromJSON(val as string | number);
       msg.stringIntMap.set(k, v);
     }
   }
@@ -922,71 +931,71 @@ unicodeString: string;
 emptyBytes: Uint8Array;
 }
 
-/** Encodes a EdgeCases to the writer using V2 wire format. */
+/** Encodes a EdgeCases to the writer. */
 export function encodeEdgeCases(writer: Writer, msg: EdgeCases): void {
 
   // Field 1: zero_int
-  if (msg.zeroInt !== undefined && msg.zeroInt !== null) {
+  if (msg.zeroInt !== undefined && msg.zeroInt !== null && msg.zeroInt !== 0) {
     writer.writeTag(1, WireType.SVarint);
     writer.writeSVarint(msg.zeroInt);
   }
 
   // Field 2: negative_one
-  if (msg.negativeOne !== undefined && msg.negativeOne !== null) {
+  if (msg.negativeOne !== undefined && msg.negativeOne !== null && msg.negativeOne !== 0) {
     writer.writeTag(2, WireType.SVarint);
     writer.writeSVarint(msg.negativeOne);
   }
 
   // Field 3: max_int32
-  if (msg.maxInt32 !== undefined && msg.maxInt32 !== null) {
+  if (msg.maxInt32 !== undefined && msg.maxInt32 !== null && msg.maxInt32 !== 0) {
     writer.writeTag(3, WireType.SVarint);
     writer.writeSVarint(msg.maxInt32);
   }
 
   // Field 4: min_int32
-  if (msg.minInt32 !== undefined && msg.minInt32 !== null) {
+  if (msg.minInt32 !== undefined && msg.minInt32 !== null && msg.minInt32 !== 0) {
     writer.writeTag(4, WireType.SVarint);
     writer.writeSVarint(msg.minInt32);
   }
 
   // Field 5: max_int64
-  if (msg.maxInt64 !== undefined && msg.maxInt64 !== null) {
+  if (msg.maxInt64 !== undefined && msg.maxInt64 !== null && msg.maxInt64 !== 0n) {
     writer.writeTag(5, WireType.SVarint);
     writer.writeSVarint64(msg.maxInt64);
   }
 
   // Field 6: min_int64
-  if (msg.minInt64 !== undefined && msg.minInt64 !== null) {
+  if (msg.minInt64 !== undefined && msg.minInt64 !== null && msg.minInt64 !== 0n) {
     writer.writeTag(6, WireType.SVarint);
     writer.writeSVarint64(msg.minInt64);
   }
 
   // Field 7: max_uint32
-  if (msg.maxUint32 !== undefined && msg.maxUint32 !== null) {
+  if (msg.maxUint32 !== undefined && msg.maxUint32 !== null && msg.maxUint32 !== 0) {
     writer.writeTag(7, WireType.Varint);
     writer.writeVarint(msg.maxUint32);
   }
 
   // Field 8: max_uint64
-  if (msg.maxUint64 !== undefined && msg.maxUint64 !== null) {
+  if (msg.maxUint64 !== undefined && msg.maxUint64 !== null && msg.maxUint64 !== 0n) {
     writer.writeTag(8, WireType.Varint);
     writer.writeVarint64(msg.maxUint64);
   }
 
   // Field 9: empty_string
-  if (msg.emptyString !== undefined && msg.emptyString !== null) {
+  if (msg.emptyString !== undefined && msg.emptyString !== null && msg.emptyString.length > 0) {
     writer.writeTag(9, WireType.Bytes);
     writer.writeString(msg.emptyString);
   }
 
   // Field 10: unicode_string
-  if (msg.unicodeString !== undefined && msg.unicodeString !== null) {
+  if (msg.unicodeString !== undefined && msg.unicodeString !== null && msg.unicodeString.length > 0) {
     writer.writeTag(10, WireType.Bytes);
     writer.writeString(msg.unicodeString);
   }
 
   // Field 11: empty_bytes
-  if (msg.emptyBytes !== undefined && msg.emptyBytes !== null) {
+  if (msg.emptyBytes !== undefined && msg.emptyBytes !== null && msg.emptyBytes.length > 0) {
     writer.writeTag(11, WireType.Bytes);
     writer.writeLengthPrefixedBytes(msg.emptyBytes);
   }
@@ -994,7 +1003,7 @@ export function encodeEdgeCases(writer: Writer, msg: EdgeCases): void {
   writer.writeEndMarker();
 }
 
-/** Decodes a EdgeCases from the reader using V2 wire format. */
+/** Decodes a EdgeCases from the reader. */
 export function decodeEdgeCases(reader: Reader): EdgeCases {
   const result: Partial<EdgeCases> = {};
 
@@ -1052,8 +1061,8 @@ export function marshalEdgeCases(msg: EdgeCases): Uint8Array {
 }
 
 /** Unmarshals a EdgeCases from bytes. */
-export function unmarshalEdgeCases(data: Uint8Array): EdgeCases {
-  const reader = new Reader(data);
+export function unmarshalEdgeCases(data: Uint8Array, opts?: ReaderOptions): EdgeCases {
+  const reader = new Reader(data, opts);
   return decodeEdgeCases(reader);
 }
 
@@ -1115,8 +1124,10 @@ export function fromJSON_EdgeCases(json: string): EdgeCases {
     throw new Error('expected JSON object');
   }
 
-  // Check for unknown fields (strict mode)
-  const allowedFields = new Set([
+  // Check for unknown fields (strict mode). Explicit string type
+  // arg keeps tsc --strict happy when the message has zero fields
+  // (otherwise the empty array literal infers as never[]).
+  const allowedFields = new Set<string>([
     'zero_int',
     'negative_one',
     'max_int32',
@@ -1141,42 +1152,42 @@ export function fromJSON_EdgeCases(json: string): EdgeCases {
 
   if ('zero_int' in obj) {
     const value = obj['zero_int'];
-    msg.zeroInt = parseNumberFromJSON(value);
+    msg.zeroInt = parseNumberFromJSON(value as string | number);
   }
 
   if ('negative_one' in obj) {
     const value = obj['negative_one'];
-    msg.negativeOne = parseNumberFromJSON(value);
+    msg.negativeOne = parseNumberFromJSON(value as string | number);
   }
 
   if ('max_int32' in obj) {
     const value = obj['max_int32'];
-    msg.maxInt32 = parseNumberFromJSON(value);
+    msg.maxInt32 = parseNumberFromJSON(value as string | number);
   }
 
   if ('min_int32' in obj) {
     const value = obj['min_int32'];
-    msg.minInt32 = parseNumberFromJSON(value);
+    msg.minInt32 = parseNumberFromJSON(value as string | number);
   }
 
   if ('max_int64' in obj) {
     const value = obj['max_int64'];
-    msg.maxInt64 = parseBigIntFromJSON(value);
+    msg.maxInt64 = parseBigIntFromJSON(value as string | number);
   }
 
   if ('min_int64' in obj) {
     const value = obj['min_int64'];
-    msg.minInt64 = parseBigIntFromJSON(value);
+    msg.minInt64 = parseBigIntFromJSON(value as string | number);
   }
 
   if ('max_uint32' in obj) {
     const value = obj['max_uint32'];
-    msg.maxUint32 = parseNumberFromJSON(value);
+    msg.maxUint32 = parseNumberFromJSON(value as string | number);
   }
 
   if ('max_uint64' in obj) {
     const value = obj['max_uint64'];
-    msg.maxUint64 = parseBigIntFromJSON(value);
+    msg.maxUint64 = parseBigIntFromJSON(value as string | number);
   }
 
   if ('empty_string' in obj) {
@@ -1209,41 +1220,41 @@ field128: number;
 field1000: number;
 }
 
-/** Encodes a AllFieldNumbers to the writer using V2 wire format. */
+/** Encodes a AllFieldNumbers to the writer. */
 export function encodeAllFieldNumbers(writer: Writer, msg: AllFieldNumbers): void {
 
   // Field 1: field_1
-  if (msg.field1 !== undefined && msg.field1 !== null) {
+  if (msg.field1 !== undefined && msg.field1 !== null && msg.field1 !== 0) {
     writer.writeTag(1, WireType.SVarint);
     writer.writeSVarint(msg.field1);
   }
 
   // Field 15: field_15
-  if (msg.field15 !== undefined && msg.field15 !== null) {
+  if (msg.field15 !== undefined && msg.field15 !== null && msg.field15 !== 0) {
     writer.writeTag(15, WireType.SVarint);
     writer.writeSVarint(msg.field15);
   }
 
   // Field 16: field_16
-  if (msg.field16 !== undefined && msg.field16 !== null) {
+  if (msg.field16 !== undefined && msg.field16 !== null && msg.field16 !== 0) {
     writer.writeTag(16, WireType.SVarint);
     writer.writeSVarint(msg.field16);
   }
 
   // Field 127: field_127
-  if (msg.field127 !== undefined && msg.field127 !== null) {
+  if (msg.field127 !== undefined && msg.field127 !== null && msg.field127 !== 0) {
     writer.writeTag(127, WireType.SVarint);
     writer.writeSVarint(msg.field127);
   }
 
   // Field 128: field_128
-  if (msg.field128 !== undefined && msg.field128 !== null) {
+  if (msg.field128 !== undefined && msg.field128 !== null && msg.field128 !== 0) {
     writer.writeTag(128, WireType.SVarint);
     writer.writeSVarint(msg.field128);
   }
 
   // Field 1000: field_1000
-  if (msg.field1000 !== undefined && msg.field1000 !== null) {
+  if (msg.field1000 !== undefined && msg.field1000 !== null && msg.field1000 !== 0) {
     writer.writeTag(1000, WireType.SVarint);
     writer.writeSVarint(msg.field1000);
   }
@@ -1251,7 +1262,7 @@ export function encodeAllFieldNumbers(writer: Writer, msg: AllFieldNumbers): voi
   writer.writeEndMarker();
 }
 
-/** Decodes a AllFieldNumbers from the reader using V2 wire format. */
+/** Decodes a AllFieldNumbers from the reader. */
 export function decodeAllFieldNumbers(reader: Reader): AllFieldNumbers {
   const result: Partial<AllFieldNumbers> = {};
 
@@ -1294,8 +1305,8 @@ export function marshalAllFieldNumbers(msg: AllFieldNumbers): Uint8Array {
 }
 
 /** Unmarshals a AllFieldNumbers from bytes. */
-export function unmarshalAllFieldNumbers(data: Uint8Array): AllFieldNumbers {
-  const reader = new Reader(data);
+export function unmarshalAllFieldNumbers(data: Uint8Array, opts?: ReaderOptions): AllFieldNumbers {
+  const reader = new Reader(data, opts);
   return decodeAllFieldNumbers(reader);
 }
 
@@ -1337,8 +1348,10 @@ export function fromJSON_AllFieldNumbers(json: string): AllFieldNumbers {
     throw new Error('expected JSON object');
   }
 
-  // Check for unknown fields (strict mode)
-  const allowedFields = new Set([
+  // Check for unknown fields (strict mode). Explicit string type
+  // arg keeps tsc --strict happy when the message has zero fields
+  // (otherwise the empty array literal infers as never[]).
+  const allowedFields = new Set<string>([
     'field_1',
     'field_15',
     'field_16',
@@ -1358,32 +1371,32 @@ export function fromJSON_AllFieldNumbers(json: string): AllFieldNumbers {
 
   if ('field_1' in obj) {
     const value = obj['field_1'];
-    msg.field1 = parseNumberFromJSON(value);
+    msg.field1 = parseNumberFromJSON(value as string | number);
   }
 
   if ('field_15' in obj) {
     const value = obj['field_15'];
-    msg.field15 = parseNumberFromJSON(value);
+    msg.field15 = parseNumberFromJSON(value as string | number);
   }
 
   if ('field_16' in obj) {
     const value = obj['field_16'];
-    msg.field16 = parseNumberFromJSON(value);
+    msg.field16 = parseNumberFromJSON(value as string | number);
   }
 
   if ('field_127' in obj) {
     const value = obj['field_127'];
-    msg.field127 = parseNumberFromJSON(value);
+    msg.field127 = parseNumberFromJSON(value as string | number);
   }
 
   if ('field_128' in obj) {
     const value = obj['field_128'];
-    msg.field128 = parseNumberFromJSON(value);
+    msg.field128 = parseNumberFromJSON(value as string | number);
   }
 
   if ('field_1000' in obj) {
     const value = obj['field_1000'];
-    msg.field1000 = parseNumberFromJSON(value);
+    msg.field1000 = parseNumberFromJSON(value as string | number);
   }
 
 

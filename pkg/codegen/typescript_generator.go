@@ -186,17 +186,26 @@ func (c *tsContext) tsComment(text string) string {
 	if len(lines) == 1 {
 		return "/** " + text + " */"
 	}
-	result := "/**\n"
+	var result strings.Builder
+	result.WriteString("/**\n")
 	for _, line := range lines {
-		result += " * " + line + "\n"
+		result.WriteString(" * " + line + "\n")
 	}
-	result += " */"
-	return result
+	result.WriteString(" */")
+	return result.String()
 }
 
-// tsWireType returns the V2 wire type constant for a field type.
-// This matches Go's V2 wire format for cross-runtime compatibility.
+// tsWireType returns the wire type constant for a field type.
+//
+// Repeated fields are always emitted as a length-prefixed payload
+// (count + elements), so their tag carries WireType.Bytes regardless
+// of the element scalar's underlying wire type. The Rust generator has
+// the same special case; Go's emitter encodes the WireBytes tag inline
+// at the call site.
 func (c *tsContext) tsWireType(f *schema.Field) string {
+	if f.Repeated {
+		return "WireType.Bytes"
+	}
 	return c.tsWireTypeForType(f.Type)
 }
 
@@ -281,8 +290,17 @@ func (c *tsContext) tsZeroCheck(f *schema.Field) string {
 		}
 	case *schema.PointerType:
 		return presence
+	case *schema.NamedType, *schema.MapType, *schema.ArrayType:
+		// Always-emit for non-optional composite fields. Mirror Go's
+		// `zeroCheck` returning "" for these kinds: the template's
+		// {{else}} branch emits the field tag + body unconditionally,
+		// matching Go and Rust byte-for-byte. A type-violating caller
+		// that passes `undefined` for a required composite field will
+		// get a runtime TypeError on member access (which is what the
+		// schema's required-modifier guarantees).
+		return ""
 	}
-	return presence
+	return ""
 }
 
 // tsWriteValueWithWriter generates write code using a custom writer name
@@ -417,8 +435,9 @@ func (c *tsContext) tsReadField(f *schema.Field) string {
 		if c.isNamedEnum(typ) {
 			return "reader.readSVarint()"
 		}
-		// Field-level: length-prefixed.
-		return fmt.Sprintf("(() => { const __data = reader.readLengthPrefixedBytes(); return decode%s(new Reader(__data)); })()", ToPascalCase(typ.Name))
+		// Field-level: length-prefixed. Track nesting depth so the
+		// runtime can reject pathological depth-bomb input.
+		return fmt.Sprintf("(() => { reader.enterNested(); try { const __data = reader.readLengthPrefixedBytes(); return decode%s(new Reader(__data, { limits: reader.getLimits(), validateUtf8: reader.getValidateUtf8() })); } finally { reader.exitNested(); } })()", ToPascalCase(typ.Name))
 	}
 	return c.tsReadValueInline("reader", t)
 }
@@ -496,7 +515,7 @@ func (c *tsContext) jsonEncodeField(idx int, f *schema.Field) string {
 	}
 
 	// Write field name
-	code.WriteString(fmt.Sprintf("  result += '\"%s\":';\n", jsonName))
+	fmt.Fprintf(&code, "  result += '\"%s\":';\n", jsonName)
 
 	// Generate value encoding
 	valueCode := c.jsonEncodeValue(f.Type, "msg."+fieldName, f.Repeated)
@@ -507,7 +526,7 @@ func (c *tsContext) jsonEncodeField(idx int, f *schema.Field) string {
 	// generated code with TS2345 ("undefined not assignable").
 	if f.Optional {
 		if _, isPtr := f.Type.(*schema.PointerType); !isPtr {
-			code.WriteString(fmt.Sprintf("  if (msg.%s !== undefined && msg.%s !== null) {\n", fieldName, fieldName))
+			fmt.Fprintf(&code, "  if (msg.%s !== undefined && msg.%s !== null) {\n", fieldName, fieldName)
 			code.WriteString(strings.ReplaceAll(valueCode, "  result", "    result"))
 			code.WriteString("  } else {\n    result += 'null';\n  }\n")
 			return code.String()
@@ -529,8 +548,8 @@ func (c *tsContext) jsonEncodeValue(t schema.TypeRef, varName string, repeated b
 	case *schema.ScalarType:
 		return c.jsonEncodeScalar(typ, varName)
 	case *schema.NamedType:
-		if c.isNamedEnum(typ) {
-			return c.jsonEncodeEnum(varName)
+		if e, ok := c.resolveNamedEnum(typ); ok {
+			return c.jsonEncodeEnumWithSchema(e, varName)
 		}
 		// Dispatch to the generated toJSON_<TypeName> function so we honor
 		// cramberry's deterministic JSON rules (sorted keys, integer-as-string,
@@ -569,9 +588,24 @@ func (c *tsContext) jsonEncodeScalar(t *schema.ScalarType, varName string) strin
 	}
 }
 
-// jsonEncodeEnum generates code to encode an enum as string name.
-func (c *tsContext) jsonEncodeEnum(varName string) string {
-	return fmt.Sprintf("  result += '\"' + %s.toString() + '\"';\n", varName)
+// jsonEncodeEnumWithSchema emits a switch that maps each enum value
+// to its source-spelled name (e.g. STATUS_ACTIVE → "STATUS_ACTIVE")
+// matching Go's `EnumType.String()` and Rust's match-on-variant. The
+// previous TS path called .toString() on the numeric enum, producing
+// "1" — a cross-runtime divergence with Go's "STATUS_ACTIVE".
+func (c *tsContext) jsonEncodeEnumWithSchema(e *schema.Enum, varName string) string {
+	enumType := c.tsEnumType(e)
+	var b strings.Builder
+	b.WriteString("  result += '\"' + (() => { switch (")
+	b.WriteString(varName)
+	b.WriteString(") {\n")
+	for _, v := range e.Values {
+		fmt.Fprintf(&b, "    case %s.%s: return %q;\n",
+			enumType, c.tsEnumValueName(v), v.Name)
+	}
+	b.WriteString("    default: return 'UNKNOWN';\n")
+	b.WriteString("  } })() + '\"';\n")
+	return b.String()
 }
 
 // jsonEncodeMessage generates code to encode a nested message by dispatching
@@ -586,9 +620,9 @@ func (c *tsContext) jsonEncodeMessage(typ *schema.NamedType, varName string) str
 func (c *tsContext) jsonEncodeArray(elemType schema.TypeRef, varName string) string {
 	var code strings.Builder
 	code.WriteString("  result += '[';\n")
-	code.WriteString(fmt.Sprintf("  for (let i = 0; i < %s.length; i++) {\n", varName))
+	fmt.Fprintf(&code, "  for (let i = 0; i < %s.length; i++) {\n", varName)
 	code.WriteString("    if (i > 0) result += ',';\n")
-	code.WriteString(fmt.Sprintf("    const elem = %s[i];\n", varName))
+	fmt.Fprintf(&code, "    const elem = %s[i];\n", varName)
 
 	// Generate element encoding
 	elemCode := c.jsonEncodeValue(elemType, "elem", false)
@@ -604,7 +638,7 @@ func (c *tsContext) jsonEncodeMap(t *schema.MapType, varName string) string {
 	var code strings.Builder
 	code.WriteString("  {\n")
 	code.WriteString("    result += '{';\n")
-	code.WriteString(fmt.Sprintf("    const keys = Array.from(%s.keys());\n", varName))
+	fmt.Fprintf(&code, "    const keys = Array.from(%s.keys());\n", varName)
 
 	// Convert keys to strings for sorting
 	keyType := t.Key.(*schema.ScalarType)
@@ -635,7 +669,7 @@ func (c *tsContext) jsonEncodeMap(t *schema.MapType, varName string) string {
 		code.WriteString("      const k = sortedKeys[i];\n")
 	}
 
-	code.WriteString(fmt.Sprintf("      const v = %s.get(k)!;\n", varName))
+	fmt.Fprintf(&code, "      const v = %s.get(k)!;\n", varName)
 
 	// Encode value
 	valueCode := c.jsonEncodeValue(t.Value, "v", false)
@@ -653,8 +687,8 @@ func (c *tsContext) jsonDecodeField(f *schema.Field) string {
 	jsonName := ToSnakeCase(f.Name)
 
 	var code strings.Builder
-	code.WriteString(fmt.Sprintf("  if ('%s' in obj) {\n", jsonName))
-	code.WriteString(fmt.Sprintf("    const value = obj['%s'];\n", jsonName))
+	fmt.Fprintf(&code, "  if ('%s' in obj) {\n", jsonName)
+	fmt.Fprintf(&code, "    const value = obj['%s'];\n", jsonName)
 
 	// Generate decoding based on type
 	decodeCode := c.jsonDecodeValue(f.Type, "msg."+fieldName, "value", f.Repeated)
@@ -718,11 +752,11 @@ func (c *tsContext) jsonDecodeEnum(e *schema.Enum, targetVar string, sourceVar s
 	var code strings.Builder
 	enumType := ToPascalCase(e.Name)
 
-	code.WriteString(fmt.Sprintf("    const strVal = String(%s);\n", sourceVar))
+	fmt.Fprintf(&code, "    const strVal = String(%s);\n", sourceVar)
 	code.WriteString("    switch (strVal) {\n")
 	for _, v := range e.Values {
-		code.WriteString(fmt.Sprintf("      case '%s':\n", v.Name))
-		code.WriteString(fmt.Sprintf("        %s = %s.%s;\n", targetVar, enumType, ToPascalCase(v.Name)))
+		fmt.Fprintf(&code, "      case '%s':\n", v.Name)
+		fmt.Fprintf(&code, "        %s = %s.%s;\n", targetVar, enumType, ToPascalCase(v.Name))
 		code.WriteString("        break;\n")
 	}
 	code.WriteString("      default:\n")
@@ -741,13 +775,13 @@ func (c *tsContext) jsonDecodeMessage(t *schema.NamedType, targetVar string, sou
 // jsonDecodePointer generates code to decode an optional pointer.
 func (c *tsContext) jsonDecodePointer(t *schema.PointerType, targetVar string, sourceVar string) string {
 	var code strings.Builder
-	code.WriteString(fmt.Sprintf("    if (%s != null) {\n", sourceVar))
+	fmt.Fprintf(&code, "    if (%s != null) {\n", sourceVar)
 
 	innerCode := c.jsonDecodeValue(t.Element, targetVar, sourceVar, false)
 	code.WriteString(strings.ReplaceAll(innerCode, "    ", "      "))
 
 	code.WriteString("    } else {\n")
-	code.WriteString(fmt.Sprintf("      %s = null;\n", targetVar))
+	fmt.Fprintf(&code, "      %s = null;\n", targetVar)
 	code.WriteString("    }\n")
 
 	return code.String()
@@ -757,16 +791,16 @@ func (c *tsContext) jsonDecodePointer(t *schema.PointerType, targetVar string, s
 func (c *tsContext) jsonDecodeArray(elemType schema.TypeRef, targetVar string, sourceVar string) string {
 	var code strings.Builder
 
-	code.WriteString(fmt.Sprintf("    if (!Array.isArray(%s)) throw new Error('expected array');\n", sourceVar))
-	code.WriteString(fmt.Sprintf("    %s = [];\n", targetVar))
-	code.WriteString(fmt.Sprintf("    for (const elem of %s) {\n", sourceVar))
-	code.WriteString(fmt.Sprintf("      let decoded: %s;\n", c.tsType(elemType)))
+	fmt.Fprintf(&code, "    if (!Array.isArray(%s)) throw new Error('expected array');\n", sourceVar)
+	fmt.Fprintf(&code, "    %s = [];\n", targetVar)
+	fmt.Fprintf(&code, "    for (const elem of %s) {\n", sourceVar)
+	fmt.Fprintf(&code, "      let decoded: %s;\n", c.tsType(elemType))
 
 	// Decode element
 	elemCode := c.jsonDecodeValue(elemType, "decoded", "elem", false)
 	code.WriteString(strings.ReplaceAll(elemCode, "    ", "      "))
 
-	code.WriteString(fmt.Sprintf("      %s.push(decoded);\n", targetVar))
+	fmt.Fprintf(&code, "      %s.push(decoded);\n", targetVar)
 	code.WriteString("    }\n")
 
 	return code.String()
@@ -776,9 +810,9 @@ func (c *tsContext) jsonDecodeArray(elemType schema.TypeRef, targetVar string, s
 func (c *tsContext) jsonDecodeMap(t *schema.MapType, targetVar string, sourceVar string) string {
 	var code strings.Builder
 
-	code.WriteString(fmt.Sprintf("    if (typeof %s !== 'object' || %s === null) throw new Error('expected object');\n", sourceVar, sourceVar))
-	code.WriteString(fmt.Sprintf("    %s = new Map();\n", targetVar))
-	code.WriteString(fmt.Sprintf("    for (const [keyStr, val] of Object.entries(%s)) {\n", sourceVar))
+	fmt.Fprintf(&code, "    if (typeof %s !== 'object' || %s === null) throw new Error('expected object');\n", sourceVar, sourceVar)
+	fmt.Fprintf(&code, "    %s = new Map();\n", targetVar)
+	fmt.Fprintf(&code, "    for (const [keyStr, val] of Object.entries(%s)) {\n", sourceVar)
 
 	// Convert string key to actual key type
 	keyType := t.Key.(*schema.ScalarType)
@@ -793,13 +827,13 @@ func (c *tsContext) jsonDecodeMap(t *schema.MapType, targetVar string, sourceVar
 		code.WriteString("      const k = keyStr;\n")
 	}
 
-	code.WriteString(fmt.Sprintf("      let v: %s;\n", c.tsType(t.Value)))
+	fmt.Fprintf(&code, "      let v: %s;\n", c.tsType(t.Value))
 
 	// Decode value
 	valueCode := c.jsonDecodeValue(t.Value, "v", "val", false)
 	code.WriteString(strings.ReplaceAll(valueCode, "    ", "      "))
 
-	code.WriteString(fmt.Sprintf("      %s.set(k, v);\n", targetVar))
+	fmt.Fprintf(&code, "      %s.set(k, v);\n", targetVar)
 	code.WriteString("    }\n")
 
 	return code.String()
@@ -827,6 +861,7 @@ import {
   sortMapKeysLexicographic,
   escapeJSONString,
 } from '@cramberry/runtime';
+import type { ReaderOptions } from '@cramberry/runtime';
 
 // Helper functions for encoding/decoding
 function writeArray<T>(writer: Writer, arr: T[], writeElem: (w: Writer, v: T) => void): void {
@@ -840,8 +875,9 @@ function writeArray<T>(writer: Writer, arr: T[], writeElem: (w: Writer, v: T) =>
 
 function readArray<T>(reader: Reader, readElem: (r: Reader) => T): T[] {
   const data = reader.readLengthPrefixedBytes();
-  const subReader = new Reader(data);
+  const subReader = new Reader(data, { limits: reader.getLimits(), validateUtf8: reader.getValidateUtf8() });
   const len = subReader.readVarint();
+  subReader.checkArrayLimit(len);
   const result: T[] = [];
   for (let i = 0; i < len; i++) {
     result.push(readElem(subReader));
@@ -897,8 +933,9 @@ function writeMap<K, V>(writer: Writer, map: Map<K, V> | Record<string, V>, writ
 
 function readMap<K, V>(reader: Reader, readKey: (r: Reader) => K, readVal: (r: Reader) => V): Map<K, V> {
   const data = reader.readLengthPrefixedBytes();
-  const subReader = new Reader(data);
+  const subReader = new Reader(data, { limits: reader.getLimits(), validateUtf8: reader.getValidateUtf8() });
   const len = subReader.readVarint();
+  subReader.checkMapLimit(len);
   const result = new Map<K, V>();
   for (let i = 0; i < len; i++) {
     const k = readKey(subReader);
@@ -932,20 +969,26 @@ export interface {{tsMessageType $msg}} {
 {{- end}}
 }
 {{if generateMarshal}}
-/** Encodes a {{tsMessageType $msg}} to the writer using V2 wire format. */
+/** Encodes a {{tsMessageType $msg}} to the writer. */
 export function encode{{tsMessageType $msg}}(writer: Writer, msg: {{tsMessageType $msg}}): void {
 {{range $msg.Fields}}
   // Field {{.Number}}: {{.Name}}
-  if ({{tsZeroCheck .}}) {
+{{- $zc := tsZeroCheck . }}
+{{- if $zc }}
+  if ({{ $zc }}) {
     writer.writeTag({{.Number}}, {{tsWireType .}});
     {{tsWriteField .}};
   }
+{{- else }}
+  writer.writeTag({{.Number}}, {{tsWireType .}});
+  {{tsWriteField .}};
+{{- end }}
 {{end -}}
   // End marker
   writer.writeEndMarker();
 }
 
-/** Decodes a {{tsMessageType $msg}} from the reader using V2 wire format. */
+/** Decodes a {{tsMessageType $msg}} from the reader. */
 export function decode{{tsMessageType $msg}}(reader: Reader): {{tsMessageType $msg}} {
   const result: Partial<{{tsMessageType $msg}}> = {};
 
@@ -975,8 +1018,8 @@ export function marshal{{tsMessageType $msg}}(msg: {{tsMessageType $msg}}): Uint
 }
 
 /** Unmarshals a {{tsMessageType $msg}} from bytes. */
-export function unmarshal{{tsMessageType $msg}}(data: Uint8Array): {{tsMessageType $msg}} {
-  const reader = new Reader(data);
+export function unmarshal{{tsMessageType $msg}}(data: Uint8Array, opts?: ReaderOptions): {{tsMessageType $msg}} {
+  const reader = new Reader(data, opts);
   return decode{{tsMessageType $msg}}(reader);
 }
 
@@ -1025,7 +1068,16 @@ export function fromJSON_{{tsMessageType $msg}}(json: string): {{tsMessageType $
 {{range $iface := .Schema.Interfaces}}
 {{if generateComments}}{{range $iface.Comments}}{{if .IsDoc}}{{comment .Text}}
 {{end}}{{end}}{{end -}}
-export type {{tsInterfaceType $iface}} = {{range $i, $impl := $iface.Implementations}}{{if $i}} | {{end}}{{$impl.Type.Name}}{{end}};
+// {{tsInterfaceType $iface}} is a tagged union — TypeScript has no
+// runtime way to distinguish two messages with the same shape, so the
+// codegen needs an explicit "kind" discriminator. Construct values via
+// the {{tsInterfaceType $iface}} helpers (e.g. {{tsInterfaceType $iface}}.<Impl>(v))
+// or as object literals: { kind: '<Impl>', value: v }.
+export type {{tsInterfaceType $iface}} =
+{{range $i, $impl := $iface.Implementations -}}
+  {{if $i}}  | {{else}}    {{end}}{ kind: '{{$impl.Type.Name}}'; value: {{$impl.Type.Name}} }
+{{end -}}
+;
 
 /** Type ID mapping for {{tsInterfaceType $iface}} */
 export const {{tsInterfaceType $iface}}TypeIds = {
@@ -1033,6 +1085,98 @@ export const {{tsInterfaceType $iface}}TypeIds = {
   {{.Type.Name}}: {{.TypeID}},
 {{- end}}
 } as const;
+
+/** Construction helpers for {{tsInterfaceType $iface}}. */
+export const {{tsInterfaceType $iface}} = {
+{{- range $iface.Implementations}}
+  {{toCamel .Type.Name}}: (value: {{.Type.Name}}): {{tsInterfaceType $iface}} => ({ kind: '{{.Type.Name}}', value }),
+{{- end}}
+};
+
+/**
+ * Encodes a polymorphic {{tsInterfaceType $iface}}. Wire layout inside the
+ * surrounding length-prefix: [type_id varint] [concrete-type body
+ * terminated by end-marker]. Mirrors the Go generator's
+ * Encode{{tsInterfaceType $iface}}.
+ */
+export function encode{{tsInterfaceType $iface}}(writer: Writer, msg: {{tsInterfaceType $iface}}): void {
+  switch (msg.kind) {
+{{- range $iface.Implementations}}
+    case '{{.Type.Name}}':
+      writer.writeVarint({{.TypeID}});
+      encode{{.Type.Name}}(writer, msg.value);
+      return;
+{{- end}}
+  }
+}
+
+/**
+ * Decodes a polymorphic {{tsInterfaceType $iface}}. Throws on an unknown
+ * type id — callers that want forward-compat should catch and fall
+ * back, since this runtime cannot reconstruct an unknown variant.
+ */
+export function decode{{tsInterfaceType $iface}}(reader: Reader): {{tsInterfaceType $iface}} {
+  const id = reader.readVarint();
+  switch (id) {
+{{- range $iface.Implementations}}
+    case {{.TypeID}}:
+      return { kind: '{{.Type.Name}}', value: decode{{.Type.Name}}(reader) };
+{{- end}}
+    default:
+      throw new Error('unknown type id ' + id + ' for interface {{tsInterfaceType $iface}}');
+  }
+}
+
+/**
+ * Encodes a polymorphic {{tsInterfaceType $iface}} to JSON as a tagged
+ * object {"_type": "Variant", ...inner}. Mirrors the Go generator's
+ * ToJSON{{tsInterfaceType $iface}} and Rust's #[serde(tag = "_type")]
+ * enum so all three runtimes produce identical JSON for the same
+ * logical input.
+ */
+export function toJSON_{{tsInterfaceType $iface}}(msg: {{tsInterfaceType $iface}}): string {
+  switch (msg.kind) {
+{{- range $iface.Implementations}}
+    case '{{.Type.Name}}': {
+      const inner = toJSON_{{.Type.Name}}(msg.value);
+      // Splice the discriminator into the concrete impl's JSON.
+      return inner === '{}'
+        ? '{"_type":"{{.Type.Name}}"}'
+        : '{"_type":"{{.Type.Name}}",' + inner.slice(1);
+    }
+{{- end}}
+  }
+}
+
+/**
+ * Decodes a tagged JSON object into a polymorphic
+ * {{tsInterfaceType $iface}}. Strips the "_type" discriminator before
+ * delegating to the concrete impl's fromJSON so the strict-mode
+ * unknown-field check doesn't reject it.
+ */
+export function fromJSON_{{tsInterfaceType $iface}}(json: string): {{tsInterfaceType $iface}} {
+  const obj = JSON.parse(json);
+  if (typeof obj !== 'object' || obj === null) {
+    throw new Error('expected JSON object for {{tsInterfaceType $iface}}');
+  }
+  const type = obj._type;
+  if (typeof type !== 'string') {
+    throw new Error('missing or non-string _type field for {{tsInterfaceType $iface}}');
+  }
+  const inner: Record<string, unknown> = {};
+  for (const k of Object.keys(obj)) {
+    if (k !== '_type') inner[k] = obj[k];
+  }
+  const innerJSON = JSON.stringify(inner);
+  switch (type) {
+{{- range $iface.Implementations}}
+    case '{{.Type.Name}}':
+      return { kind: '{{.Type.Name}}', value: fromJSON_{{.Type.Name}}(innerJSON) };
+{{- end}}
+    default:
+      throw new Error('unknown _type ' + type + ' for {{tsInterfaceType $iface}}');
+  }
+}
 
 {{end}}
 `

@@ -1,4 +1,4 @@
-import { TypeNotRegisteredError, UnknownTypeError } from "./errors";
+import { DuplicateTypeRegistrationError, TypeNotRegisteredError, UnknownTypeError } from "./errors";
 import { Reader } from "./reader";
 import { Writer } from "./writer";
 import { TypeID, WireType } from "./types";
@@ -39,6 +39,15 @@ export class Registry {
 
   /**
    * Registers a type with the registry.
+   *
+   * Throws DuplicateTypeRegistrationError if `name` or `typeId` is
+   * already bound to a different registration. The previous "last
+   * write wins" behaviour silently masked schema bugs (two messages
+   * claiming the same wire ID); Go's `Registry.RegisterTypeWithID`
+   * returns the same error.
+   *
+   * Re-registering the SAME (name, typeId) pair is allowed and is a
+   * no-op; this lets idempotent module-loading patterns work.
    */
   register<T>(
     name: string,
@@ -48,6 +57,19 @@ export class Registry {
     sizer?: Sizer<T>
   ): TypeID {
     const id = typeId ?? this.nextTypeId++;
+
+    const existingById = this.byId.get(id);
+    if (existingById !== undefined && existingById.name !== name) {
+      throw new DuplicateTypeRegistrationError(
+        `type ID ${id} is already registered to ${existingById.name}, cannot reassign to ${name}`,
+      );
+    }
+    const existingByName = this.byName.get(name);
+    if (existingByName !== undefined && existingByName.typeId !== id) {
+      throw new DuplicateTypeRegistrationError(
+        `type name ${name} is already registered with ID ${existingByName.typeId}, cannot reassign to ${id}`,
+      );
+    }
 
     const registration: TypeRegistration = {
       typeId: id,
@@ -89,8 +111,8 @@ export class Registry {
    * Encodes a polymorphic value with its type ID.
    *
    * Wire shape: [field tag (Bytes)] [typeID varint] [value bytes (length-prefixed)].
-   * The Bytes wire type is the canonical V2 carrier for variable-length
-   * payloads; the typeID + value-bytes pair forms the body that the matching
+   * The Bytes wire type is the canonical carrier for variable-length payloads;
+   * the typeID + value-bytes pair forms the body that the matching
    * `decodePolymorphic` reads.
    */
   encodePolymorphic<T>(writer: Writer, fieldNumber: number, name: string, value: T): void {
@@ -99,9 +121,7 @@ export class Registry {
       throw new TypeNotRegisteredError(name);
     }
 
-    // Field tag: Bytes is the V2 wire type for length-prefixed payloads.
-    // (V1 had a dedicated TypeRef wire type at value 7; that surface was
-    // removed when the format collapsed to a single canonical V2.)
+    // Field tag: Bytes is the wire type for length-prefixed payloads.
     writer.writeTag(fieldNumber, WireType.Bytes);
 
     writer.writeVarint(reg.typeId);

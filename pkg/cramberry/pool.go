@@ -1,4 +1,4 @@
-// Package-internal pool exports.
+// Package cramberry — internal pool exports.
 //
 // This file used to expose `GetBuffer` / `PutBuffer` / `BufferPoolStats`
 // for size-tiered byte-slice pooling, but nothing in the codebase ever

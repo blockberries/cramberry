@@ -64,6 +64,7 @@ func (c *goContext) funcMap() template.FuncMap {
 		"isPointerField":       c.isPointerField,
 		"isNilCheckable":       c.isNilCheckable,
 		"needsCramberryImport": c.needsCramberryImport,
+		"hasOptionalPointer":   c.hasOptionalPointer,
 		"externalImports":      c.externalImports,
 		"comment":              GoComment,
 		"indent":               Indent,
@@ -74,9 +75,9 @@ func (c *goContext) funcMap() template.FuncMap {
 		"generateMarshal":      func() bool { return c.Options.GenerateMarshal },
 		"generateJSON":         func() bool { return c.Options.GenerateJSON },
 		"generateComments":     func() bool { return c.Options.GenerateComments },
-		"wireTypeV2":           c.wireTypeV2,
-		"encodeFieldV2":        c.encodeFieldV2,
-		"decodeFieldV2":        c.decodeFieldV2,
+		"wireType":             c.wireType,
+		"encodeField":          c.encodeField,
+		"decodeField":          c.decodeField,
 		"zeroCheck":            c.zeroCheck,
 		"isPackableSlice":      c.isPackableSlice,
 		"jsonFieldName":        c.jsonFieldName,
@@ -85,12 +86,12 @@ func (c *goContext) funcMap() template.FuncMap {
 	}
 }
 
-// wireTypeV2 returns the V2 wire type constant name for a field.
-func (c *goContext) wireTypeV2(f *schema.Field) string {
-	return c.wireTypeV2ForType(f.Type, f.Repeated)
+// wireType returns the wire type constant name for a field.
+func (c *goContext) wireType(f *schema.Field) string {
+	return c.wireTypeForType(f.Type, f.Repeated)
 }
 
-func (c *goContext) wireTypeV2ForType(t schema.TypeRef, repeated bool) string {
+func (c *goContext) wireTypeForType(t schema.TypeRef, repeated bool) string {
 	// Slices of packable types use Bytes wire type
 	if repeated {
 		return "cramberry.WireBytes"
@@ -127,28 +128,28 @@ func (c *goContext) wireTypeV2ForType(t schema.TypeRef, repeated bool) string {
 	}
 }
 
-// encodeFieldV2 generates the encoding code for a field using V2 format.
-func (c *goContext) encodeFieldV2(f *schema.Field) string {
+// encodeField generates the encoding code for a field.
+func (c *goContext) encodeField(f *schema.Field) string {
 	fieldName := "m." + ToPascalCase(f.Name)
 	fieldNum := f.Number
 
 	// Handle pointers first
 	if c.isPointerField(f) {
-		return c.encodePointerFieldV2(f, fieldName, fieldNum)
+		return c.encodePointerField(f, fieldName, fieldNum)
 	}
 
 	// Handle repeated fields
 	if f.Repeated {
-		return c.encodeRepeatedFieldV2(f, fieldName, fieldNum)
+		return c.encodeRepeatedField(f, fieldName, fieldNum)
 	}
 
 	// Handle regular fields
-	return c.encodeScalarFieldV2(f, fieldName, fieldNum)
+	return c.encodeScalarField(f, fieldName, fieldNum)
 }
 
-func (c *goContext) encodePointerFieldV2(f *schema.Field, fieldName string, fieldNum int) string {
-	wireType := c.wireTypeV2(f)
-	inner := c.encodeValueV2(f.Type, fieldName, true)
+func (c *goContext) encodePointerField(f *schema.Field, fieldName string, fieldNum int) string {
+	wireType := c.wireType(f)
+	inner := c.encodeValue(f.Type, fieldName, true)
 	body := c.maybeWrapBody(f.Type, false /*repeated*/, inner)
 
 	return fmt.Sprintf(`if %s != nil {
@@ -157,8 +158,8 @@ func (c *goContext) encodePointerFieldV2(f *schema.Field, fieldName string, fiel
 	}`, fieldName, fieldNum, wireType, body)
 }
 
-func (c *goContext) encodeRepeatedFieldV2(f *schema.Field, fieldName string, fieldNum int) string {
-	wireType := c.wireTypeV2(f)
+func (c *goContext) encodeRepeatedField(f *schema.Field, fieldName string, fieldNum int) string {
+	wireType := c.wireType(f)
 
 	var body string
 	if c.isPackableType(f.Type) {
@@ -166,12 +167,12 @@ func (c *goContext) encodeRepeatedFieldV2(f *schema.Field, fieldName string, fie
 		body = fmt.Sprintf(`w.WriteUvarint(uint64(len(%s)))
 		for _, v := range %s {
 			%s
-		}`, fieldName, fieldName, c.encodePackedElementV2(f.Type))
+		}`, fieldName, fieldName, c.encodePackedElement(f.Type))
 	} else {
 		body = fmt.Sprintf(`w.WriteUvarint(uint64(len(%s)))
 		for _, v := range %s {
 			%s
-		}`, fieldName, fieldName, c.encodeValueV2(f.Type, "v", false))
+		}`, fieldName, fieldName, c.encodeValue(f.Type, "v", false))
 	}
 
 	// Repeated fields are always wrapped in a length-prefixed payload so a
@@ -186,10 +187,10 @@ func (c *goContext) encodeRepeatedFieldV2(f *schema.Field, fieldName string, fie
 	}`, fieldName, fieldNum, wireType, body)
 }
 
-func (c *goContext) encodeScalarFieldV2(f *schema.Field, fieldName string, fieldNum int) string {
-	wireType := c.wireTypeV2(f)
+func (c *goContext) encodeScalarField(f *schema.Field, fieldName string, fieldNum int) string {
+	wireType := c.wireType(f)
 	zeroCheck := c.zeroCheck(f)
-	inner := c.encodeValueV2(f.Type, fieldName, false)
+	inner := c.encodeValue(f.Type, fieldName, false)
 	body := c.maybeWrapBody(f.Type, false /*repeated*/, inner)
 
 	// For optional fields, always emit if non-zero
@@ -239,14 +240,20 @@ func wrapInBeginEnd(body string) string {
 	}`, body)
 }
 
-func (c *goContext) encodeValueV2(t schema.TypeRef, varName string, isPointer bool) string {
+func (c *goContext) encodeValue(t schema.TypeRef, varName string, isPointer bool) string {
 	switch typ := t.(type) {
 	case *schema.ScalarType:
 		if isPointer {
-			return c.encodeScalarV2(typ.Name, "*"+varName)
+			return c.encodeScalar(typ.Name, "*"+varName)
 		}
-		return c.encodeScalarV2(typ.Name, varName)
+		return c.encodeScalar(typ.Name, varName)
 	case *schema.NamedType:
+		// Polymorphic interface — dispatch through the generated
+		// Encode<Iface> helper, which writes (TypeID varint, length-
+		// prefixed body). The interface itself has no EncodeTo method.
+		if c.isNamedInterface(typ) {
+			return fmt.Sprintf(`Encode%s(w, %s)`, ToPascalCase(typ.Name), varName)
+		}
 		// Named types are messages or enums
 		// For enums and messages, call EncodeTo (exported for cross-package access)
 		return fmt.Sprintf(`%s.EncodeTo(w)`, varName)
@@ -256,13 +263,13 @@ func (c *goContext) encodeValueV2(t schema.TypeRef, varName string, isPointer bo
 			return fmt.Sprintf(`w.WriteUvarint(uint64(len(%s)))
 		for _, v := range %s {
 			%s
-		}`, varName, varName, c.encodeValueV2(typ.Element, "v", false))
+		}`, varName, varName, c.encodeValue(typ.Element, "v", false))
 		}
 		// Dynamic slices
 		return fmt.Sprintf(`w.WriteUvarint(uint64(len(%s)))
 		for _, v := range %s {
 			%s
-		}`, varName, varName, c.encodeValueV2(typ.Element, "v", false))
+		}`, varName, varName, c.encodeValue(typ.Element, "v", false))
 	case *schema.MapType:
 		// Sort keys for deterministic output. Map iteration order in Go is
 		// randomized; the reflection marshaller sorts under DefaultOptions
@@ -276,11 +283,11 @@ func (c *goContext) encodeValueV2(t schema.TypeRef, varName string, isPointer bo
 			%s
 			%s
 		}
-	}`, sortHelper, varName, varName, c.encodeValueV2(typ.Key, "k", false), c.encodeValueV2(typ.Value, "v", false))
+	}`, sortHelper, varName, varName, c.encodeValue(typ.Key, "k", false), c.encodeValue(typ.Value, "v", false))
 	case *schema.PointerType:
 		// For pointer types, encode the underlying element
 		// The nil check should already be handled at the field level
-		return c.encodeValueV2(typ.Element, varName, true)
+		return c.encodeValue(typ.Element, varName, true)
 	default:
 		// This should not be reached for valid schema types
 		return fmt.Sprintf("/* unsupported type for encode: %T */", t)
@@ -309,7 +316,7 @@ func mapKeySortHelper(keyType schema.TypeRef) string {
 	}
 }
 
-func (c *goContext) encodeScalarV2(typeName, varName string) string {
+func (c *goContext) encodeScalar(typeName, varName string) string {
 	switch typeName {
 	case "bool":
 		return fmt.Sprintf("w.WriteBool(%s)", varName)
@@ -347,37 +354,37 @@ func (c *goContext) encodeScalarV2(typeName, varName string) string {
 	}
 }
 
-func (c *goContext) encodePackedElementV2(t schema.TypeRef) string {
+func (c *goContext) encodePackedElement(t schema.TypeRef) string {
 	switch typ := t.(type) {
 	case *schema.ScalarType:
-		return c.encodeScalarV2(typ.Name, "v")
+		return c.encodeScalar(typ.Name, "v")
 	default:
 		// Packed encoding only supports scalar types
 		return fmt.Sprintf("/* unsupported packed element type: %T */", t)
 	}
 }
 
-// decodeFieldV2 generates the decoding code for a field using V2 format.
+// decodeField generates the decoding code for a field.
 //
 // For wire-type WireBytes payloads, we mirror the encoder's BeginMessage /
-// EndMessage wrapping (see encodePointerFieldV2 / encodeRepeatedFieldV2 /
-// encodeScalarFieldV2 + maybeWrapBody). Reading the length first bounds
+// EndMessage wrapping (see encodePointerField / encodeRepeatedField /
+// encodeScalarField + maybeWrapBody). Reading the length first bounds
 // the body decode to that length, so trailing bytes inside the field don't
 // leak into the parent's tag stream.
-func (c *goContext) decodeFieldV2(f *schema.Field) string {
+func (c *goContext) decodeField(f *schema.Field) string {
 	fieldName := "m." + ToPascalCase(f.Name)
 
 	var body string
 	switch {
 	case f.Repeated:
-		body = c.decodeRepeatedFieldV2(f, fieldName)
+		body = c.decodeRepeatedField(f, fieldName)
 	default:
 		if _, isMap := f.Type.(*schema.MapType); isMap {
-			body = c.decodeMapFieldV2(f, fieldName)
+			body = c.decodeMapField(f, fieldName)
 		} else if c.isPointerField(f) {
-			body = c.decodePointerFieldV2(f, fieldName)
+			body = c.decodePointerField(f, fieldName)
 		} else {
-			body = c.decodeScalarFieldV2(f, fieldName)
+			body = c.decodeScalarField(f, fieldName)
 		}
 	}
 
@@ -419,16 +426,26 @@ func wrapDecodeBeginEnd(body string) string {
 	}`, body)
 }
 
-func (c *goContext) decodePointerFieldV2(f *schema.Field, fieldName string) string {
+func (c *goContext) decodePointerField(f *schema.Field, fieldName string) string {
 	goType := c.goTypeInternal(f.Type, false)
-	inner := c.decodeValueV2(f.Type, "tmp")
+	inner := c.decodeValue(f.Type, "tmp")
+
+	// Interfaces (and maps/slices, but those don't reach this path) are
+	// already nullable in Go — wrapping them in `*` would produce
+	// `*Animal` which the codegen-emitted EncodeAnimal can't accept.
+	// `needsPointer` matches that distinction; assign `tmp` directly
+	// when the type is already pointer-like, `&tmp` otherwise.
+	assignment := "&tmp"
+	if c.needsPointer(f.Type) {
+		assignment = "tmp"
+	}
 
 	return fmt.Sprintf(`var tmp %s
 		%s
-		%s = &tmp`, goType, inner, fieldName)
+		%s = %s`, goType, inner, fieldName, assignment)
 }
 
-func (c *goContext) decodeMapFieldV2(f *schema.Field, fieldName string) string {
+func (c *goContext) decodeMapField(f *schema.Field, fieldName string) string {
 	mapType := f.Type.(*schema.MapType)
 	keyType := c.goTypeInternal(mapType.Key, false)
 	valType := c.goTypeInternal(mapType.Value, false)
@@ -445,10 +462,10 @@ func (c *goContext) decodeMapFieldV2(f *schema.Field, fieldName string) string {
 			var v %s
 			%s
 			%s[k] = v
-		}`, fieldName, keyType, valType, keyType, c.decodeValueV2(mapType.Key, "k"), valType, c.decodeValueV2(mapType.Value, "v"), fieldName)
+		}`, fieldName, keyType, valType, keyType, c.decodeValue(mapType.Key, "k"), valType, c.decodeValue(mapType.Value, "v"), fieldName)
 }
 
-func (c *goContext) decodeRepeatedFieldV2(f *schema.Field, fieldName string) string {
+func (c *goContext) decodeRepeatedField(f *schema.Field, fieldName string) string {
 	goType := c.goTypeInternal(f.Type, false)
 
 	// Check if it's a packable type
@@ -461,7 +478,7 @@ func (c *goContext) decodeRepeatedFieldV2(f *schema.Field, fieldName string) str
 		%s = make([]%s, n)
 		for i := 0; i < n; i++ {
 			%s
-		}`, fieldName, goType, c.decodePackedElementV2(f.Type, fieldName+"[i]"))
+		}`, fieldName, goType, c.decodePackedElement(f.Type, fieldName+"[i]"))
 	}
 
 	// Non-packable types
@@ -472,18 +489,24 @@ func (c *goContext) decodeRepeatedFieldV2(f *schema.Field, fieldName string) str
 		%s = make([]%s, n)
 		for i := 0; i < n; i++ {
 			%s
-		}`, fieldName, goType, c.decodeValueV2(f.Type, fieldName+"[i]"))
+		}`, fieldName, goType, c.decodeValue(f.Type, fieldName+"[i]"))
 }
 
-func (c *goContext) decodeScalarFieldV2(f *schema.Field, fieldName string) string {
-	return c.decodeValueV2(f.Type, fieldName)
+func (c *goContext) decodeScalarField(f *schema.Field, fieldName string) string {
+	return c.decodeValue(f.Type, fieldName)
 }
 
-func (c *goContext) decodeValueV2(t schema.TypeRef, varName string) string {
+func (c *goContext) decodeValue(t schema.TypeRef, varName string) string {
 	switch typ := t.(type) {
 	case *schema.ScalarType:
-		return c.decodeScalarV2(typ.Name, varName)
+		return c.decodeScalar(typ.Name, varName)
 	case *schema.NamedType:
+		// Polymorphic interface — Decode<Iface> reads (TypeID varint,
+		// length-prefixed body) and returns the concrete impl as the
+		// interface type.
+		if c.isNamedInterface(typ) {
+			return fmt.Sprintf(`%s = Decode%s(r)`, varName, ToPascalCase(typ.Name))
+		}
 		// Named types are messages or enums (exported for cross-package access)
 		return fmt.Sprintf(`%s.DecodeFrom(r)`, varName)
 	case *schema.ArrayType:
@@ -498,7 +521,7 @@ func (c *goContext) decodeValueV2(t schema.TypeRef, varName string) string {
 			for i := 0; i < n; i++ {
 				%s
 			}
-		}`, varName, goType, c.decodeValueV2(typ.Element, varName+"[i]"))
+		}`, varName, goType, c.decodeValue(typ.Element, varName+"[i]"))
 	case *schema.MapType:
 		keyType := c.goTypeInternal(typ.Key, false)
 		valType := c.goTypeInternal(typ.Value, false)
@@ -516,7 +539,7 @@ func (c *goContext) decodeValueV2(t schema.TypeRef, varName string) string {
 				%s
 				%s[k] = v
 			}
-		}`, varName, keyType, valType, keyType, c.decodeValueV2(typ.Key, "k"), valType, c.decodeValueV2(typ.Value, "v"), varName)
+		}`, varName, keyType, valType, keyType, c.decodeValue(typ.Key, "k"), valType, c.decodeValue(typ.Value, "v"), varName)
 	case *schema.PointerType:
 		// For pointer types, allocate and decode the underlying element
 		elemType := c.goTypeInternal(typ.Element, false)
@@ -524,14 +547,14 @@ func (c *goContext) decodeValueV2(t schema.TypeRef, varName string) string {
 			var v %s
 			%s
 			%s = &v
-		}`, elemType, c.decodeValueV2(typ.Element, "v"), varName)
+		}`, elemType, c.decodeValue(typ.Element, "v"), varName)
 	default:
 		// This should not be reached for valid schema types
 		return fmt.Sprintf("/* unsupported type for decode: %T */", t)
 	}
 }
 
-func (c *goContext) decodeScalarV2(typeName, varName string) string {
+func (c *goContext) decodeScalar(typeName, varName string) string {
 	switch typeName {
 	case "bool":
 		return fmt.Sprintf("%s = r.ReadBool()", varName)
@@ -569,10 +592,10 @@ func (c *goContext) decodeScalarV2(typeName, varName string) string {
 	}
 }
 
-func (c *goContext) decodePackedElementV2(t schema.TypeRef, varName string) string {
+func (c *goContext) decodePackedElement(t schema.TypeRef, varName string) string {
 	switch typ := t.(type) {
 	case *schema.ScalarType:
-		return c.decodeScalarV2(typ.Name, varName)
+		return c.decodeScalar(typ.Name, varName)
 	default:
 		// Packed decoding only supports scalar types
 		return fmt.Sprintf("/* unsupported packed element type: %T */", t)
@@ -659,6 +682,11 @@ func (c *goContext) resolveNamedEnum(typ *schema.NamedType) (*schema.Enum, bool)
 // isNamedEnum reports whether the given NamedType refers to an enum.
 func (c *goContext) isNamedEnum(typ *schema.NamedType) bool {
 	return IsNamedEnum(c.Schema, c.Options.ImportedSchemas, typ)
+}
+
+// isNamedInterface reports whether the given NamedType refers to an interface.
+func (c *goContext) isNamedInterface(typ *schema.NamedType) bool {
+	return IsNamedInterface(c.Schema, c.Options.ImportedSchemas, typ)
 }
 
 // isSamePackage checks if an import alias refers to a schema in the same package.
@@ -832,11 +860,17 @@ func (c *goContext) hasRequired(m *schema.Message) bool {
 }
 
 func (c *goContext) needsPointer(t schema.TypeRef) bool {
-	switch t.(type) {
+	switch typ := t.(type) {
 	case *schema.PointerType:
 		return true
 	case *schema.ArrayType, *schema.MapType:
 		return true // slices and maps are already pointer-like
+	case *schema.NamedType:
+		// Interfaces are already nullable in Go (a nil interface
+		// value is well-defined). Wrapping in `*` would produce
+		// `*Animal` which the codegen-emitted EncodeAnimal can't
+		// accept (it takes Animal, not *Animal).
+		return c.isNamedInterface(typ)
 	default:
 		return false
 	}
@@ -854,14 +888,14 @@ func (c *goContext) isScalarType(t schema.TypeRef) bool {
 }
 
 // isPointerField returns true if the field needs pointer handling in encode/decode.
-// Note: Schema PointerType fields are handled directly in decodeValueV2/encodeValueV2,
+// Note: Schema PointerType fields are handled directly in decodeValue/encodeValue,
 // not through the pointer field path.
 func (c *goContext) isPointerField(f *schema.Field) bool {
 	if f.Repeated {
 		return false
 	}
-	// Schema pointer types (e.g., *Hash) are handled in decodeValueV2/encodeValueV2
-	// They don't need the extra indirection that decodePointerFieldV2 adds
+	// Schema pointer types (e.g., *Hash) are handled in decodeValue/encodeValue
+	// They don't need the extra indirection that decodePointerField adds
 	if _, isPtr := f.Type.(*schema.PointerType); isPtr {
 		return false
 	}
@@ -922,6 +956,30 @@ func (c *goContext) needsCramberryImport() bool {
 	// Check for interfaces
 	if len(c.Schema.Interfaces) > 0 {
 		return true
+	}
+	return false
+}
+
+// hasOptionalPointer reports whether any message has an explicit
+// schema-level pointer field (`*Type`). The Go generator's
+// `jsonDecodePointer` is the only emitter that uses
+// `bytes.Equal(rawValue, []byte("null"))`, and it's dispatched only
+// from `jsonDecodeValue`'s `*schema.PointerType` branch. The
+// `optional` modifier doesn't go through jsonDecodePointer — it
+// goes through jsonDecodeField's tempVal-allocation path, which
+// doesn't need `bytes.Equal`. Without this distinction the import
+// would be added for any schema with `optional` fields and trip
+// Go's strict-import check.
+func (c *goContext) hasOptionalPointer() bool {
+	if !c.Options.GenerateJSON {
+		return false
+	}
+	for _, msg := range c.Schema.Messages {
+		for _, f := range msg.Fields {
+			if _, isPtr := f.Type.(*schema.PointerType); isPtr {
+				return true
+			}
+		}
 	}
 	return false
 }
@@ -1017,7 +1075,7 @@ func (c *goContext) jsonEncodeField(idx int, f *schema.Field, _ string) string {
 	}
 
 	// Write field name
-	code.WriteString(fmt.Sprintf("\tbuf.WriteString(`\"%s\":`)\n", jsonName))
+	fmt.Fprintf(&code, "\tbuf.WriteString(`\"%s\":`)\n", jsonName)
 
 	// Check if this field is a pointer in the generated code
 	// Required scalar fields become pointers to distinguish nil from zero
@@ -1028,11 +1086,40 @@ func (c *goContext) jsonEncodeField(idx int, f *schema.Field, _ string) string {
 		actualFieldName = "*" + fieldName
 	}
 
+	// Optional bytes fields land as *[]byte in the generated struct. They
+	// need a nil-check + dereference for JSON encoding (the scalar
+	// encoder receives []byte). Required bytes are already []byte and
+	// fall through unchanged.
+	if isPtr && !f.Repeated && c.isBytesScalar(f.Type) {
+		valueCode := c.jsonEncodeValue(f.Type, "*"+fieldName, false, f.Required)
+		fmt.Fprintf(&code, "\tif %s != nil {\n%s\t} else {\n\t\tbuf.WriteString(\"null\")\n\t}\n", fieldName, indentBlock(valueCode))
+		return code.String()
+	}
+
 	// Generate value encoding based on type
 	valueCode := c.jsonEncodeValue(f.Type, actualFieldName, f.Repeated, f.Required)
 	code.WriteString(valueCode)
 
 	return code.String()
+}
+
+// isBytesScalar returns true if t is the bytes ([]byte) scalar type.
+func (c *goContext) isBytesScalar(t schema.TypeRef) bool {
+	if scalar, ok := t.(*schema.ScalarType); ok {
+		return scalar.Name == "bytes"
+	}
+	return false
+}
+
+// indentBlock indents every non-empty line in s by one extra tab.
+func indentBlock(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		if line != "" {
+			lines[i] = "\t" + line
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // jsonEncodeValue generates code to encode a value to JSON.
@@ -1047,6 +1134,11 @@ func (c *goContext) jsonEncodeValue(t schema.TypeRef, varName string, repeated b
 	case *schema.NamedType:
 		if c.isNamedEnum(typ) {
 			return c.jsonEncodeEnum(varName)
+		}
+		// Interfaces have no ToJSON method on the bare interface type
+		// — dispatch through the codegen-emitted polymorphic helper.
+		if c.isNamedInterface(typ) {
+			return c.jsonEncodeInterface(typ, varName)
 		}
 		return c.jsonEncodeMessage(varName)
 	case *schema.MapType:
@@ -1104,7 +1196,7 @@ func (c *goContext) jsonEncodeMessage(varName string) string {
 func (c *goContext) jsonEncodeArray(elemType schema.TypeRef, varName string) string {
 	var code strings.Builder
 	code.WriteString("\tbuf.WriteString(\"[\")\n")
-	code.WriteString(fmt.Sprintf("\tfor i, v := range %s {\n", varName))
+	fmt.Fprintf(&code, "\tfor i, v := range %s {\n", varName)
 	code.WriteString("\t\tif i > 0 {\n\t\t\tbuf.WriteString(\",\")\n\t\t}\n")
 
 	// Generate element encoding
@@ -1121,8 +1213,8 @@ func (c *goContext) jsonEncodeMap(t *schema.MapType, varName string) string {
 	var code strings.Builder
 	code.WriteString("\t{\n") // Start scoped block
 	code.WriteString("\t\tbuf.WriteString(\"{\")\n")
-	code.WriteString(fmt.Sprintf("\t\tkeys := make([]string, 0, len(%s))\n", varName))
-	code.WriteString(fmt.Sprintf("\t\tfor k := range %s {\n", varName))
+	fmt.Fprintf(&code, "\t\tkeys := make([]string, 0, len(%s))\n", varName)
+	fmt.Fprintf(&code, "\t\tfor k := range %s {\n", varName)
 
 	// Convert key to string for sorting
 	keyType := t.Key.(*schema.ScalarType)
@@ -1156,18 +1248,18 @@ func (c *goContext) jsonEncodeMap(t *schema.MapType, varName string) string {
 	case "string":
 		code.WriteString("\t\t\tk := keyStr\n")
 	case "int8", "int16", "int32", "int64", "int":
-		code.WriteString(fmt.Sprintf("\t\t\tkInt, kErr := cramberry.ParseInt64FromString(keyStr)\n\t\t\tif kErr != nil { return \"\", kErr }\n\t\t\tactualKey := %s(kInt)\n", c.goType(t.Key)))
-		code.WriteString(fmt.Sprintf("\t\t\tv := %s[actualKey]\n", varName))
+		fmt.Fprintf(&code, "\t\t\tkInt, kErr := cramberry.ParseInt64FromString(keyStr)\n\t\t\tif kErr != nil { return \"\", kErr }\n\t\t\tactualKey := %s(kInt)\n", c.goType(t.Key))
+		fmt.Fprintf(&code, "\t\t\tv := %s[actualKey]\n", varName)
 	case "uint8", "uint16", "uint32", "uint64", "uint", "byte":
-		code.WriteString(fmt.Sprintf("\t\t\tkUint, kErr := cramberry.ParseUint64FromString(keyStr)\n\t\t\tif kErr != nil { return \"\", kErr }\n\t\t\tactualKey := %s(kUint)\n", c.goType(t.Key)))
-		code.WriteString(fmt.Sprintf("\t\t\tv := %s[actualKey]\n", varName))
+		fmt.Fprintf(&code, "\t\t\tkUint, kErr := cramberry.ParseUint64FromString(keyStr)\n\t\t\tif kErr != nil { return \"\", kErr }\n\t\t\tactualKey := %s(kUint)\n", c.goType(t.Key))
+		fmt.Fprintf(&code, "\t\t\tv := %s[actualKey]\n", varName)
 	default:
-		code.WriteString(fmt.Sprintf("\t\t\tv := %s[keyStr]\n", varName))
+		fmt.Fprintf(&code, "\t\t\tv := %s[keyStr]\n", varName)
 	}
 
 	// Encode value
 	if keyType.Name == "string" {
-		code.WriteString(fmt.Sprintf("\t\t\tv := %s[k]\n", varName))
+		fmt.Fprintf(&code, "\t\t\tv := %s[k]\n", varName)
 	}
 	valueCode := c.jsonEncodeValue(t.Value, "v", false, false)
 	code.WriteString(strings.ReplaceAll(valueCode, "\t", "\t\t\t"))
@@ -1184,20 +1276,41 @@ func (c *goContext) jsonDecodeField(f *schema.Field, _ string) string {
 	jsonName := ToSnakeCase(f.Name)
 
 	var code strings.Builder
-	code.WriteString(fmt.Sprintf("\tif rawValue, ok := raw[\"%s\"]; ok {\n", jsonName))
+	fmt.Fprintf(&code, "\tif rawValue, ok := raw[\"%s\"]; ok {\n", jsonName)
 
 	// Check if this field is a pointer in the generated code
 	isPtr := c.isPointerField(f)
 	targetVar := "m." + fieldName
 
-	if isPtr && c.isScalarType(f.Type) {
-		// For pointer scalar fields, decode to temp var then assign pointer
+	// Generated Go field is a pointer-with-allocation-required when:
+	//   - It's a scalar (`*int32`, `*string`, etc.).
+	//   - It's a non-interface NamedType (`*Address`).
+	// In those cases the inner JSON decoder writes a value of T and
+	// the field expects *T — emit a temp local and assign &tempVal.
+	//
+	// Skip the wrap for:
+	//   - Schema PointerType (explicit `*Type`): handled inline by
+	//     jsonDecodePointer.
+	//   - Maps and interfaces: not actually wrapped in `*` even when
+	//     marked optional (interfaces are nullable; maps are
+	//     reference-y already), so decode directly into the field.
+	needsTempWrap := isPtr
+	if _, isSchemaPtr := f.Type.(*schema.PointerType); isSchemaPtr {
+		needsTempWrap = false
+	}
+	if _, isMap := f.Type.(*schema.MapType); isMap {
+		needsTempWrap = false
+	}
+	if nt, isNamed := f.Type.(*schema.NamedType); isNamed && c.isNamedInterface(nt) {
+		needsTempWrap = false
+	}
+
+	if needsTempWrap {
 		code.WriteString("\t\tvar tempVal " + c.goType(f.Type) + "\n")
 		decodeCode := c.jsonDecodeValue(f.Type, "tempVal", f.Repeated)
 		code.WriteString(decodeCode)
-		code.WriteString(fmt.Sprintf("\t\t%s = &tempVal\n", targetVar))
+		fmt.Fprintf(&code, "\t\t%s = &tempVal\n", targetVar)
 	} else {
-		// Generate decoding based on type
 		decodeCode := c.jsonDecodeValue(f.Type, targetVar, f.Repeated)
 		code.WriteString(decodeCode)
 	}
@@ -1219,6 +1332,9 @@ func (c *goContext) jsonDecodeValue(t schema.TypeRef, targetVar string, repeated
 		if e, ok := c.resolveNamedEnum(typ); ok {
 			return c.jsonDecodeEnum(e, targetVar)
 		}
+		if c.isNamedInterface(typ) {
+			return c.jsonDecodeInterface(typ, targetVar)
+		}
 		return c.jsonDecodeMessage(typ, targetVar)
 	case *schema.MapType:
 		return c.jsonDecodeMap(typ, targetVar)
@@ -1238,59 +1354,59 @@ func (c *goContext) jsonDecodeScalar(t *schema.ScalarType, targetVar string) str
 	case "bool":
 		code.WriteString("\t\tvar boolVal bool\n")
 		code.WriteString("\t\tif err := json.Unmarshal(rawValue, &boolVal); err != nil {\n")
-		code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar))
+		fmt.Fprintf(&code, "\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar)
 		code.WriteString("\t\t}\n")
-		code.WriteString(fmt.Sprintf("\t\t%s = boolVal\n", targetVar))
+		fmt.Fprintf(&code, "\t\t%s = boolVal\n", targetVar)
 
 	case "int8", "int16", "int32", "int64", "int":
 		code.WriteString("\t\tvar strVal string\n")
 		code.WriteString("\t\tvar numVal float64\n")
 		code.WriteString("\t\tif err := json.Unmarshal(rawValue, &strVal); err == nil {\n")
-		code.WriteString(fmt.Sprintf("\t\t\tif v, err := cramberry.ParseInt64FromString(strVal); err != nil {\n\t\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n\t\t\t} else {\n\t\t\t\t%s = %s(v)\n\t\t\t}\n", targetVar, targetVar, t.Name))
+		fmt.Fprintf(&code, "\t\t\tif v, err := cramberry.ParseInt64FromString(strVal); err != nil {\n\t\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n\t\t\t} else {\n\t\t\t\t%s = %s(v)\n\t\t\t}\n", targetVar, targetVar, t.Name)
 		code.WriteString("\t\t} else if err := json.Unmarshal(rawValue, &numVal); err == nil {\n")
-		code.WriteString(fmt.Sprintf("\t\t\t%s = %s(numVal)\n", targetVar, t.Name))
+		fmt.Fprintf(&code, "\t\t\t%s = %s(numVal)\n", targetVar, t.Name)
 		code.WriteString("\t\t} else {\n")
-		code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: expected string or number\", \"%s\")\n", targetVar))
+		fmt.Fprintf(&code, "\t\t\treturn fmt.Errorf(\"field %%s: expected string or number\", \"%s\")\n", targetVar)
 		code.WriteString("\t\t}\n")
 
 	case "uint8", "uint16", "uint32", "uint64", "uint", "byte":
 		code.WriteString("\t\tvar strVal string\n")
 		code.WriteString("\t\tvar numVal float64\n")
 		code.WriteString("\t\tif err := json.Unmarshal(rawValue, &strVal); err == nil {\n")
-		code.WriteString(fmt.Sprintf("\t\t\tif v, err := cramberry.ParseUint64FromString(strVal); err != nil {\n\t\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n\t\t\t} else {\n\t\t\t\t%s = %s(v)\n\t\t\t}\n", targetVar, targetVar, t.Name))
+		fmt.Fprintf(&code, "\t\t\tif v, err := cramberry.ParseUint64FromString(strVal); err != nil {\n\t\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n\t\t\t} else {\n\t\t\t\t%s = %s(v)\n\t\t\t}\n", targetVar, targetVar, t.Name)
 		code.WriteString("\t\t} else if err := json.Unmarshal(rawValue, &numVal); err == nil {\n")
-		code.WriteString(fmt.Sprintf("\t\t\t%s = %s(numVal)\n", targetVar, t.Name))
+		fmt.Fprintf(&code, "\t\t\t%s = %s(numVal)\n", targetVar, t.Name)
 		code.WriteString("\t\t} else {\n")
-		code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: expected string or number\", \"%s\")\n", targetVar))
+		fmt.Fprintf(&code, "\t\t\treturn fmt.Errorf(\"field %%s: expected string or number\", \"%s\")\n", targetVar)
 		code.WriteString("\t\t}\n")
 
 	case "float32":
 		code.WriteString("\t\tvar floatVal float64\n")
 		code.WriteString("\t\tif err := json.Unmarshal(rawValue, &floatVal); err != nil {\n")
-		code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar))
+		fmt.Fprintf(&code, "\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar)
 		code.WriteString("\t\t}\n")
-		code.WriteString(fmt.Sprintf("\t\t%s = float32(floatVal)\n", targetVar))
+		fmt.Fprintf(&code, "\t\t%s = float32(floatVal)\n", targetVar)
 
 	case "float64":
 		code.WriteString("\t\tvar floatVal float64\n")
 		code.WriteString("\t\tif err := json.Unmarshal(rawValue, &floatVal); err != nil {\n")
-		code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar))
+		fmt.Fprintf(&code, "\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar)
 		code.WriteString("\t\t}\n")
-		code.WriteString(fmt.Sprintf("\t\t%s = floatVal\n", targetVar))
+		fmt.Fprintf(&code, "\t\t%s = floatVal\n", targetVar)
 
 	case "string":
 		code.WriteString("\t\tvar strVal string\n")
 		code.WriteString("\t\tif err := json.Unmarshal(rawValue, &strVal); err != nil {\n")
-		code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar))
+		fmt.Fprintf(&code, "\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar)
 		code.WriteString("\t\t}\n")
-		code.WriteString(fmt.Sprintf("\t\t%s = strVal\n", targetVar))
+		fmt.Fprintf(&code, "\t\t%s = strVal\n", targetVar)
 
 	case "bytes":
 		code.WriteString("\t\tvar strVal string\n")
 		code.WriteString("\t\tif err := json.Unmarshal(rawValue, &strVal); err != nil {\n")
-		code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar))
+		fmt.Fprintf(&code, "\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar)
 		code.WriteString("\t\t}\n")
-		code.WriteString(fmt.Sprintf("\t\tif decoded, err := cramberry.DecodeBase64(strVal); err != nil {\n\t\t\treturn fmt.Errorf(\"field %%s: invalid base64: %%w\", \"%s\", err)\n\t\t} else {\n\t\t\t%s = decoded\n\t\t}\n", targetVar, targetVar))
+		fmt.Fprintf(&code, "\t\tif decoded, err := cramberry.DecodeBase64(strVal); err != nil {\n\t\t\treturn fmt.Errorf(\"field %%s: invalid base64: %%w\", \"%s\", err)\n\t\t} else {\n\t\t\t%s = decoded\n\t\t}\n", targetVar, targetVar)
 
 	default:
 		code.WriteString("\t\t// Unsupported scalar type\n")
@@ -1306,15 +1422,15 @@ func (c *goContext) jsonDecodeEnum(e *schema.Enum, targetVar string) string {
 
 	code.WriteString("\t\tvar strVal string\n")
 	code.WriteString("\t\tif err := json.Unmarshal(rawValue, &strVal); err != nil {\n")
-	code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar))
+	fmt.Fprintf(&code, "\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar)
 	code.WriteString("\t\t}\n")
 	code.WriteString("\t\tswitch strVal {\n")
 	for _, v := range e.Values {
-		code.WriteString(fmt.Sprintf("\t\tcase \"%s\":\n", v.Name))
-		code.WriteString(fmt.Sprintf("\t\t\t%s = %s%s\n", targetVar, enumType, ToPascalCase(v.Name)))
+		fmt.Fprintf(&code, "\t\tcase \"%s\":\n", v.Name)
+		fmt.Fprintf(&code, "\t\t\t%s = %s%s\n", targetVar, enumType, ToPascalCase(v.Name))
 	}
 	code.WriteString("\t\tdefault:\n")
-	code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: unknown enum value: %%s\", \"%s\", strVal)\n", targetVar))
+	fmt.Fprintf(&code, "\t\t\treturn fmt.Errorf(\"field %%s: unknown enum value: %%s\", \"%s\", strVal)\n", targetVar)
 	code.WriteString("\t\t}\n")
 
 	return code.String()
@@ -1330,25 +1446,75 @@ func (c *goContext) jsonDecodeMessage(t *schema.NamedType, targetVar string) str
 	}
 
 	// rawValue is already json.RawMessage, use it directly
-	code.WriteString(fmt.Sprintf("\t\tvar msg %s\n", msgType))
-	code.WriteString(fmt.Sprintf("\t\tif err := msg.FromJSON(string(rawValue)); err != nil {\n\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n\t\t}\n", targetVar))
-	code.WriteString(fmt.Sprintf("\t\t%s = msg\n", targetVar))
+	fmt.Fprintf(&code, "\t\tvar msg %s\n", msgType)
+	fmt.Fprintf(&code, "\t\tif err := msg.FromJSON(string(rawValue)); err != nil {\n\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n\t\t}\n", targetVar)
+	fmt.Fprintf(&code, "\t\t%s = msg\n", targetVar)
 
 	return code.String()
 }
 
+// jsonEncodeInterface dispatches a polymorphic field through the
+// generated ToJSON<Iface> helper. Without this, the generator would
+// emit `m.X.ToJSON()` on the bare interface — the interface has no
+// such method (it lives on each concrete impl), so the file failed
+// to compile for any schema with `iface_field = N`.
+func (c *goContext) jsonEncodeInterface(t *schema.NamedType, varName string) string {
+	ifaceName := ToPascalCase(t.Name)
+	if t.Package != "" && !c.isSamePackage(t.Package) {
+		ifaceName = t.Package + "." + ifaceName
+	}
+	return fmt.Sprintf(
+		"\t\tif msgJSON, err := ToJSON%s(%s); err != nil {\n"+
+			"\t\t\treturn \"\", err\n"+
+			"\t\t} else {\n"+
+			"\t\t\tbuf.WriteString(msgJSON)\n"+
+			"\t\t}\n",
+		ifaceName, varName,
+	)
+}
+
+// jsonDecodeInterface mirrors jsonEncodeInterface for the decode path.
+func (c *goContext) jsonDecodeInterface(t *schema.NamedType, targetVar string) string {
+	ifaceName := ToPascalCase(t.Name)
+	if t.Package != "" && !c.isSamePackage(t.Package) {
+		ifaceName = t.Package + "." + ifaceName
+	}
+	return fmt.Sprintf(
+		"\t\tdecoded, err := FromJSON%s(string(rawValue))\n"+
+			"\t\tif err != nil {\n"+
+			"\t\t\treturn fmt.Errorf(\"field %%s: %%w\", %q, err)\n"+
+			"\t\t}\n"+
+			"\t\t%s = decoded\n",
+		ifaceName, targetVar, targetVar,
+	)
+}
+
 // jsonDecodePointer generates code to decode an optional pointer field.
+//
+// Two prior bugs lived here:
+//
+//  1. The null-detection used `json.Unmarshal(rawValue, &isNull)` and
+//     branched on `err == nil && isNull`. But `Unmarshal(null, &bool)`
+//     returns no error AND leaves the bool at its zero value, so the
+//     null branch was unreachable. Now we compare the raw bytes
+//     directly via `bytes.Equal(rawValue, []byte("null"))`.
+//
+//  2. The non-null branch emitted `*m.Value = strVal` directly. The
+//     pointer was nil at that point, so the dereference panicked on
+//     the first non-null FromJSON call. Now we decode into a fresh
+//     local of the element type and assign its address.
 func (c *goContext) jsonDecodePointer(t *schema.PointerType, targetVar string) string {
 	var code strings.Builder
 
-	code.WriteString("\t\tvar isNull bool\n")
-	code.WriteString("\t\tif err := json.Unmarshal(rawValue, &isNull); err == nil && isNull {\n")
-	code.WriteString(fmt.Sprintf("\t\t\t%s = nil\n", targetVar))
+	code.WriteString("\t\tif bytes.Equal(rawValue, []byte(\"null\")) {\n")
+	fmt.Fprintf(&code, "\t\t\t%s = nil\n", targetVar)
 	code.WriteString("\t\t} else {\n")
 
-	// Decode the value
-	innerCode := c.jsonDecodeValue(t.Element, "*"+targetVar, false)
+	// Decode into a fresh local, then point at it.
+	fmt.Fprintf(&code, "\t\t\tvar __ptrVal %s\n", c.goType(t.Element))
+	innerCode := c.jsonDecodeValue(t.Element, "__ptrVal", false)
 	code.WriteString(strings.ReplaceAll(innerCode, "\t", "\t\t"))
+	fmt.Fprintf(&code, "\t\t\t%s = &__ptrVal\n", targetVar)
 
 	code.WriteString("\t\t}\n")
 
@@ -1361,9 +1527,9 @@ func (c *goContext) jsonDecodeArray(elemType schema.TypeRef, targetVar string) s
 
 	code.WriteString("\t\tvar arrRaw []json.RawMessage\n")
 	code.WriteString("\t\tif err := json.Unmarshal(rawValue, &arrRaw); err != nil {\n")
-	code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar))
+	fmt.Fprintf(&code, "\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar)
 	code.WriteString("\t\t}\n")
-	code.WriteString(fmt.Sprintf("\t\t%s = make([]%s, len(arrRaw))\n", targetVar, c.goType(elemType)))
+	fmt.Fprintf(&code, "\t\t%s = make([]%s, len(arrRaw))\n", targetVar, c.goType(elemType))
 	code.WriteString("\t\tfor i, elemRaw := range arrRaw {\n")
 	code.WriteString("\t\t\trawValue = elemRaw\n")
 
@@ -1382,9 +1548,9 @@ func (c *goContext) jsonDecodeMap(t *schema.MapType, targetVar string) string {
 
 	code.WriteString("\t\tvar mapRaw map[string]json.RawMessage\n")
 	code.WriteString("\t\tif err := json.Unmarshal(rawValue, &mapRaw); err != nil {\n")
-	code.WriteString(fmt.Sprintf("\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar))
+	fmt.Fprintf(&code, "\t\t\treturn fmt.Errorf(\"field %%s: %%w\", \"%s\", err)\n", targetVar)
 	code.WriteString("\t\t}\n")
-	code.WriteString(fmt.Sprintf("\t\t%s = make(map[%s]%s, len(mapRaw))\n", targetVar, c.goType(t.Key), c.goType(t.Value)))
+	fmt.Fprintf(&code, "\t\t%s = make(map[%s]%s, len(mapRaw))\n", targetVar, c.goType(t.Key), c.goType(t.Value))
 	code.WriteString("\t\tfor keyStr, valRaw := range mapRaw {\n")
 
 	// Convert string key to actual key type. Propagate parse errors so
@@ -1394,9 +1560,9 @@ func (c *goContext) jsonDecodeMap(t *schema.MapType, targetVar string) string {
 	case "string":
 		code.WriteString("\t\t\tk := keyStr\n")
 	case "int8", "int16", "int32", "int64", "int":
-		code.WriteString(fmt.Sprintf("\t\t\tkInt, kErr := cramberry.ParseInt64FromString(keyStr)\n\t\t\tif kErr != nil {\n\t\t\t\treturn fmt.Errorf(\"field %%s: invalid map key %%q: %%w\", \"%s\", keyStr, kErr)\n\t\t\t}\n\t\t\tk := %s(kInt)\n", targetVar, c.goType(t.Key)))
+		fmt.Fprintf(&code, "\t\t\tkInt, kErr := cramberry.ParseInt64FromString(keyStr)\n\t\t\tif kErr != nil {\n\t\t\t\treturn fmt.Errorf(\"field %%s: invalid map key %%q: %%w\", \"%s\", keyStr, kErr)\n\t\t\t}\n\t\t\tk := %s(kInt)\n", targetVar, c.goType(t.Key))
 	case "uint8", "uint16", "uint32", "uint64", "uint", "byte":
-		code.WriteString(fmt.Sprintf("\t\t\tkUint, kErr := cramberry.ParseUint64FromString(keyStr)\n\t\t\tif kErr != nil {\n\t\t\t\treturn fmt.Errorf(\"field %%s: invalid map key %%q: %%w\", \"%s\", keyStr, kErr)\n\t\t\t}\n\t\t\tk := %s(kUint)\n", targetVar, c.goType(t.Key)))
+		fmt.Fprintf(&code, "\t\t\tkUint, kErr := cramberry.ParseUint64FromString(keyStr)\n\t\t\tif kErr != nil {\n\t\t\t\treturn fmt.Errorf(\"field %%s: invalid map key %%q: %%w\", \"%s\", keyStr, kErr)\n\t\t\t}\n\t\t\tk := %s(kUint)\n", targetVar, c.goType(t.Key))
 	default:
 		code.WriteString("\t\t\tk := keyStr\n")
 	}
@@ -1424,6 +1590,9 @@ package {{goPackage}}
 import (
 {{- if needsCramberryImport}}
 {{- if generateJSON}}
+{{- if hasOptionalPointer}}
+	"bytes"
+{{- end}}
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -1493,8 +1662,8 @@ type {{goMessageType $msg}} struct {
 {{- end}}
 }
 {{if generateMarshal}}
-// MarshalCramberry encodes the message to binary format using optimized V2 encoding.
-// This method uses direct field access without reflection for maximum performance.
+// MarshalCramberry encodes the message to binary format using direct field
+// access without reflection for maximum performance.
 func (m *{{goMessageType $msg}}) MarshalCramberry() ([]byte, error) {
 	w := cramberry.GetWriter()
 	defer cramberry.PutWriter(w)
@@ -1507,23 +1676,23 @@ func (m *{{goMessageType $msg}}) MarshalCramberry() ([]byte, error) {
 	return w.BytesCopy(), nil
 }
 
-// EncodeTo encodes the message directly to the writer using V2 format.
+// EncodeTo encodes the message directly to the writer.
 func (m *{{goMessageType $msg}}) EncodeTo(w *cramberry.Writer) {
 {{- range $msg.Fields}}
-	{{encodeFieldV2 .}}
+	{{encodeField .}}
 {{- end}}
 	w.WriteEndMarker()
 }
 
-// UnmarshalCramberry decodes the message from binary format using optimized V2 decoding.
-// This method uses direct field access without reflection for maximum performance.
+// UnmarshalCramberry decodes the message from binary format using direct
+// field access without reflection for maximum performance.
 func (m *{{goMessageType $msg}}) UnmarshalCramberry(data []byte) error {
 	r := cramberry.NewReaderWithOptions(data, cramberry.DefaultOptions)
 	m.DecodeFrom(r)
 	return r.Err()
 }
 
-// DecodeFrom decodes the message from the reader using V2 format.
+// DecodeFrom decodes the message from the reader.
 func (m *{{goMessageType $msg}}) DecodeFrom(r *cramberry.Reader) {
 	for {
 		fieldNum, wireType := r.ReadTag()
@@ -1533,7 +1702,7 @@ func (m *{{goMessageType $msg}}) DecodeFrom(r *cramberry.Reader) {
 		switch fieldNum {
 {{- range $msg.Fields}}
 		case {{.Number}}:
-			{{decodeFieldV2 .}}
+			{{decodeField .}}
 {{- end}}
 		default:
 			// Skip unknown field for forward compatibility
@@ -1638,5 +1807,123 @@ func {{goInterfaceType $iface}}TypeID(v {{goInterfaceType $iface}}) cramberry.Ty
 		return 0
 	}
 }
+
+// Encode{{goInterfaceType $iface}} writes a polymorphic {{goInterfaceType $iface}}
+// to the writer. Wire layout inside the surrounding length-prefix:
+// [type_id varint] [concrete-type body terminated by end-marker].
+// Mirrors the reflection marshaller's encodeInterface in pkg/cramberry/marshal.go.
+func Encode{{goInterfaceType $iface}}(w *cramberry.Writer, v {{goInterfaceType $iface}}) {
+	if v == nil {
+		w.WriteTypeID(cramberry.TypeIDNil)
+		return
+	}
+	switch __c := v.(type) {
+{{- range $iface.Implementations}}
+	case *{{.Type.Name}}:
+		w.WriteTypeID({{.TypeID}})
+		__c.EncodeTo(w)
+{{- end}}
+	default:
+		w.WriteTypeID(cramberry.TypeIDNil)
+	}
+}
+
+// Decode{{goInterfaceType $iface}} reads a polymorphic {{goInterfaceType $iface}}
+// from the reader. Returns nil for the nil-type-id sentinel or for an
+// unknown type id (forward-compat: an old decoder must not crash on a
+// new schema's polymorphic value, even if it can't reconstruct it).
+func Decode{{goInterfaceType $iface}}(r *cramberry.Reader) {{goInterfaceType $iface}} {
+	id := r.ReadTypeID()
+	if r.Err() != nil {
+		return nil
+	}
+	switch id {
+{{- range $iface.Implementations}}
+	case {{.TypeID}}:
+		var __v {{.Type.Name}}
+		__v.DecodeFrom(r)
+		return &__v
+{{- end}}
+	default:
+		return nil
+	}
+}
+
+{{- if generateJSON}}
+
+// ToJSON{{goInterfaceType $iface}} serializes a polymorphic
+// {{goInterfaceType $iface}} value to a tagged JSON object of the
+// shape {"_type": "Variant", ...inner-fields-flat}. Mirrors the
+// Rust generator's serde-tagged enum and the TS generator's
+// discriminated-union helper. Without this, the field-level encode
+// would call ToJSON() on the bare interface — which has no such
+// method, since ToJSON lives on each concrete impl.
+func ToJSON{{goInterfaceType $iface}}(v {{goInterfaceType $iface}}) (string, error) {
+	if v == nil {
+		return "null", nil
+	}
+	var name, inner string
+	var err error
+	switch __c := v.(type) {
+{{- range $iface.Implementations}}
+	case *{{.Type.Name}}:
+		name = "{{.Type.Name}}"
+		inner, err = __c.ToJSON()
+{{- end}}
+	default:
+		return "", fmt.Errorf("ToJSON{{goInterfaceType $iface}}: unknown concrete type %T", v)
+	}
+	if err != nil {
+		return "", err
+	}
+	// inner is the concrete impl's own ToJSON output, e.g. {"name":"Rex"}.
+	// Splice in the discriminator: {"_type":"Dog","name":"Rex"}.
+	if inner == "{}" {
+		return "{\"_type\":\"" + name + "\"}", nil
+	}
+	return "{\"_type\":\"" + name + "\"," + inner[1:], nil
+}
+
+// FromJSON{{goInterfaceType $iface}} reverses ToJSON{{goInterfaceType $iface}}.
+// Returns an error when "_type" is missing or names an unknown impl.
+//
+// Strips the discriminator field before delegating to the concrete
+// impl's FromJSON — concrete FromJSONs are strict and would reject
+// "_type" as an unknown field otherwise.
+func FromJSON{{goInterfaceType $iface}}(s string) ({{goInterfaceType $iface}}, error) {
+	if s == "null" {
+		return nil, nil
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(s), &raw); err != nil {
+		return nil, fmt.Errorf("FromJSON{{goInterfaceType $iface}}: %w", err)
+	}
+	typeRaw, ok := raw["_type"]
+	if !ok {
+		return nil, fmt.Errorf("FromJSON{{goInterfaceType $iface}}: missing \"_type\" field")
+	}
+	var typeName string
+	if err := json.Unmarshal(typeRaw, &typeName); err != nil {
+		return nil, fmt.Errorf("FromJSON{{goInterfaceType $iface}}: _type: %w", err)
+	}
+	delete(raw, "_type")
+	innerJSON, err := json.Marshal(raw)
+	if err != nil {
+		return nil, fmt.Errorf("FromJSON{{goInterfaceType $iface}}: %w", err)
+	}
+	switch typeName {
+{{- range $iface.Implementations}}
+	case "{{.Type.Name}}":
+		var v {{.Type.Name}}
+		if err := v.FromJSON(string(innerJSON)); err != nil {
+			return nil, err
+		}
+		return &v, nil
+{{- end}}
+	default:
+		return nil, fmt.Errorf("FromJSON{{goInterfaceType $iface}}: unknown _type %q", typeName)
+	}
+}
+{{- end}}
 {{end}}
 `

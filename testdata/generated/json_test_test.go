@@ -189,3 +189,64 @@ func TestUnknownFieldsRejected(t *testing.T) {
 	}
 	t.Logf("Unknown field correctly rejected: %v", err)
 }
+
+// Regression test: FromJSON for an optional pointer field used to emit
+// `*m.Value = strVal` directly, which panics when m.Value is nil. The
+// generator now allocates a local of the element type, populates it,
+// and assigns its address. Trace of the prior bug:
+//
+//	var m OptionalPointer    // m.Value == nil
+//	m.FromJSON(`{"value":"hi"}`)  // takes the non-null branch
+//	*m.Value = "hi"          // <- nil pointer dereference panic
+//
+// This test would have caught the panic on the very first call.
+func TestOptionalPointer_FromJSON_NonNullValue(t *testing.T) {
+	cases := []struct {
+		name       string
+		json       string
+		wantValue  *string
+		wantNumber *int64
+	}{
+		{
+			name:      "string set",
+			json:      `{"value":"hello"}`,
+			wantValue: stringPtr("hello"),
+		},
+		{
+			name:       "number set",
+			json:       `{"number":"42"}`,
+			wantNumber: int64Ptr(42),
+		},
+		{
+			name:       "both set",
+			json:       `{"value":"hello","number":"42"}`,
+			wantValue:  stringPtr("hello"),
+			wantNumber: int64Ptr(42),
+		},
+		{
+			name: "both null",
+			json: `{"value":null,"number":null}`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var m OptionalPointer
+			if err := m.FromJSON(tc.json); err != nil {
+				t.Fatalf("FromJSON(%q) error: %v", tc.json, err)
+			}
+			if (tc.wantValue == nil) != (m.Value == nil) {
+				t.Errorf("Value: got %v, want %v", m.Value, tc.wantValue)
+			} else if tc.wantValue != nil && *m.Value != *tc.wantValue {
+				t.Errorf("Value: got %q, want %q", *m.Value, *tc.wantValue)
+			}
+			if (tc.wantNumber == nil) != (m.Number == nil) {
+				t.Errorf("Number: got %v, want %v", m.Number, tc.wantNumber)
+			} else if tc.wantNumber != nil && *m.Number != *tc.wantNumber {
+				t.Errorf("Number: got %d, want %d", *m.Number, *tc.wantNumber)
+			}
+		})
+	}
+}
+
+func stringPtr(s string) *string { return &s }
+func int64Ptr(n int64) *int64    { return &n }

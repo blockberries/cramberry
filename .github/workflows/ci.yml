@@ -9,103 +9,246 @@ on:
 permissions:
   contents: read
 
+# Reusable Go setup defaults so each job picks up the same toolchain.
+env:
+  GO_VERSION: '1.25'
+  NODE_VERSION: '22'
+  RUST_TOOLCHAIN: stable
+
 jobs:
-  test:
-    name: Test
+  # ---------------------------------------------------------------------
+  # Go: matrix-test the runtime + codegen + schema + extract packages.
+  # ---------------------------------------------------------------------
+  go-test:
+    name: Go (test + race + coverage)
     runs-on: ubuntu-latest
     strategy:
       matrix:
         go-version: ['1.23', '1.24', '1.25']
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
           cache: true
 
-      - name: Set up Go environment
-        run: go env -w GOTOOLCHAIN=go${{ matrix.go-version }}.0+auto
-
-      - name: Download dependencies
+      - name: go mod download
         run: go mod download
 
-      - name: Verify dependencies
+      - name: go mod verify
         run: go mod verify
 
-      - name: Run go vet
+      - name: go vet
         run: go vet ./...
 
-      - name: Run tests
+      - name: go test -race
         run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: Upload coverage to Codecov
-        if: matrix.go-version == '1.25'
+        if: matrix.go-version == env.GO_VERSION
         uses: codecov/codecov-action@v4
         with:
           files: coverage.out
           fail_ci_if_error: false
           verbose: true
 
-  lint:
-    name: Lint
+  go-lint:
+    name: Go (golangci-lint)
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Run golangci-lint
+      - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: latest
           args: --timeout=5m
 
-  build:
-    name: Build
+  # ---------------------------------------------------------------------
+  # TypeScript port: build + unit tests.
+  # ---------------------------------------------------------------------
+  ts-test:
+    name: TypeScript (build + test)
     runs-on: ubuntu-latest
-    needs: [test, lint]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: typescript/package-lock.json
+
+      - name: npm ci
+        working-directory: typescript
+        run: npm ci
+
+      - name: tsup build
+        working-directory: typescript
+        run: npm run build
+
+      - name: vitest
+        working-directory: typescript
+        run: npm test
+
+      - name: tsc strict typecheck
+        working-directory: typescript
+        run: npm run typecheck
+
+  # ---------------------------------------------------------------------
+  # Rust port: build + unit tests + clippy on the lib (not test floats).
+  # ---------------------------------------------------------------------
+  rust-test:
+    name: Rust (build + test + clippy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache cargo registry + target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('rust/Cargo.lock') }}
+
+      - name: cargo build
+        working-directory: rust
+        run: cargo build --all-targets
+
+      - name: cargo test
+        working-directory: rust
+        run: cargo test --all-targets
+
+      - name: cargo clippy (lib only — tests have benign float-literal lints)
+        working-directory: rust
+        run: cargo clippy --no-deps -- -D warnings
+
+      - name: cargo fmt --check
+        working-directory: rust
+        run: cargo fmt --all -- --check
+
+  # ---------------------------------------------------------------------
+  # Cross-language integration: every check that touches more than one
+  # runtime. Builds the CLI once, then exercises:
+  #   - codegen-check: every .cram in examples/ + testdata/ compiles in
+  #     Go, Rust, and TS.
+  #   - codegen-parity-check: same fixture encoded through Go reflection,
+  #     Go codegen, Rust codegen, and TS codegen produces byte-identical
+  #     output for both wire format and deterministic JSON.
+  #   - rust-integration-test: Rust runner decodes Go-produced golden bytes.
+  #   - ts-integration-test: same, TS runner.
+  # ---------------------------------------------------------------------
+  cross-language:
+    name: Cross-language (codegen-check + parity + integration)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: typescript/package-lock.json
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install protoc (required by prost-build for bench/Rust)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+            test/integration/rust/target
+          key: ${{ runner.os }}-cross-cargo-${{ hashFiles('rust/Cargo.lock', 'test/integration/rust/Cargo.lock') }}
+
+      - name: Build cramberry CLI
+        run: make build
+
+      - name: Build TS runtime (needed for ts-codegen-check + integration)
+        run: make ts-build
+
+      - name: codegen-check (compile every generated file in 3 languages)
+        run: make codegen-check
+
+      - name: "codegen-parity-check (byte-parity: wire + JSON across 4 runtimes)"
+        run: make codegen-parity-check
+
+      - name: rust-integration-test
+        run: make rust-integration-test
+
+      - name: ts-integration-test
+        run: make ts-integration-test
+
+  # ---------------------------------------------------------------------
+  # Build the CLI on every supported platform. Catches issues that only
+  # surface on Windows (path handling, atomicfile rename semantics).
+  # ---------------------------------------------------------------------
+  build:
+    name: Build CLI
+    runs-on: ${{ matrix.os }}
+    needs: [go-test, go-lint]
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Build
+      - name: go build ./...
         run: go build -v ./...
 
+  # ---------------------------------------------------------------------
+  # Fuzz: short fuzz runs on each Go fuzz target. 30 s per target keeps
+  # the job under a few minutes; corpus growth across CI runs is the
+  # actual signal.
+  # ---------------------------------------------------------------------
   fuzz:
-    name: Fuzz
+    name: Fuzz (30s per target)
     runs-on: ubuntu-latest
-    needs: [test]
+    needs: [go-test]
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Run fuzz tests
+      - name: Run all Fuzz* targets
         run: |
-          # Run each fuzz test for 30 seconds
-          for fuzztest in $(go test -list='Fuzz.*' ./... 2>/dev/null | grep '^Fuzz'); do
-            echo "Running $fuzztest..."
-            go test -fuzz="$fuzztest" -fuzztime=30s ./... || true
+          set -e
+          fuzzlist=$(go test -list='Fuzz.*' ./... 2>/dev/null | grep '^Fuzz' || true)
+          if [ -z "$fuzzlist" ]; then
+            echo "no fuzz targets found"
+            exit 0
+          fi
+          for f in $fuzzlist; do
+            echo "::group::$f"
+            go test -run='^$' -fuzz="$f" -fuzztime=30s ./... || exit 1
+            echo "::endgroup::"
           done

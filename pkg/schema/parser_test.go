@@ -845,9 +845,20 @@ message Good2 {
 		t.Error("expected parse errors")
 	}
 
-	// Should still parse at least one message (Good1)
-	if len(schema.Messages) == 0 {
-		t.Error("expected at least one message to be parsed")
+	// Recovery means: messages BEFORE and AFTER the bad one are both
+	// parsed. Asserting only `len(Messages) > 0` lets a "stop on first
+	// error" parser pass — Good1 alone makes the count > 0. Verify
+	// Good2 specifically — that's the one that requires the parser to
+	// resync past the malformed body.
+	names := make(map[string]bool, len(schema.Messages))
+	for _, m := range schema.Messages {
+		names[m.Name] = true
+	}
+	if !names["Good1"] {
+		t.Error("Good1 should have been parsed (it precedes the bad message)")
+	}
+	if !names["Good2"] {
+		t.Error("Good2 should have been parsed via error recovery (it follows the bad message)")
 	}
 }
 

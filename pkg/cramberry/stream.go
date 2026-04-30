@@ -450,7 +450,11 @@ var streamReaderPool = sync.Pool{
 }
 
 // NewStreamReader creates a new StreamReader that reads from r.
-// The default buffer size is 4096 bytes.
+// The default buffer size is 4096 bytes and limits are DefaultOptions
+// (MaxBytesLength = 100 MB). For adversarial network endpoints where
+// the peer is untrusted, prefer NewStreamReaderWithOptions(r,
+// Options{Limits: SecureLimits}) — the default limits permit a single
+// frame to claim 100 MB of allocation.
 func NewStreamReader(r io.Reader) *StreamReader {
 	return NewStreamReaderSize(r, 4096)
 }
@@ -586,6 +590,13 @@ func (sr *StreamReader) ReadInt8() int8 {
 }
 
 // ReadUvarint reads an unsigned varint.
+//
+// Rejects non-canonical encodings: a multi-byte varint whose terminating
+// byte is zero is necessarily over-long (the value fits in fewer bytes),
+// so accepting it would let the same logical value hash to different
+// bytes across runtimes. The non-stream `Reader.ReadUvarint`, the Rust
+// stream, and the TS stream all enforce the same rule; without it the
+// Go stream layer was the odd one out.
 func (sr *StreamReader) ReadUvarint() uint64 {
 	if !sr.checkRead() {
 		return 0
@@ -593,7 +604,7 @@ func (sr *StreamReader) ReadUvarint() uint64 {
 	// Read varint byte by byte
 	var result uint64
 	var shift uint
-	for i := 0; i < MaxVarintLen64; i++ {
+	for i := range MaxVarintLen64 {
 		b, err := sr.r.ReadByte()
 		if err != nil {
 			if err == io.EOF {
@@ -610,6 +621,10 @@ func (sr *StreamReader) ReadUvarint() uint64 {
 		}
 		result |= uint64(b&0x7F) << shift
 		if b < 0x80 {
+			if i > 0 && b == 0 {
+				sr.setError(wire.ErrVarintNonCanonical)
+				return 0
+			}
 			return result
 		}
 		shift += 7

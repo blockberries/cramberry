@@ -714,7 +714,7 @@ func TestSizeOf(t *testing.T) {
 func TestWriterLargeMessage(t *testing.T) {
 	w := NewWriter()
 	// Write a large amount of data to test buffer growth
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		w.WriteInt32(int32(i))
 	}
 	if w.Err() != nil {

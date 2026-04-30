@@ -460,7 +460,7 @@ func TestExtractDeterministicOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExtractToString() error = %v", err)
 	}
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		got, err := ExtractToString([]string{target}, DefaultConfig())
 		if err != nil {
 			t.Fatalf("iteration %d: ExtractToString() error = %v", i, err)

@@ -176,7 +176,7 @@ func encodeSlice(w *Writer, v reflect.Value) error {
 	if w.Err() != nil {
 		return w.Err()
 	}
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if err := encodeValue(w, v.Index(i)); err != nil {
 			return err
 		}
@@ -228,7 +228,7 @@ func encodePackedSlice(w *Writer, v reflect.Value) error {
 
 	elemKind := v.Type().Elem().Kind()
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		elem := v.Index(i)
 		switch elemKind {
 		case reflect.Bool:
@@ -274,7 +274,7 @@ func encodeArray(w *Writer, v reflect.Value) error {
 	if w.Err() != nil {
 		return w.Err()
 	}
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if err := encodeValue(w, v.Index(i)); err != nil {
 			return err
 		}
@@ -296,7 +296,7 @@ func encodePackedArray(w *Writer, v reflect.Value) error {
 
 	elemKind := v.Type().Elem().Kind()
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		elem := v.Index(i)
 		switch elemKind {
 		case reflect.Bool:
@@ -502,7 +502,7 @@ func needsBodyLengthPrefix(v reflect.Value) bool {
 	return false
 }
 
-// getWireTypeCached returns the V2 wire type for a reflect.Type, using cache.
+// getWireTypeCached returns the wire type for a reflect.Type, using cache.
 func getWireTypeCached(t reflect.Type) byte {
 	if wt, ok := wireTypeCache.Load(t); ok {
 		return wt.(byte)
@@ -571,7 +571,7 @@ type structInfo struct {
 // structInfoCache caches struct metadata for performance.
 var structInfoCache sync.Map
 
-// wireTypeCache caches V2 wire types by reflect.Type for performance.
+// wireTypeCache caches wire types by reflect.Type for performance.
 var wireTypeCache sync.Map
 
 // packableCache caches whether element types support packed encoding.

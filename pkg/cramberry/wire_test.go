@@ -132,7 +132,7 @@ func TestWriterReaderCompactTag(t *testing.T) {
 	}
 }
 
-func TestV2StructEncoding(t *testing.T) {
+func TestStructEncoding(t *testing.T) {
 	type TestStruct struct {
 		A int32  `cramberry:"1"`
 		B string `cramberry:"2"`
@@ -141,7 +141,7 @@ func TestV2StructEncoding(t *testing.T) {
 
 	original := TestStruct{A: 42, B: "hello", C: true}
 
-	// Marshal with V2
+	// Marshal
 	data, err := MarshalWithOptions(original, DefaultOptions)
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
@@ -162,7 +162,7 @@ func TestV2StructEncoding(t *testing.T) {
 	}
 }
 
-func TestV2StructEncodeSize(t *testing.T) {
+func TestStructEncodeSize(t *testing.T) {
 	type TestStruct struct {
 		Field1  int32  `cramberry:"1"`
 		Field2  string `cramberry:"2"`
@@ -198,7 +198,7 @@ func TestV2StructEncodeSize(t *testing.T) {
 	}
 }
 
-func TestV2NestedStruct(t *testing.T) {
+func TestNestedStruct(t *testing.T) {
 	type Inner struct {
 		X int32  `cramberry:"1"`
 		Y string `cramberry:"2"`
@@ -216,7 +216,7 @@ func TestV2NestedStruct(t *testing.T) {
 		Count: 100,
 	}
 
-	// Round-trip with V2
+	// Round-trip
 	data, err := MarshalWithOptions(original, DefaultOptions)
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
@@ -233,7 +233,7 @@ func TestV2NestedStruct(t *testing.T) {
 	}
 }
 
-func TestV2SkipUnknownFields(t *testing.T) {
+func TestSkipUnknownFields(t *testing.T) {
 	// Create encoded data with a field that won't be in our target struct
 	w := NewWriterWithOptions(DefaultOptions)
 
@@ -274,7 +274,7 @@ func TestV2SkipUnknownFields(t *testing.T) {
 	}
 }
 
-func TestV2ExtendedFieldNumbers(t *testing.T) {
+func TestExtendedFieldNumbers(t *testing.T) {
 	type LargeFieldStruct struct {
 		Field1   int32 `cramberry:"1"`
 		Field16  int32 `cramberry:"16"`
@@ -323,7 +323,7 @@ func TestPackedSliceEncoding(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Marshal with V2
+			// Marshal
 			data, err := MarshalWithOptions(tt.value, DefaultOptions)
 			if err != nil {
 				t.Fatalf("Marshal error: %v", err)
@@ -503,7 +503,7 @@ func TestDeterministicMapEncoding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		data2, err := Marshal(original)
 		if err != nil {
 			t.Fatalf("Marshal error: %v", err)

@@ -3,6 +3,7 @@ import { Registry } from './registry';
 import { Writer } from './writer';
 import { Reader } from './reader';
 import { WireType } from './types';
+import { DuplicateTypeRegistrationError } from './errors';
 
 describe('Registry', () => {
   describe('encodePolymorphic / decodePolymorphic', () => {
@@ -20,8 +21,7 @@ describe('Registry', () => {
       reg.encodePolymorphic(writer, 1, 'Greeting', 'hello');
       const bytes = writer.bytes();
 
-      // Verify the field tag uses Bytes (V2 canonical), not the deleted
-      // TypeRef wire type (which would land as undefined → 0 = Varint).
+      // Verify the field tag uses Bytes (canonical for length-prefixed).
       const reader = new Reader(bytes);
       const tag = reader.readTag();
       expect(tag.fieldNumber).toBe(1);
@@ -36,6 +36,29 @@ describe('Registry', () => {
       const reg = new Registry();
       const writer = new Writer();
       expect(() => reg.encodePolymorphic(writer, 1, 'Missing', 'x')).toThrow();
+    });
+
+    it('rejects duplicate type ID with different name', () => {
+      const reg = new Registry();
+      reg.register<string>('A', (w, v) => w.writeString(v), (r) => r.readString(), 128);
+      expect(() =>
+        reg.register<string>('B', (w, v) => w.writeString(v), (r) => r.readString(), 128),
+      ).toThrow(DuplicateTypeRegistrationError);
+    });
+
+    it('rejects duplicate name with different type ID', () => {
+      const reg = new Registry();
+      reg.register<string>('A', (w, v) => w.writeString(v), (r) => r.readString(), 128);
+      expect(() =>
+        reg.register<string>('A', (w, v) => w.writeString(v), (r) => r.readString(), 129),
+      ).toThrow(DuplicateTypeRegistrationError);
+    });
+
+    it('idempotently re-registers the same (name, id) pair', () => {
+      const reg = new Registry();
+      const id1 = reg.register<string>('A', (w, v) => w.writeString(v), (r) => r.readString(), 128);
+      const id2 = reg.register<string>('A', (w, v) => w.writeString(v), (r) => r.readString(), 128);
+      expect(id1).toBe(id2);
     });
 
     it('rejects unregistered type ID at decode time', () => {

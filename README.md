@@ -13,14 +13,20 @@ codec across the [Stealth blockchain stack](../README.md).
   canonicalization, `-0.0` → `+0.0` normalization, canonical varints
   (non-canonical encodings rejected on decode).
 - **Compact** — comparable size to Protobuf, 2–3× smaller than JSON.
-- **Schema-first** — `.cram` files generate type-safe Go / TS / Rust code.
+- **Schema-first** — `.cram` files generate type-safe Go / TS / Rust
+  code, including polymorphic interface dispatch.
 - **Reflection fallback** — `Marshal`/`Unmarshal` on arbitrary structs via
   `cramberry:` struct tags.
 - **Zero-copy reads** in Go via generation-tracked `unsafe.String`.
 - **Cross-language byte parity** — `make codegen-parity-check` proves
   Go reflection, Go codegen, Rust codegen, and TS codegen all produce
   byte-identical output for the same logical input across every common
-  type (scalars, repeated, nested, maps, optional, enums, recursive).
+  shape: scalars, repeated, nested, maps, optional, enums, recursive,
+  *and polymorphic interface dispatch* — for **both the wire format
+  and deterministic JSON**.
+- **Cross-language benchmarks** — `make bench-cross` runs the same
+  encode/decode workload through Go / Rust / TypeScript with protobuf
+  and JSON baselines.
 
 ## Install
 
@@ -61,6 +67,20 @@ message User {
     string name = 2;
     []string tags = 3;
 }
+
+message Organization {
+    uint64 id = 1;
+    string name = 2;
+}
+
+interface Principal {
+    128 = User;
+    129 = Organization;
+}
+
+message Session {
+    Principal owner = 1;
+}
 ```
 
 Then generate Go/TS/Rust:
@@ -77,6 +97,19 @@ are accepted alongside the canonical names.
 The generated TypeScript imports `from '@cramberry/runtime'` —
 `npm install @cramberry/runtime` (or `npm install file:.../typescript`
 for local development) provides the runtime.
+
+Polymorphic interface fields produce per-runtime ergonomic wrappers:
+- Go: an `interface Principal` plus generated `EncodePrincipal` /
+  `DecodePrincipal` (and `ToJSONPrincipal` / `FromJSONPrincipal`)
+  helpers used automatically by parent-message codecs.
+- Rust: a `pub enum Principal { User(User), Organization(Organization) }`
+  plus `encode_principal` / `decode_principal` free functions.
+- TypeScript: a tagged union plus a `Principal.user(v)` / `Principal.organization(v)`
+  factory namespace; the discriminator (`kind`) is part of the value
+  shape, mirroring Rust's enum variants.
+
+All three emit byte-identical wire output AND byte-identical JSON
+output for the same logical value.
 
 ## Wire format
 

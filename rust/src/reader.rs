@@ -148,7 +148,7 @@ impl<'a> Reader<'a> {
         Ok(zigzag_decode_64(self.read_varint64()?))
     }
 
-    /// Reads a V2 compact field tag.
+    /// Reads a compact field tag.
     /// Returns a FieldTag with field_number=0 for end marker.
     pub fn read_tag(&mut self) -> Result<FieldTag> {
         let remaining = &self.buffer[self.pos..];
@@ -227,16 +227,33 @@ impl<'a> Reader<'a> {
     }
 
     /// Reads a length-prefixed string.
+    ///
+    /// Length is read as a 64-bit varint to match the Go writer (which
+    /// emits `write_varint64`). A 32-bit `read_varint` would silently
+    /// truncate any length > 2^32 - 1, decoding the wrong number of
+    /// bytes as the "string" body.
     pub fn read_string(&mut self) -> Result<&'a str> {
-        let length = self.read_varint()? as usize;
+        let length = self.read_safe_length()?;
         let bytes = self.read_bytes(length)?;
         std::str::from_utf8(bytes).map_err(|_| Error::InvalidUtf8)
     }
 
     /// Reads length-prefixed bytes.
     pub fn read_length_prefixed_bytes(&mut self) -> Result<&'a [u8]> {
-        let length = self.read_varint()? as usize;
+        let length = self.read_safe_length()?;
         self.read_bytes(length)
+    }
+
+    /// Reads a 64-bit varint length prefix and narrows it to a `usize`,
+    /// rejecting values that would overflow `usize` on the current
+    /// architecture (relevant on 32-bit targets, where a Go-encoded
+    /// length > 4 GiB would silently truncate without this check).
+    fn read_safe_length(&mut self) -> Result<usize> {
+        let len64 = self.read_varint64()?;
+        if len64 > usize::MAX as u64 {
+            return Err(Error::buffer_underflow(usize::MAX, self.remaining()));
+        }
+        Ok(len64 as usize)
     }
 
     /// Skips a field based on its wire type.
@@ -250,7 +267,7 @@ impl<'a> Reader<'a> {
                 self.pos += 8;
             }
             WireType::Bytes => {
-                let length = self.read_varint()? as usize;
+                let length = self.read_safe_length()?;
                 self.check_available(length)?;
                 self.pos += length;
             }

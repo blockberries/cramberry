@@ -337,7 +337,7 @@ func TestGenerateGoldenFiles(t *testing.T) {
 
 	testCases := []struct {
 		name string
-		data interface{}
+		data any
 	}{
 		{"scalar_types", TestData.ScalarTypes},
 		{"repeated_types", TestData.RepeatedTypes},
@@ -375,7 +375,7 @@ func TestGenerateGoldenFiles(t *testing.T) {
 func TestVerifyGoldenFiles(t *testing.T) {
 	testCases := []struct {
 		name string
-		data interface{}
+		data any
 	}{
 		{"scalar_types", TestData.ScalarTypes},
 		{"repeated_types", TestData.RepeatedTypes},

@@ -35,7 +35,11 @@ serde_json = "1.0"
 path = "$(basename "$rsfile")"
 TOML
 
-    if (cd "$out" && cargo build --quiet 2>&1) ; then
+    # The generated code is consumed via `pub mod cramgen { #![allow(...)] include!(...) }`
+    # in real crates; here we compile the file as a top-level lib, so suppress
+    # warnings that the generator structurally cannot avoid (`mut` locals only
+    # written-then-overwritten on the decode path, etc.).
+    if (cd "$out" && RUSTFLAGS="-A unused_imports -A unused_mut -A unused_variables -A unused_assignments -A unreachable_patterns -A unused_parens" cargo build --quiet 2>&1) ; then
         echo "  OK  $name"
     else
         echo "FAIL  $name" >&2

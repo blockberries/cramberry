@@ -7,6 +7,562 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (seventh review pass — JSON cross-runtime parity)
+
+Adding cross-language JSON byte-parity to `codegen-parity-check.sh`
+turned out to be more than a doc improvement: it surfaced four real
+bugs across the JSON paths that the existing wire-format-only parity
+check had been missing.
+
+**Critical (cross-runtime byte divergence in JSON):**
+
+1. Rust's polymorphic JSON helper (`to_json_<iface>`) used
+   `serde_json::to_string(msg)` which formats integers as JSON
+   numbers. Go and TS use codegen-emitted helpers that format
+   integers as JSON strings (cramberry's deterministic-JSON
+   convention). For any schema with a polymorphic field whose
+   variants contain numeric fields, JSON output diverged:
+   - Go/TS: `{"_type":"Dog","age":"5"}` (integer-as-string)
+   - Rust:  `{"_type":"Dog","age":5}` (integer-as-number)
+   Replaced the serde delegation with an explicit match-on-variant
+   that splices `_type` into the codegen-emitted `to_json_<concrete>`
+   output, matching Go and TS exactly.
+
+2. TypeScript's enum JSON encoder emitted `value.toString()`,
+   producing `"1"` for `Status.StatusActive`. Go and Rust emit the
+   variant's source name `"STATUS_ACTIVE"` via `String()` /
+   `match`. Diverged for every schema with an enum field.
+   Replaced TS's encoder with a switch that maps each enum value to
+   its source name. The TS decoder already accepted name-form;
+   round-trip identity preserved.
+
+3. Generated Go code unconditionally imported `"bytes"` whenever
+   JSON was enabled, but `bytes.Equal` is only emitted by
+   `jsonDecodePointer` (schema `*Type` fields) — schemas that use
+   `optional` but no explicit `*Type` got an unused import. Tightened
+   `hasOptionalPointer` to check for `*schema.PointerType` only.
+
+4. Optional non-scalar NamedType fields (`optional Address office`)
+   produced JSON decoder code that assigned a value to a pointer
+   field: `m.Office = msg` where `m.Office` is `*Address`. The
+   previous `jsonDecodeField` only allocated a tempVal for *scalar*
+   pointer fields. Generalized the wrap to fire for any
+   isPointerField + non-PointerType + non-MapType + non-interface
+   case.
+
+**Test infrastructure:**
+
+`scripts/codegen-parity-check.sh` now generates code with `-json`
+enabled (was `-json=false`), runs JSON encode probes in all three
+runtimes against the same `parity_fixture.cram` data, and asserts
+byte-identical output. The TS probe explicitly populates the empty/
+zero fields (`emptyStr`, `emptyList`, `emptyBytes`, `zeroCount`,
+`zeroRatio`) since TS object literals don't auto-default missing
+fields.
+
+After all four fixes, both wire-format AND JSON output is
+byte-identical across:
+
+    Go reflection == Go codegen == Rust codegen == TS codegen
+
+…for the same `Sample` fixture, including the polymorphic Animal
+field, all numeric edge cases, and the recursive Tree.
+
+### Fixed (sixth review pass — JSON+interface, validator gaps, dropped warnings)
+
+A sixth review found that the polymorphic codegen fix from round 5
+covered the wire-format path but left the JSON path broken across all
+three runtimes (Go and TS at least; Rust escaped via serde derive),
+plus a regression in the bytes-import gating, plus three validator
+gaps that had been silently accepting malformed schemas.
+
+**Critical (uncompilable Go for any schema with -json + interface):**
+
+1. The Go generator's JSON path emitted `m.X.ToJSON()` and
+   `var msg Animal; msg.FromJSON(...)` for an interface field —
+   `Animal` is a bare interface with only the marker method
+   `is<Iface>()`, so neither method exists on the field type.
+   Compile error:
+   ```
+   m.Pet.ToJSON undefined (type Animal has no field or method ToJSON)
+   msg.FromJSON undefined (type Animal has no field or method FromJSON)
+   ```
+   Same root cause as the round-5 wire-format bug: the JSON path
+   didn't check `isNamedInterface` before dispatching.
+
+   Fixed by emitting `ToJSON<Iface>(v Iface)` / `FromJSON<Iface>(s string)`
+   helpers next to the existing wire helpers, gated on
+   `generateJSON`. JSON shape: `{"_type": "Variant", ...inner-fields-flat}`
+   matching Rust's serde-tagged enum and the new TS helper. The field
+   codec dispatches through these via new `jsonEncodeInterface` /
+   `jsonDecodeInterface` paths.
+
+   The TS template had the same bug: emitted `toJSON_Animal(...)` /
+   `fromJSON_Animal(...)` calls without ever defining the helpers.
+   Added matching `toJSON_<Iface>` / `fromJSON_<Iface>` functions to
+   the TS template.
+
+   Rust dodged this because the round-5 fix added `to_json_<iface>` /
+   `from_json_<iface>` via `serde_json` (the enum derives
+   `Serialize`/`Deserialize` with `#[serde(tag = "_type")]`). All
+   three runtimes now emit the same JSON shape for the same logical
+   input.
+
+**High (regression I introduced in round 4):**
+
+2. Generated Go code unconditionally imported `"bytes"` whenever JSON
+   helpers were emitted, but `bytes.Equal` is only used in
+   `jsonDecodePointer` (optional pointer JSON decode). Schemas
+   without `optional <Type>` fields ended up with an unused import —
+   Go's strict-import check failed the build. Now gated on a new
+   `hasOptionalPointer` template helper.
+
+**High (validator silently accepted malformed schemas):**
+
+3. `enum E {}` — empty enum was accepted (the prior "must have a zero
+   value" check used `len(enum.Values) > 0` as a guard, so empty
+   enums skipped it entirely). The codegen then emitted `const ()`
+   blocks with no entries — bizarre. Now rejected with "enum E must
+   have at least one value".
+
+4. `message M @999999999 { ... }` — `@TypeID` had a lower bound check
+   (must be ≥ 128) but no upper bound. Type IDs share the wire-format
+   field-number budget; values past `wire.MaxFieldNumber` (2^29-1)
+   push the encoded varint past the documented spec and risk overflow
+   on 32-bit runtime types. Now rejected with "type ID N exceeds
+   maximum (536870911)" for both message TypeIDs and interface-impl
+   TypeIDs.
+
+5. `pkg/schema/io.go::loadFileInternal` filtered out every
+   `SeverityWarning` from the validator before propagating errors to
+   the CLI. Result: a schema like `int32 x = 19500;` (reserved
+   protobuf field-number range) printed `Valid: file.cram` instead of
+   the warning the validator produced. The CLI even had a path to
+   surface warnings (`Severity == SeverityWarning` check, exit code
+   2) but it was unreachable. Now warnings propagate; the CLI surfaces
+   them and exits 2 if any are present.
+
+**Regression tests added:**
+
+- `TestGoGenerator_JSONInterfaceFieldCompiles` (codegen)
+- `TestGoGenerator_NoOptionalPointer_NoBytesImport` (codegen)
+- `TestValidate_EmptyEnumRejected` (validator)
+- `TestValidate_TypeIDExceedsMaxRejected` with two sub-cases for
+  message TypeIDs and interface-impl TypeIDs
+
+Plus end-to-end runtime verification: a schema with `Animal pet = 1`
+encodes to JSON `{"pet":{"_type":"Dog","name":"Rex"}}` and round-trips
+correctly in all three runtimes.
+
+### Fixed (fifth review pass — polymorphic codegen across all 3 runtimes)
+
+A fifth review uncovered a major correctness bug: codegen for any
+schema with an interface field referencing the interface type produced
+**uncompilable code in all three runtimes**. The bug went unnoticed
+because every committed example schema declared `interface` types but
+never used one as a field type — so `make codegen-check` (which
+compiles every fixture in all three languages) had no test that hit
+the broken path.
+
+**Critical (uncompilable code):**
+
+1. Go: emitted `m.Resident.EncodeTo(w)` / `m.Resident.DecodeFrom(r)` for an
+   interface field. The interface type only has the marker method
+   `is<Iface>()`; `EncodeTo`/`DecodeFrom` exist on each concrete
+   implementation, not on the interface. Any non-trivial schema with an
+   interface field failed to compile (`undefined method`).
+
+2. Rust: emitted `encode_animal(&mut __sub, &msg.resident)` /
+   `decode_animal(...)` calls — but those functions were never
+   generated. Same compile failure.
+
+3. TypeScript: emitted `encodeAnimal(__sub, msg.resident)` /
+   `decodeAnimal(...)` — also never generated.
+
+**Fix:** each generator now emits a polymorphic `Encode<Iface>` /
+`Decode<Iface>` pair next to the interface type definition. Wire layout
+inside the surrounding length-prefix:
+
+    [type_id varint] [concrete-type body terminated by end-marker]
+
+Mirrors the Go reflection marshaller's `encodeInterface`. The field-
+level encoder/decoder dispatches to these helpers when the field type
+is a NamedType referencing an interface (rather than calling the
+non-existent `EncodeTo` method).
+
+The TypeScript surface changed materially: the old `Animal = Dog | Cat`
+bare-union has no runtime discriminator, so it could never have been
+encoded correctly. The new tagged union `Animal = { kind: 'Dog'; value: Dog }
+| { kind: 'Cat'; value: Cat }` plus factory helpers
+(`Animal.dog(v)`, `Animal.cat(v)`) gives an unambiguous runtime
+discriminator. Existing code using the bare union was already broken
+on encode; this is a strict improvement.
+
+**Test gaps fixed alongside:**
+
+- `pkg/schema/parser_test.go::TestParseErrorRecovery` previously
+  asserted only `len(schema.Messages) > 0` — passing trivially when
+  the parser stopped at the first error and returned just the leading
+  good message. Now asserts both `Good1` (before the bad message) and
+  `Good2` (after, requires recovery) are present.
+
+- `pkg/cramberry/sort_test.go::TestCodegenMapDeterminism` was
+  comparing sorted iterations to sorted iterations and would have
+  passed even if `SortedMapKeys` was reduced to a no-op `for k := range m`.
+  Now (1) explicitly asserts `sort.StringsAreSorted` on the returned
+  keys, and (2) compares against an unsorted-iteration baseline,
+  failing if the two ever match for 100 consecutive Go-runtime random
+  seeds (statistically impossible for a real sort).
+
+**Bonus — parity-fixture coverage:**
+
+`scripts/parity_fixture.cram` now includes a polymorphic field:
+
+    interface Animal {
+      130 = Dog;
+      131 = Cat;
+    }
+    message Sample {
+      ...
+      Animal pet = 31;
+    }
+
+`make codegen-parity-check` now exercises the polymorphic encode/
+decode path in all four runtimes (Go reflection, Go codegen, Rust
+codegen, TS codegen). Round 1's bug class would have been caught
+automatically had this fixture existed.
+
+Verified: all four runtimes produce byte-identical encoding for the
+same logical input — including the polymorphic Dog variant
+(TypeID=130).
+
+### Fixed (fourth review pass — 3 issues + 6 regression tests)
+
+A fourth independent review surfaced three more verified bugs (out of
+many agent reports — most were filtered out as false positives).
+
+**Critical (runtime panic in generated code):**
+
+1. The Go generator's `jsonDecodePointer` emitted `*m.Value = strVal`
+   directly, but `m.Value` is nil before any decode — so the very
+   first `FromJSON` call with a non-null optional pointer field
+   panicked on a nil-pointer dereference. Two compounding bugs were
+   present in this single function:
+
+   - The non-null branch dereferenced before allocating. Fixed by
+     decoding into a fresh local of the element type and assigning
+     its address.
+   - The null-detection used `json.Unmarshal(rawValue, &isNull)` and
+     branched on `err == nil && isNull`, but `Unmarshal(null, &bool)`
+     returns no error AND leaves the bool at zero — so the null
+     branch was unreachable. Fixed by using
+     `bytes.Equal(rawValue, []byte("null"))` directly.
+
+   The generated Go code now imports `"bytes"` automatically when
+   JSON helpers are emitted. Regression test
+   (`TestOptionalPointer_FromJSON_NonNullValue`) covers four cases
+   that would have caught both bugs: string-set, number-set,
+   both-set, and the previously-unreachable both-null branch.
+
+**High (silent data corruption):**
+
+2. `pkg/schema/io.go::WriteSchema` swallowed every `fmt.Fprintf`
+   write error and unconditionally returned `nil`. Combined with
+   `WriteToFile` (which wraps `WriteSchema` inside `atomicfile.Write`),
+   a disk-full / broken-pipe / quota-exceeded condition would commit
+   a truncated `.cram` file with no signal to the caller — the
+   atomicfile guarantee held but the content was incomplete. Fixed
+   by wrapping `out` in `bufio.Writer` once at entry; the deferred
+   `Flush()` surfaces the cached underlying-write error without
+   touching every Fprintf call site.
+
+   Two new tests: `TestWriteSchema_PropagatesUnderlyingWriteError`
+   uses a `failWriter` stub that errors after N bytes and asserts
+   the error reaches the caller. `TestWriteSchema_HappyPath`
+   ensures the wrapped writer doesn't break normal usage.
+
+3. `pkg/cramberry/unmarshal.go::decodeMap` merged into a non-nil
+   destination map (preserving stale entries not in the wire), while
+   the slice path always replaced. Asymmetric and broke the
+   determinism contract that `decode(encode(x)) == x` for reused
+   destinations. Now always allocates a fresh map matching the
+   slice path. Two regression tests
+   (`TestUnmarshal_MapFieldReplacesExistingEntries`,
+   `TestUnmarshal_SliceFieldReplacesExistingEntries`) lock both
+   in.
+
+### Fixed (third review pass — 5 issues + 2 regression tests)
+
+After two prior cleanup passes, a third independent review surfaced
+five more genuine bugs (filtered from many agent false positives —
+"missing cycle detection", "MaxMessageSize divergence", "**T loses nil
+distinction" all turned out not to be real after verification).
+
+**Critical (cross-runtime divergence):**
+
+1. TypeScript template wrapped every field emission in `if
+   (tsZeroCheck)`, but `tsZeroCheck` for non-optional `NamedType` /
+   `MapType` / `ArrayType` fields returned the `presence` expression
+   (`field !== undefined && field !== null`). For type-correct callers
+   this evaluated true (always emitted). For type-violating callers
+   passing `undefined`, TS silently skipped the field while Go and Rust
+   emitted it unconditionally — producing different bytes for the same
+   logical input. Fixed by: (a) `tsZeroCheck` now returns empty string
+   for non-optional composite fields, mirroring `goContext.zeroCheck`;
+   (b) the TS template gained an `{{else}}` branch matching Rust's
+   pattern, emitting the tag + body without an `if`-wrapper when
+   zeroCheck is empty. Regression test added.
+
+2. Go `StreamReader.ReadUvarint` accepted non-canonical varint
+   encodings (`[0x80, 0x00]` decoding to 0). The non-stream
+   `Reader.ReadUvarint`, the Rust stream, and the TS stream all rejected
+   them. The Go stream layer was the odd one out — meaning a peer could
+   send overlong varints that Go accepts and other runtimes reject.
+   Added the `i > 0 && b == 0` rejection inside the byte-by-byte loop,
+   matching `internal/wire.DecodeUvarint`. Regression test
+   (`TestStreamReader_RejectsNonCanonicalVarint`) covers
+   2-byte, 2-byte (overlong one), and 3-byte overlong encodings.
+
+**Cleanup (Medium):**
+
+3. `rust/src/registry.rs::TypeRegistration.type_id` was stored on the
+   registration struct but never read — entries already key by ID in
+   the `by_id` HashMap. Clippy reported it as dead. Removed.
+
+4. `rust/src/json.rs::sort_map_keys_lexicographic` took `&mut
+   Vec<String>`. Clippy: `&mut [String]` is more flexible and avoids
+   forcing the caller to own a `Vec`. Codegen-emitted callers still
+   pass `&mut keys` where `keys: Vec<String>` — auto-deref works.
+
+5. Two unnecessary closure warnings in `rust/src/registry.rs`
+   (`get_type_name`, `decode_polymorphic`):
+   `.ok_or_else(|| Error::UnknownTypeId(id))` → `.ok_or(Error::…)`.
+   Constructor is cheap; the closure indirection added nothing.
+
+`cargo clippy --no-deps` is now clean for the lib build.
+
+### Fixed (second review pass — 6 issues + bonus parity coverage)
+
+A follow-up review surfaced six more bugs, all verified by reading the
+actual code (rather than agent claims taken at face value). Five of six
+were genuine; the parallel agents reported many false positives that
+were filtered out before this list.
+
+**Critical (cross-runtime byte / accept-reject divergence):**
+
+1. TypeScript `Reader.skipValue` and `Reader.readTypeRef` read length
+   prefixes via the 32-bit-capped `readVarint()`. The recent length-prefix
+   fix updated `readString` and `readLengthPrefixedBytes` but missed
+   these two siblings — Go's writer emits 64-bit length prefixes, so a
+   skip on an unknown `Bytes` field with length > 5 varint bytes (or a
+   polymorphic body > 4 GB) silently truncated. Both now go through
+   `readSafeLength` (varint64 + narrow with `Number.MAX_SAFE_INTEGER`
+   cap).
+
+2. TypeScript `StreamReader.readVarint` looped only 5 iterations (32-bit
+   cap) AND had no non-canonical-encoding rejection. Mirrors the
+   `Reader.readVarint` bug fixed last pass — the stream layer was a
+   parallel implementation that wasn't updated. Now reads via the same
+   64-bit varint shape with overlong-zero rejection and
+   `MAX_SAFE_INTEGER` cap.
+
+3. Rust `Reader::read_string`, `read_length_prefixed_bytes`, and
+   `skip_value` (Bytes branch) used `read_varint()` (u32, 5 bytes max).
+   Same root cause as the TS bug. Replaced with a new
+   `read_safe_length()` helper that goes through `read_varint64()` and
+   guards against `usize::MAX` overflow on 32-bit targets.
+
+**High (correctness):**
+
+4. `pkg/schema/compat.go` did not detect field-modifier transitions.
+   `optional → required` is breaking (an old encoder may have omitted
+   the field; a new strict decoder rejects). `required → optional` is
+   wire-compatible but worth a warning. Added `FieldOptionalToRequired`
+   breaking-change type and emit it from `checkMessageCompat`. Added
+   unit tests for both transitions.
+
+5. TypeScript `Registry.register` silently overwrote existing
+   registrations on duplicate name or duplicate type ID. Go's
+   `Registry.RegisterTypeWithID` returns `ErrDuplicateTypeID`.
+   Now throws `DuplicateTypeRegistrationError` on conflicting bindings,
+   while still being idempotent for the same `(name, typeId)` pair.
+
+**Medium:**
+
+6. `Writer.Reset()` cleared `buf` / `depth` / `err` / `frozen` but not
+   `opts`. `MarshalWithOptions` masks the leak by calling `SetOptions`
+   immediately after `GetWriter`, but direct `GetWriter` callers
+   inherited the prior caller's `SecureLimits`. Now restored to
+   `DefaultOptions` on every Reset.
+
+**Bonus — parity-fixture extension:**
+
+`scripts/parity_fixture.cram` now includes a 20 000-byte `string`
+field. The encoded length prefix is `varint(20000) = 0xa0 0x9c 0x01`
+(3 bytes) — exercising the multi-byte length-prefix decode path on
+every runtime. Combined with the existing `repeated int64` field
+(added in the previous pass), the parity check now covers both
+hotspot bug classes that round 1 missed: wrong wire-type tag for
+repeated scalars, and 32-bit-truncation of multi-byte length prefixes.
+
+`make codegen-parity-check` confirms Go reflection == Go codegen ==
+Rust codegen == TS codegen byte-for-byte for the extended fixture.
+
+### Fixed (review pass — 12 verified issues)
+
+A fresh code review surfaced 12 real bugs across the runtime, generators,
+and tooling. Three are consensus-affecting (cross-runtime byte
+divergence); the rest range from DoS hardening to cleanup.
+
+**Critical (cross-runtime byte divergence):**
+
+1. TypeScript generator emitted the *element*'s wire type for repeated
+   scalar fields (`WireType.SVarint` for `repeated int64`). The body is
+   length-prefixed bytes, so Go used `WireBytes`. Same bug as the
+   recently-fixed Rust generator. Caught by adding a `repeated int64`
+   field to `parity_fixture.cram` — the parity check now catches this
+   class of drift automatically.
+
+2. TypeScript reader accepted non-canonical varints (`[0x80, 0x00]`
+   decoding to 0). Go's `internal/wire/varint.go` rejects them as
+   `ErrVarintNonCanonical`. Same input → different
+   accept/reject across runtimes; hashing-over-bytes diverged. Both
+   `readVarint` and `readVarint64` now reject overlong encodings.
+
+3. Validator did not check for duplicate `@TypeID` annotations across
+   messages within a single schema. Two messages claiming the same
+   polymorphic ID would pass validation, then collide at runtime
+   registration. `collectTypes` now tracks IDs across messages and
+   reports them inline.
+
+**High (correctness / hardening):**
+
+4. TypeScript reader had zero per-field limit enforcement (Go enforces
+   `MaxStringLength`, `MaxBytesLength`, `MaxArrayLength`, `MaxMapSize`,
+   `MaxDepth`). Ported the `Limits` struct, `DEFAULT_LIMITS` /
+   `SECURE_LIMITS` presets, and `ReaderOptions{limits, validateUtf8}`.
+   Generated `unmarshal*` functions accept the options through; the
+   codegen-emitted `readArray` / `readMap` helpers and nested-message
+   decoders now invoke `checkArrayLimit` / `checkMapLimit` /
+   `enterNested` and propagate the parent reader's limits to
+   sub-readers.
+
+5. `internal/atomicfile/atomicfile.go` swallowed dir-fsync errors
+   (`_ = dirF.Sync()`). Now propagates them — a successful return is
+   genuinely durable, not just renamed.
+
+6. `cmd/cramberry/main.go` initialized `importPaths` as a nil
+   `importPathFlag` map; downstream codegen received nil when `-M`
+   was never passed. Initialised as an empty map so iteration is safe.
+
+**Medium:**
+
+7. TypeScript readers used a 32-bit-capped `readVarint()` for length
+   prefixes, rejecting valid Go-encoded payloads >4 GB. New
+   `readSafeLength()` reads via `readVarint64` and narrows to a JS
+   number with a `Number.MAX_SAFE_INTEGER` cap. Cross-runtime parity
+   restored for any practical length.
+
+8. TypeScript reader had no UTF-8 validation option. `TextDecoder` in
+   default lenient mode silently substitutes U+FFFD for invalid bytes,
+   diverging from Go's `ValidateUTF8` flag. Added
+   `ReaderOptions.validateUtf8` using `TextDecoder("utf-8", { fatal: true })`.
+
+9. Documented that `pkg/cramberry/stream.NewStreamReader` uses
+   `DefaultLimits` (100 MB per ReadBytes call); recommended
+   `NewStreamReaderWithOptions(r, Options{Limits: SecureLimits})` for
+   adversarial endpoints. Behaviour unchanged; doc clarified.
+
+**Low (cleanup):**
+
+10. Removed `SortedMapKeysFloat32`/`SortedMapKeysFloat64`/
+    `SortedMapKeysBool`. The schema validator rejects bool/float map
+    keys at parse time, so the codegen path never emitted calls to
+    these — they were unreachable from schema-driven flows. The
+    reflection marshaller's inline `CompareFloatKeys` /
+    `CompareFloat32Keys` cover its own use case.
+
+11. `pkg/extract/collector.go` flattened anonymous (embedded) Go
+    fields into the schema as if they were named fields, losing the
+    embedding semantic on round-trip. Now skipped — users who want an
+    embedded type to participate in the wire format must declare it as
+    a named field.
+
+12. `pkg/schema/lexer.go::Peek` saved `pos`/`line`/`column` but not
+    `start`/`startPos`. The latter is what `Next()` stamps into the
+    next token's `Position`, so a Peek between tokens corrupted the
+    next real token's position. All five fields are now restored.
+
+### Added (cross-language benchmark suite)
+
+Extended `internal/bench/` to cover all three runtimes against
+protobuf and JSON baselines:
+
+- **Rust** (`internal/bench/rust/`) — criterion benches with
+  `prost`-generated protobuf baseline and `serde_json`. Covers
+  SmallMessage, Metrics, Person, Document, Event, Batch100, and
+  Batch1000 — encode + decode for every codec.
+- **TypeScript** (`internal/bench/ts/`) — `tinybench` harness with
+  `protobufjs` and native JSON. Same scenarios as Rust.
+- **Makefile** — new targets `bench-go`, `bench-rust`, `bench-ts`,
+  `bench-cross`, `bench-sizes`. `bench-cross` runs all three
+  languages sequentially.
+- **README** (`internal/bench/README.md`) — fully rewritten to
+  document all three runtimes, how to filter, what each tool
+  reports, and the caveats around cross-language perf comparisons.
+
+The Go side already exercised cramberry codegen + reflection vs
+protobuf vs JSON; this extension brings Rust and TS to parity so
+the same fixtures can be measured under every runtime.
+
+### Fixed (Rust generator — four cross-runtime drift bugs)
+
+The new cross-language bench harness exercises shapes the existing
+parity fixture didn't (`type` keyword fields, `repeated` scalars,
+`repeated` messages, large maps in real fixtures), and surfaced
+four real Rust-generator bugs:
+
+1. **`type` keyword escape at access sites.** The struct field was
+   declared `r#type` but `rustWriteField`, `rustZeroCheck`, and
+   the JSON encode/decode field generators used the bare
+   `msg.type`. Any schema with a `type` field failed to compile
+   (`expected identifier, found keyword`). Fixed by routing every
+   field access through `rustFieldName(f)`, which already knew
+   about Rust reserved-keyword escaping.
+
+2. **Repeated/map decode read elements from the outer reader.**
+   The generated body shadowed `__data` and `sub_reader`, then
+   read the count from `sub_reader` — but the loop body called
+   `reader.read_*()?` (inherited from `rustReadValue` recursion),
+   draining the *outer* stream. Decoding a `repeated int64` field
+   walked past the next field's tag and failed with a multi-KB
+   `BufferUnderflow`. Fixed by shadowing the outer `reader` so
+   element reads consume the sub-buffer.
+
+3. **Wrong wire-type tag for repeated scalar fields.** The
+   generator emitted the *element's* wire type in the field tag
+   (`WireType::SVarint` for `repeated int64`), but the body is
+   length-prefixed bytes (count + packed scalars) — Go used
+   `WireType::Bytes` for this. Bytes-on-wire diverged across
+   runtimes for any schema with a packed scalar array. Fixed by
+   forcing `rustWireType` to return `WireType::Bytes` for any
+   repeated field.
+
+4. **Spurious length-prefix wrapper on repeated message decode.**
+   For `repeated Tag`, the encoder concatenated `body 0x00`-
+   separated tag bodies inside one outer length-prefix. The
+   decoder, reusing the single-message decode pattern, expected
+   each element to start with its own length prefix and called
+   `read_length_prefixed_bytes` per element — reading the first
+   tag's first byte as a length and immediately failing. Fixed
+   by special-casing the repeated-message branch in
+   `rustReadValue` to call `decode_<name>(&mut reader)` directly.
+
+After all four fixes, Rust codegen produces byte-identical output
+to Go codegen for every Document/Person/Event/Batch fixture in the
+new bench suite — confirmed end-to-end by encoding the same input
+through both runtimes and diffing the hex.
+
 ### Extended (parity fixture — recursive types)
 
 The codegen-parity fixture now also exercises a recursive type

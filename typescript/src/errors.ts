@@ -107,3 +107,14 @@ export class StreamClosedError extends EncodeError {
     this.name = "StreamClosedError";
   }
 }
+
+/**
+ * Error thrown when a type ID or name is already registered with a
+ * different binding. Mirrors Go's `ErrDuplicateTypeID`.
+ */
+export class DuplicateTypeRegistrationError extends CramberryError {
+  constructor(message: string) {
+    super(message);
+    this.name = "DuplicateTypeRegistrationError";
+  }
+}

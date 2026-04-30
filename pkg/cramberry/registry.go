@@ -59,17 +59,17 @@ var DefaultRegistry = NewRegistry()
 // Register registers a type with an auto-assigned ID.
 // The type must be a pointer to a struct or a struct.
 func Register[T any]() (TypeID, error) {
-	return DefaultRegistry.RegisterType(reflect.TypeOf((*T)(nil)).Elem())
+	return DefaultRegistry.RegisterType(reflect.TypeFor[T]())
 }
 
 // RegisterWithID registers a type with a specific ID.
 func RegisterWithID[T any](id TypeID) error {
-	return DefaultRegistry.RegisterTypeWithID(reflect.TypeOf((*T)(nil)).Elem(), id)
+	return DefaultRegistry.RegisterTypeWithID(reflect.TypeFor[T](), id)
 }
 
 // RegisterInterface registers an interface type.
 func RegisterInterface[T any]() error {
-	return DefaultRegistry.RegisterInterfaceType(reflect.TypeOf((*T)(nil)).Elem())
+	return DefaultRegistry.RegisterInterfaceType(reflect.TypeFor[T]())
 }
 
 // RegisterValue registers the type of the given value with an auto-assigned ID.
@@ -358,7 +358,7 @@ func typeName(t reflect.Type) string {
 // ID if the type is already registered. This is safe for concurrent use
 // and will never return an error for already-registered types.
 func RegisterOrGet[T any]() TypeID {
-	return DefaultRegistry.RegisterOrGetType(reflect.TypeOf((*T)(nil)).Elem())
+	return DefaultRegistry.RegisterOrGetType(reflect.TypeFor[T]())
 }
 
 // RegisterOrGetType registers a type and returns its ID, or returns the existing
@@ -412,7 +412,7 @@ func (r *Registry) RegisterOrGetType(t reflect.Type) TypeID {
 // previous behavior) hid bugs where two types competed for the same ID.
 // Use RegisterOrGet for auto-assignment.
 func RegisterOrGetWithID[T any](id TypeID) TypeID {
-	return DefaultRegistry.RegisterOrGetTypeWithID(reflect.TypeOf((*T)(nil)).Elem(), id)
+	return DefaultRegistry.RegisterOrGetTypeWithID(reflect.TypeFor[T](), id)
 }
 
 // RegisterOrGetTypeWithID registers a type with a specific ID, or returns

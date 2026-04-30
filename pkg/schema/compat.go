@@ -28,6 +28,10 @@ const (
 	InterfaceTypeRemoved
 	// InterfaceTypeIDReused indicates an interface type ID was reused.
 	InterfaceTypeIDReused
+	// FieldOptionalToRequired is a field that gained the `required`
+	// modifier in the new schema. A new decoder will reject any message
+	// produced by an old encoder that omitted the now-required field.
+	FieldOptionalToRequired
 )
 
 // String returns a human-readable description of the breaking change type.
@@ -53,6 +57,8 @@ func (t BreakingChangeType) String() string {
 		return "interface type removed"
 	case InterfaceTypeIDReused:
 		return "interface type ID reused"
+	case FieldOptionalToRequired:
+		return "field changed from optional to required"
 	default:
 		return "unknown breaking change"
 	}
@@ -195,6 +201,24 @@ func checkMessageCompat(oldMsg, newMsg *Message, report *CompatibilityReport) {
 						oldF.Name, oldF.Type.String(), newF.Type.String()),
 					Location: fmt.Sprintf("%s.%s", oldMsg.Name, oldF.Name),
 				})
+			}
+			// Modifier transitions:
+			//   optional -> required: BREAKING. An old encoder may have
+			//     omitted the field; a new decoder will reject it.
+			//   required -> optional: WARNING. Wire-compatible but
+			//     semantically risky — a new encoder may stop emitting
+			//     the field, surprising old code that assumed presence.
+			if !oldF.Required && newF.Required {
+				report.Breaking = append(report.Breaking, BreakingChange{
+					Type: FieldOptionalToRequired,
+					Message: fmt.Sprintf("field %q changed from optional to required",
+						oldF.Name),
+					Location: fmt.Sprintf("%s.%s", oldMsg.Name, oldF.Name),
+				})
+			} else if oldF.Required && !newF.Required {
+				report.Warnings = append(report.Warnings,
+					fmt.Sprintf("field %s.%s relaxed from required to optional",
+						oldMsg.Name, oldF.Name))
 			}
 		} else {
 			// Field was removed

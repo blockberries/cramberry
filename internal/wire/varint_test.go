@@ -263,62 +263,62 @@ func TestAppendToExistingBuffer(t *testing.T) {
 
 func BenchmarkAppendUvarint_Small(b *testing.B) {
 	buf := make([]byte, 0, 16)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		buf = AppendUvarint(buf[:0], 127)
 	}
 }
 
 func BenchmarkAppendUvarint_Medium(b *testing.B) {
 	buf := make([]byte, 0, 16)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		buf = AppendUvarint(buf[:0], 16384)
 	}
 }
 
 func BenchmarkAppendUvarint_Large(b *testing.B) {
 	buf := make([]byte, 0, 16)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		buf = AppendUvarint(buf[:0], math.MaxUint64)
 	}
 }
 
 func BenchmarkDecodeUvarint_Small(b *testing.B) {
 	data := []byte{0x7f}
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _, _ = DecodeUvarint(data)
 	}
 }
 
 func BenchmarkDecodeUvarint_Medium(b *testing.B) {
 	data := []byte{0x80, 0x80, 0x01}
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _, _ = DecodeUvarint(data)
 	}
 }
 
 func BenchmarkDecodeUvarint_Large(b *testing.B) {
 	data := []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01}
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _, _ = DecodeUvarint(data)
 	}
 }
 
 func BenchmarkAppendSvarint_Small(b *testing.B) {
 	buf := make([]byte, 0, 16)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		buf = AppendSvarint(buf[:0], -64)
 	}
 }
 
 func BenchmarkDecodeSvarint_Small(b *testing.B) {
 	data := []byte{0x7f}
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _, _ = DecodeSvarint(data)
 	}
 }
 
 func BenchmarkUvarintSize(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		_ = UvarintSize(uint64(i))
 	}
 }

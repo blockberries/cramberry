@@ -8,8 +8,6 @@ import {
   MaxInt64,
   encodeTag,
   decodeTag,
-  encodeTag,
-  decodeTag,
   WireType,
   END_MARKER,
 } from './types';
@@ -108,7 +106,7 @@ describe('zigzag encoding (64-bit)', () => {
   });
 });
 
-describe('V2 compact tag encoding', () => {
+describe('compact tag encoding', () => {
   it('encodes field 1 with Varint wire type as single byte', () => {
     const encoded = encodeTag(1, WireType.Varint);
     expect(encoded.length).toBe(1);

@@ -3,6 +3,57 @@ import { WireType, TypeID, FieldTag, zigzagDecode, zigzagDecode64, END_MARKER, T
 
 // Module-level singleton to avoid repeated instantiation
 const textDecoder = new TextDecoder();
+// Strict UTF-8 decoder used when ReaderOptions.validateUtf8 is set.
+const strictTextDecoder = new TextDecoder("utf-8", { fatal: true });
+
+/**
+ * Limits caps the size of incoming data to prevent allocation-amplification
+ * DoS. Mirrors the Go runtime's Limits struct in pkg/cramberry/types.go.
+ *
+ * A value of 0 disables that limit. Codes that need stricter caps for
+ * adversarial inputs should use SECURE_LIMITS.
+ */
+export interface Limits {
+  maxMessageSize: number;
+  maxStringLength: number;
+  maxBytesLength: number;
+  maxArrayLength: number;
+  maxMapSize: number;
+  maxDepth: number;
+}
+
+/**
+ * DEFAULT_LIMITS mirrors the Go runtime's DefaultLimits — generous values
+ * suitable for trusted-stack and consensus-internal use.
+ */
+export const DEFAULT_LIMITS: Limits = {
+  maxMessageSize: 64 * 1024 * 1024,   // 64 MB
+  maxStringLength: 10 * 1024 * 1024,  // 10 MB
+  maxBytesLength: 100 * 1024 * 1024,  // 100 MB
+  maxArrayLength: 1_000_000,
+  maxMapSize: 1_000_000,
+  maxDepth: 100,
+};
+
+/**
+ * SECURE_LIMITS mirrors the Go runtime's SecureLimits — tighter caps for
+ * adversarial network endpoints.
+ */
+export const SECURE_LIMITS: Limits = {
+  maxMessageSize: 1 * 1024 * 1024,    // 1 MB
+  maxStringLength: 1 * 1024 * 1024,   // 1 MB
+  maxBytesLength: 10 * 1024 * 1024,   // 10 MB
+  maxArrayLength: 10_000,
+  maxMapSize: 10_000,
+  maxDepth: 32,
+};
+
+export interface ReaderOptions {
+  /** Per-field caps. Defaults to DEFAULT_LIMITS. */
+  limits?: Limits;
+  /** When true, reject strings whose bytes are not valid UTF-8. */
+  validateUtf8?: boolean;
+}
 
 /**
  * Reader decodes Cramberry data from a binary buffer.
@@ -12,12 +63,79 @@ export class Reader {
   private view: DataView;
   private pos: number;
   private end: number;
+  private limits: Limits;
+  private validateUtf8: boolean;
+  private depth: number;
 
-  constructor(data: Uint8Array) {
+  constructor(data: Uint8Array, opts?: ReaderOptions) {
     this.buffer = data;
     this.view = new DataView(data.buffer, data.byteOffset, data.byteLength);
     this.pos = 0;
     this.end = data.length;
+    this.limits = opts?.limits ?? DEFAULT_LIMITS;
+    this.validateUtf8 = opts?.validateUtf8 ?? false;
+    this.depth = 0;
+  }
+
+  /**
+   * Reports an error if reading `n` more bytes would exceed maxStringLength.
+   */
+  private checkStringLimit(n: number): void {
+    if (this.limits.maxStringLength > 0 && n > this.limits.maxStringLength) {
+      throw new DecodeError(
+        `string length ${n} exceeds maxStringLength ${this.limits.maxStringLength}`,
+      );
+    }
+  }
+
+  /**
+   * Reports an error if reading `n` more bytes would exceed maxBytesLength.
+   */
+  private checkBytesLimit(n: number): void {
+    if (this.limits.maxBytesLength > 0 && n > this.limits.maxBytesLength) {
+      throw new DecodeError(
+        `bytes length ${n} exceeds maxBytesLength ${this.limits.maxBytesLength}`,
+      );
+    }
+  }
+
+  /**
+   * Reports an error if `n` would exceed maxArrayLength.
+   */
+  checkArrayLimit(n: number): void {
+    if (this.limits.maxArrayLength > 0 && n > this.limits.maxArrayLength) {
+      throw new DecodeError(
+        `array length ${n} exceeds maxArrayLength ${this.limits.maxArrayLength}`,
+      );
+    }
+  }
+
+  /**
+   * Reports an error if `n` would exceed maxMapSize.
+   */
+  checkMapLimit(n: number): void {
+    if (this.limits.maxMapSize > 0 && n > this.limits.maxMapSize) {
+      throw new DecodeError(
+        `map size ${n} exceeds maxMapSize ${this.limits.maxMapSize}`,
+      );
+    }
+  }
+
+  /**
+   * Tracks nesting depth across BeginMessage / EndMessage. Generated code
+   * calls these from sub-message decoders to bound recursion.
+   */
+  enterNested(): void {
+    this.depth++;
+    if (this.limits.maxDepth > 0 && this.depth > this.limits.maxDepth) {
+      throw new DecodeError(
+        `nesting depth ${this.depth} exceeds maxDepth ${this.limits.maxDepth}`,
+      );
+    }
+  }
+
+  exitNested(): void {
+    if (this.depth > 0) this.depth--;
   }
 
   /**
@@ -96,6 +214,14 @@ export class Reader {
 
       result |= (b & 0x7f) << shift;
       if ((b & 0x80) === 0) {
+        // Reject non-canonical varints. A multi-byte varint whose
+        // terminating byte is zero is overlong: the same value fits in
+        // fewer bytes. Accepting it would let the same logical value
+        // hash to different bytes across runtimes — Go's decoder
+        // explicitly rejects this (internal/wire/varint.go).
+        if (i > 0 && b === 0) {
+          throw new DecodeError("non-canonical varint");
+        }
         return result >>> 0; // Ensure unsigned
       }
       shift += 7;
@@ -132,6 +258,10 @@ export class Reader {
 
       result |= (bBigInt & 0x7fn) << shift;
       if ((b & 0x80) === 0) {
+        // Same non-canonical-varint rejection as readVarint().
+        if (i > 0 && b === 0) {
+          throw new DecodeError("non-canonical varint");
+        }
         return result;
       }
       shift += 7n;
@@ -155,7 +285,7 @@ export class Reader {
   }
 
   /**
-   * Reads a V2 compact field tag.
+   * Reads a compact field tag.
    * Returns fieldNumber 0 for end marker.
    */
   readTag(): FieldTag {
@@ -349,10 +479,22 @@ export class Reader {
 
   /**
    * Reads a length-prefixed string.
+   *
+   * Length is read as a 64-bit varint (matching Go's wire format) and then
+   * narrowed to a JS number — strings larger than Number.MAX_SAFE_INTEGER
+   * (~9 PB) are rejected; smaller-than-2^32 length prefixes are valid.
    */
   readString(): string {
-    const length = this.readVarint();
+    const length = this.readSafeLength();
+    this.checkStringLimit(length);
     const bytes = this.readBytes(length);
+    if (this.validateUtf8) {
+      try {
+        return strictTextDecoder.decode(bytes);
+      } catch {
+        throw new DecodeError("invalid UTF-8");
+      }
+    }
     return textDecoder.decode(bytes);
   }
 
@@ -360,28 +502,51 @@ export class Reader {
    * Reads length-prefixed bytes.
    */
   readLengthPrefixedBytes(): Uint8Array {
-    const length = this.readVarint();
+    const length = this.readSafeLength();
+    this.checkBytesLimit(length);
     return this.readBytes(length);
   }
 
   /**
-   * Skips a field based on its V2 wire type.
+   * Reads a 64-bit varint length prefix and narrows it to a JS number.
+   * Rejects values exceeding Number.MAX_SAFE_INTEGER so the result is
+   * usable as an index without precision loss.
+   */
+  private readSafeLength(): number {
+    const big = this.readVarint64();
+    if (big > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new DecodeError(
+        `length ${big} exceeds Number.MAX_SAFE_INTEGER`,
+      );
+    }
+    return Number(big);
+  }
+
+  /**
+   * Skips a field based on its wire type.
+   *
+   * Both varints and length prefixes are read as 64-bit so a generated
+   * decoder can skip unknown fields whose values exceed 32 bits — Go
+   * encodes int64/uint64 as 10-byte varints and length prefixes as
+   * 64-bit unsigned. Skipping must consume the same number of bytes
+   * the encoder wrote, regardless of magnitude.
    */
   skipValue(wireType: WireType): void {
     switch (wireType) {
       case WireType.Varint: // 0
       case WireType.SVarint: // 4
-        this.readVarint();
+        this.readVarint64();
         break;
       case WireType.Fixed64: // 1
         this.checkAvailable(8);
         this.pos += 8;
         break;
-      case WireType.Bytes: // 2
-        const length = this.readVarint();
+      case WireType.Bytes: { // 2
+        const length = this.readSafeLength();
         this.checkAvailable(length);
         this.pos += length;
         break;
+      }
       case WireType.Fixed32: // 3
         this.checkAvailable(4);
         this.pos += 4;
@@ -396,9 +561,28 @@ export class Reader {
    */
   subReader(length: number): Reader {
     this.checkAvailable(length);
-    const sub = new Reader(this.buffer.subarray(this.pos, this.pos + length));
+    const sub = new Reader(this.buffer.subarray(this.pos, this.pos + length), {
+      limits: this.limits,
+      validateUtf8: this.validateUtf8,
+    });
     this.pos += length;
     return sub;
+  }
+
+  /**
+   * Returns the active limits. Used by codegen-emitted helpers to
+   * construct sub-readers that share the parent's caps.
+   */
+  getLimits(): Limits {
+    return this.limits;
+  }
+
+  /**
+   * Returns whether UTF-8 validation is enabled. Used by codegen-emitted
+   * helpers to propagate the setting to sub-readers.
+   */
+  getValidateUtf8(): boolean {
+    return this.validateUtf8;
   }
 
   /**
@@ -408,7 +592,7 @@ export class Reader {
    */
   readTypeRef(): { typeId: TypeID; reader: Reader } {
     const typeId = this.readVarint();
-    const length = this.readVarint();
+    const length = this.readSafeLength();
     const reader = this.subReader(length);
     return { typeId, reader };
   }

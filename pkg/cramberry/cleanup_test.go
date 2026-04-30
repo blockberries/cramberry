@@ -81,20 +81,20 @@ type regTypeB struct{ Y int }
 
 func TestRegisterOrGetTypeWithID_PanicsOnIDCollision(t *testing.T) {
 	r := NewRegistry()
-	r.RegisterOrGetTypeWithID(reflect.TypeOf(regTypeA{}), 200)
+	r.RegisterOrGetTypeWithID(reflect.TypeFor[regTypeA](), 200)
 	defer func() {
 		if rec := recover(); rec == nil {
 			t.Fatal("expected panic on ID collision with a different type, got none")
 		}
 	}()
 	// Try to take id=200 with a different type — must panic, not silently swap.
-	r.RegisterOrGetTypeWithID(reflect.TypeOf(regTypeB{}), 200)
+	r.RegisterOrGetTypeWithID(reflect.TypeFor[regTypeB](), 200)
 }
 
 func TestRegisterOrGetTypeWithID_ReturnsExistingIDForRepeatRegistration(t *testing.T) {
 	r := NewRegistry()
-	id1 := r.RegisterOrGetTypeWithID(reflect.TypeOf(regTypeA{}), 200)
-	id2 := r.RegisterOrGetTypeWithID(reflect.TypeOf(regTypeA{}), 999) // same type
+	id1 := r.RegisterOrGetTypeWithID(reflect.TypeFor[regTypeA](), 200)
+	id2 := r.RegisterOrGetTypeWithID(reflect.TypeFor[regTypeA](), 999) // same type
 	if id1 != id2 {
 		t.Errorf("repeat registration returned different IDs: %d vs %d", id1, id2)
 	}

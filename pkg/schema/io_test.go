@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -734,5 +735,62 @@ import "../escape.cram";
 	resolved = l.resolveImportPath("ok.cram", subdir)
 	if resolved == "" {
 		t.Fatal("non-traversing import should resolve")
+	}
+}
+
+// failWriter fails after `n` bytes have been "written," letting tests
+// drive the formatter into a partial-write scenario without an actual
+// filesystem.
+type failWriter struct {
+	written int
+	failAt  int
+}
+
+func (f *failWriter) Write(p []byte) (int, error) {
+	if f.written >= f.failAt {
+		return 0, io.ErrShortWrite
+	}
+	remaining := f.failAt - f.written
+	if len(p) <= remaining {
+		f.written += len(p)
+		return len(p), nil
+	}
+	f.written += remaining
+	return remaining, io.ErrShortWrite
+}
+
+// Regression test: WriteSchema used to silently swallow every
+// fmt.Fprintf write error and unconditionally return nil. Combined
+// with WriteToFile (which wraps WriteSchema in atomicfile.Write), a
+// disk-full / broken-pipe / quota-exceeded condition would commit a
+// truncated `.cram` file with no signal to the caller. The fix wraps
+// `out` in a bufio.Writer; the deferred Flush surfaces the cached
+// underlying-write error.
+func TestWriteSchema_PropagatesUnderlyingWriteError(t *testing.T) {
+	s := &Schema{
+		Package: &Package{Name: "demo"},
+		Messages: []*Message{
+			{Name: "Foo", Fields: []*Field{
+				{Name: "x", Number: 1, Type: &NamedType{Name: "int32"}},
+			}},
+		},
+	}
+	w := NewWriter()
+	fw := &failWriter{failAt: 8} // fail after 8 bytes
+	err := w.WriteSchema(fw, s)
+	if err == nil {
+		t.Fatal("expected an error from underlying writer; got nil")
+	}
+}
+
+// Sanity: when the underlying writer is healthy, no error.
+func TestWriteSchema_HappyPath(t *testing.T) {
+	s := &Schema{Package: &Package{Name: "demo"}}
+	var sb strings.Builder
+	if err := NewWriter().WriteSchema(&sb, s); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(sb.String(), "package demo;") {
+		t.Errorf("expected package line, got %q", sb.String())
 	}
 }

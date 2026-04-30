@@ -141,7 +141,7 @@ func decodeSlice(r *Reader, v reflect.Value) error {
 	// Create the slice
 	slice := reflect.MakeSlice(v.Type(), n, n)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if err := decodeValue(r, slice.Index(i)); err != nil {
 			return err
 		}
@@ -173,7 +173,7 @@ func decodePackedSlice(r *Reader, v reflect.Value) error {
 	slice := reflect.MakeSlice(v.Type(), n, n)
 	elemKind := v.Type().Elem().Kind()
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		elem := slice.Index(i)
 		switch elemKind {
 		case reflect.Bool:
@@ -225,7 +225,7 @@ func decodeArray(r *Reader, v reflect.Value) error {
 		return NewDecodeError("array length mismatch", nil)
 	}
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if err := decodeValue(r, v.Index(i)); err != nil {
 			return err
 		}
@@ -253,7 +253,7 @@ func decodePackedArray(r *Reader, v reflect.Value) error {
 
 	elemKind := v.Type().Elem().Kind()
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		elem := v.Index(i)
 		switch elemKind {
 		case reflect.Bool:
@@ -309,15 +309,19 @@ func decodeMap(r *Reader, v reflect.Value) error {
 		return NewDecodeError("map size exceeds remaining bytes", ErrMaxMapSize)
 	}
 
-	// Create the map if it's nil
-	if v.IsNil() {
-		v.Set(reflect.MakeMapWithSize(v.Type(), n))
-	}
+	// Always allocate a fresh map: a Cramberry message represents the
+	// FULL state of its fields, not a delta. Merging into an existing
+	// map (the prior behavior) made decode-into-reused-struct produce
+	// "old keys + new keys" instead of "just the wire's keys", and was
+	// asymmetric with the slice path (which always replaces). The
+	// determinism contract is "decode(encode(x)) == x" — that's only
+	// true if a re-decode replaces the destination cleanly.
+	v.Set(reflect.MakeMapWithSize(v.Type(), n))
 
 	keyType := v.Type().Key()
 	elemType := v.Type().Elem()
 
-	for i := 0; i < n; i++ {
+	for range n {
 		key := reflect.New(keyType).Elem()
 		if err := decodeValue(r, key); err != nil {
 			return err
@@ -515,7 +519,7 @@ func sizeSlice(v reflect.Value, opts Options) int {
 	}
 	n := v.Len()
 	size := SizeOfUvarint(uint64(n))
-	for i := 0; i < n; i++ {
+	for i := range n {
 		size += sizeValue(v.Index(i), opts)
 	}
 	return size
@@ -524,7 +528,7 @@ func sizeSlice(v reflect.Value, opts Options) int {
 func sizeArray(v reflect.Value, opts Options) int {
 	n := v.Len()
 	size := SizeOfUvarint(uint64(n))
-	for i := 0; i < n; i++ {
+	for i := range n {
 		size += sizeValue(v.Index(i), opts)
 	}
 	return size

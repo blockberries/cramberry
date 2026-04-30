@@ -72,8 +72,8 @@ type ScalarTypes struct {
 	BytesVal   []byte  `cramberry:"9" json:"bytes_val"`
 }
 
-// MarshalCramberry encodes the message to binary format using optimized V2 encoding.
-// This method uses direct field access without reflection for maximum performance.
+// MarshalCramberry encodes the message to binary format using direct field
+// access without reflection for maximum performance.
 func (m *ScalarTypes) MarshalCramberry() ([]byte, error) {
 	w := cramberry.GetWriter()
 	defer cramberry.PutWriter(w)
@@ -86,7 +86,7 @@ func (m *ScalarTypes) MarshalCramberry() ([]byte, error) {
 	return w.BytesCopy(), nil
 }
 
-// EncodeTo encodes the message directly to the writer using V2 format.
+// EncodeTo encodes the message directly to the writer.
 func (m *ScalarTypes) EncodeTo(w *cramberry.Writer) {
 	if m.BoolVal {
 		w.WriteTag(1, cramberry.WireVarint)
@@ -127,15 +127,15 @@ func (m *ScalarTypes) EncodeTo(w *cramberry.Writer) {
 	w.WriteEndMarker()
 }
 
-// UnmarshalCramberry decodes the message from binary format using optimized V2 decoding.
-// This method uses direct field access without reflection for maximum performance.
+// UnmarshalCramberry decodes the message from binary format using direct
+// field access without reflection for maximum performance.
 func (m *ScalarTypes) UnmarshalCramberry(data []byte) error {
 	r := cramberry.NewReaderWithOptions(data, cramberry.DefaultOptions)
 	m.DecodeFrom(r)
 	return r.Err()
 }
 
-// DecodeFrom decodes the message from the reader using V2 format.
+// DecodeFrom decodes the message from the reader.
 func (m *ScalarTypes) DecodeFrom(r *cramberry.Reader) {
 	for {
 		fieldNum, wireType := r.ReadTag()
@@ -178,8 +178,8 @@ type RepeatedTypes struct {
 	BytesList  [][]byte `cramberry:"3" json:"bytes_list"`
 }
 
-// MarshalCramberry encodes the message to binary format using optimized V2 encoding.
-// This method uses direct field access without reflection for maximum performance.
+// MarshalCramberry encodes the message to binary format using direct field
+// access without reflection for maximum performance.
 func (m *RepeatedTypes) MarshalCramberry() ([]byte, error) {
 	w := cramberry.GetWriter()
 	defer cramberry.PutWriter(w)
@@ -192,7 +192,7 @@ func (m *RepeatedTypes) MarshalCramberry() ([]byte, error) {
 	return w.BytesCopy(), nil
 }
 
-// EncodeTo encodes the message directly to the writer using V2 format.
+// EncodeTo encodes the message directly to the writer.
 func (m *RepeatedTypes) EncodeTo(w *cramberry.Writer) {
 	if len(m.Int32List) > 0 {
 		w.WriteTag(1, cramberry.WireBytes)
@@ -230,15 +230,15 @@ func (m *RepeatedTypes) EncodeTo(w *cramberry.Writer) {
 	w.WriteEndMarker()
 }
 
-// UnmarshalCramberry decodes the message from binary format using optimized V2 decoding.
-// This method uses direct field access without reflection for maximum performance.
+// UnmarshalCramberry decodes the message from binary format using direct
+// field access without reflection for maximum performance.
 func (m *RepeatedTypes) UnmarshalCramberry(data []byte) error {
 	r := cramberry.NewReaderWithOptions(data, cramberry.DefaultOptions)
 	m.DecodeFrom(r)
 	return r.Err()
 }
 
-// DecodeFrom decodes the message from the reader using V2 format.
+// DecodeFrom decodes the message from the reader.
 func (m *RepeatedTypes) DecodeFrom(r *cramberry.Reader) {
 	for {
 		fieldNum, wireType := r.ReadTag()
@@ -310,8 +310,8 @@ type NestedMessage struct {
 	Value int32  `cramberry:"2" json:"value"`
 }
 
-// MarshalCramberry encodes the message to binary format using optimized V2 encoding.
-// This method uses direct field access without reflection for maximum performance.
+// MarshalCramberry encodes the message to binary format using direct field
+// access without reflection for maximum performance.
 func (m *NestedMessage) MarshalCramberry() ([]byte, error) {
 	w := cramberry.GetWriter()
 	defer cramberry.PutWriter(w)
@@ -324,7 +324,7 @@ func (m *NestedMessage) MarshalCramberry() ([]byte, error) {
 	return w.BytesCopy(), nil
 }
 
-// EncodeTo encodes the message directly to the writer using V2 format.
+// EncodeTo encodes the message directly to the writer.
 func (m *NestedMessage) EncodeTo(w *cramberry.Writer) {
 	if m.Name != "" {
 		w.WriteTag(1, cramberry.WireBytes)
@@ -337,15 +337,15 @@ func (m *NestedMessage) EncodeTo(w *cramberry.Writer) {
 	w.WriteEndMarker()
 }
 
-// UnmarshalCramberry decodes the message from binary format using optimized V2 decoding.
-// This method uses direct field access without reflection for maximum performance.
+// UnmarshalCramberry decodes the message from binary format using direct
+// field access without reflection for maximum performance.
 func (m *NestedMessage) UnmarshalCramberry(data []byte) error {
 	r := cramberry.NewReaderWithOptions(data, cramberry.DefaultOptions)
 	m.DecodeFrom(r)
 	return r.Err()
 }
 
-// DecodeFrom decodes the message from the reader using V2 format.
+// DecodeFrom decodes the message from the reader.
 func (m *NestedMessage) DecodeFrom(r *cramberry.Reader) {
 	for {
 		fieldNum, wireType := r.ReadTag()
@@ -377,8 +377,8 @@ type ComplexTypes struct {
 	IntStringMap   map[int32]string `cramberry:"6" json:"int_string_map"`
 }
 
-// MarshalCramberry encodes the message to binary format using optimized V2 encoding.
-// This method uses direct field access without reflection for maximum performance.
+// MarshalCramberry encodes the message to binary format using direct field
+// access without reflection for maximum performance.
 func (m *ComplexTypes) MarshalCramberry() ([]byte, error) {
 	w := cramberry.GetWriter()
 	defer cramberry.PutWriter(w)
@@ -391,7 +391,7 @@ func (m *ComplexTypes) MarshalCramberry() ([]byte, error) {
 	return w.BytesCopy(), nil
 }
 
-// EncodeTo encodes the message directly to the writer using V2 format.
+// EncodeTo encodes the message directly to the writer.
 func (m *ComplexTypes) EncodeTo(w *cramberry.Writer) {
 	w.WriteTag(1, cramberry.WireSVarint)
 	m.Status.EncodeTo(w)
@@ -455,15 +455,15 @@ func (m *ComplexTypes) EncodeTo(w *cramberry.Writer) {
 	w.WriteEndMarker()
 }
 
-// UnmarshalCramberry decodes the message from binary format using optimized V2 decoding.
-// This method uses direct field access without reflection for maximum performance.
+// UnmarshalCramberry decodes the message from binary format using direct
+// field access without reflection for maximum performance.
 func (m *ComplexTypes) UnmarshalCramberry(data []byte) error {
 	r := cramberry.NewReaderWithOptions(data, cramberry.DefaultOptions)
 	m.DecodeFrom(r)
 	return r.Err()
 }
 
-// DecodeFrom decodes the message from the reader using V2 format.
+// DecodeFrom decodes the message from the reader.
 func (m *ComplexTypes) DecodeFrom(r *cramberry.Reader) {
 	for {
 		fieldNum, wireType := r.ReadTag()
@@ -576,8 +576,8 @@ type EdgeCases struct {
 	EmptyBytes    []byte `cramberry:"11" json:"empty_bytes"`
 }
 
-// MarshalCramberry encodes the message to binary format using optimized V2 encoding.
-// This method uses direct field access without reflection for maximum performance.
+// MarshalCramberry encodes the message to binary format using direct field
+// access without reflection for maximum performance.
 func (m *EdgeCases) MarshalCramberry() ([]byte, error) {
 	w := cramberry.GetWriter()
 	defer cramberry.PutWriter(w)
@@ -590,7 +590,7 @@ func (m *EdgeCases) MarshalCramberry() ([]byte, error) {
 	return w.BytesCopy(), nil
 }
 
-// EncodeTo encodes the message directly to the writer using V2 format.
+// EncodeTo encodes the message directly to the writer.
 func (m *EdgeCases) EncodeTo(w *cramberry.Writer) {
 	if m.ZeroInt != 0 {
 		w.WriteTag(1, cramberry.WireSVarint)
@@ -639,15 +639,15 @@ func (m *EdgeCases) EncodeTo(w *cramberry.Writer) {
 	w.WriteEndMarker()
 }
 
-// UnmarshalCramberry decodes the message from binary format using optimized V2 decoding.
-// This method uses direct field access without reflection for maximum performance.
+// UnmarshalCramberry decodes the message from binary format using direct
+// field access without reflection for maximum performance.
 func (m *EdgeCases) UnmarshalCramberry(data []byte) error {
 	r := cramberry.NewReaderWithOptions(data, cramberry.DefaultOptions)
 	m.DecodeFrom(r)
 	return r.Err()
 }
 
-// DecodeFrom decodes the message from the reader using V2 format.
+// DecodeFrom decodes the message from the reader.
 func (m *EdgeCases) DecodeFrom(r *cramberry.Reader) {
 	for {
 		fieldNum, wireType := r.ReadTag()
@@ -697,8 +697,8 @@ type AllFieldNumbers struct {
 	Field1000 int32 `cramberry:"1000" json:"field_1000"`
 }
 
-// MarshalCramberry encodes the message to binary format using optimized V2 encoding.
-// This method uses direct field access without reflection for maximum performance.
+// MarshalCramberry encodes the message to binary format using direct field
+// access without reflection for maximum performance.
 func (m *AllFieldNumbers) MarshalCramberry() ([]byte, error) {
 	w := cramberry.GetWriter()
 	defer cramberry.PutWriter(w)
@@ -711,7 +711,7 @@ func (m *AllFieldNumbers) MarshalCramberry() ([]byte, error) {
 	return w.BytesCopy(), nil
 }
 
-// EncodeTo encodes the message directly to the writer using V2 format.
+// EncodeTo encodes the message directly to the writer.
 func (m *AllFieldNumbers) EncodeTo(w *cramberry.Writer) {
 	if m.Field1 != 0 {
 		w.WriteTag(1, cramberry.WireSVarint)
@@ -740,15 +740,15 @@ func (m *AllFieldNumbers) EncodeTo(w *cramberry.Writer) {
 	w.WriteEndMarker()
 }
 
-// UnmarshalCramberry decodes the message from binary format using optimized V2 decoding.
-// This method uses direct field access without reflection for maximum performance.
+// UnmarshalCramberry decodes the message from binary format using direct
+// field access without reflection for maximum performance.
 func (m *AllFieldNumbers) UnmarshalCramberry(data []byte) error {
 	r := cramberry.NewReaderWithOptions(data, cramberry.DefaultOptions)
 	m.DecodeFrom(r)
 	return r.Err()
 }
 
-// DecodeFrom decodes the message from the reader using V2 format.
+// DecodeFrom decodes the message from the reader.
 func (m *AllFieldNumbers) DecodeFrom(r *cramberry.Reader) {
 	for {
 		fieldNum, wireType := r.ReadTag()

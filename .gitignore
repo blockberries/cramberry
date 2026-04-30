@@ -41,12 +41,16 @@ tmp/
 # Rust
 rust/target/
 test/integration/rust/target/
+internal/bench/rust/target/
+internal/bench/rust/Cargo.lock
 
 # TypeScript/Node
 typescript/node_modules/
 typescript/dist/
 typescript/*.tsbuildinfo
 test/integration/ts/node_modules/
+internal/bench/ts/node_modules/
+internal/bench/ts/package-lock.json
 
 # Build artifacts
 basic

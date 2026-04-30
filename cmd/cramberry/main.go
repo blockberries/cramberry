@@ -179,7 +179,9 @@ func cmdGenerate(args []string) {
 	jsonTags := fs.Bool("json", true, "Generate JSON tags/methods")
 	var searchPaths stringSliceFlag
 	fs.Var(&searchPaths, "I", "Add import search path (can be repeated)")
-	var importPaths importPathFlag
+	// Initialize as an empty (non-nil) map so downstream codegen can rely
+	// on a usable map even when -M is never passed.
+	importPaths := importPathFlag{}
 	fs.Var(&importPaths, "M", "Map schema import alias to Go import path (alias=path, can be repeated)")
 
 	fs.Usage = func() {

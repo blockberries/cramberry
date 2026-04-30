@@ -36,7 +36,7 @@ func TestRegistryBasic(t *testing.T) {
 	r := NewRegistry()
 
 	// Register a type
-	id, err := r.RegisterType(reflect.TypeOf(Person{}))
+	id, err := r.RegisterType(reflect.TypeFor[Person]())
 	if err != nil {
 		t.Fatalf("Register error: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestRegistryBasic(t *testing.T) {
 	}
 
 	// Should be able to look up
-	reg, ok := r.LookupType(reflect.TypeOf(Person{}))
+	reg, ok := r.LookupType(reflect.TypeFor[Person]())
 	if !ok {
 		t.Fatal("LookupType failed")
 	}
@@ -71,7 +71,7 @@ func TestRegistryWithID(t *testing.T) {
 
 	// Register with specific ID
 	id := TypeID(200)
-	err := r.RegisterTypeWithID(reflect.TypeOf(Animal{}), id)
+	err := r.RegisterTypeWithID(reflect.TypeFor[Animal](), id)
 	if err != nil {
 		t.Fatalf("RegisterWithID error: %v", err)
 	}
@@ -88,20 +88,20 @@ func TestRegistryWithID(t *testing.T) {
 func TestRegistryDuplicateType(t *testing.T) {
 	r := NewRegistry()
 
-	_, err := r.RegisterType(reflect.TypeOf(Person{}))
+	_, err := r.RegisterType(reflect.TypeFor[Person]())
 	if err != nil {
 		t.Fatalf("First Register error: %v", err)
 	}
 
 	// Registering same type again with same ID should succeed
-	reg, _ := r.LookupType(reflect.TypeOf(Person{}))
-	err = r.RegisterTypeWithID(reflect.TypeOf(Person{}), reg.ID)
+	reg, _ := r.LookupType(reflect.TypeFor[Person]())
+	err = r.RegisterTypeWithID(reflect.TypeFor[Person](), reg.ID)
 	if err != nil {
 		t.Errorf("Re-registering with same ID should succeed: %v", err)
 	}
 
 	// Registering same type with different ID should fail
-	err = r.RegisterTypeWithID(reflect.TypeOf(Person{}), TypeID(999))
+	err = r.RegisterTypeWithID(reflect.TypeFor[Person](), TypeID(999))
 	if err == nil {
 		t.Error("Registering same type with different ID should fail")
 	}
@@ -111,13 +111,13 @@ func TestRegistryDuplicateID(t *testing.T) {
 	r := NewRegistry()
 
 	id := TypeID(200)
-	err := r.RegisterTypeWithID(reflect.TypeOf(Person{}), id)
+	err := r.RegisterTypeWithID(reflect.TypeFor[Person](), id)
 	if err != nil {
 		t.Fatalf("First RegisterWithID error: %v", err)
 	}
 
 	// Using same ID for different type should fail
-	err = r.RegisterTypeWithID(reflect.TypeOf(Animal{}), id)
+	err = r.RegisterTypeWithID(reflect.TypeFor[Animal](), id)
 	if err == nil {
 		t.Error("Using same ID for different type should fail")
 	}
@@ -126,7 +126,7 @@ func TestRegistryDuplicateID(t *testing.T) {
 func TestRegistryTypeIDFor(t *testing.T) {
 	r := NewRegistry()
 
-	_, err := r.RegisterType(reflect.TypeOf(Person{}))
+	_, err := r.RegisterType(reflect.TypeFor[Person]())
 	if err != nil {
 		t.Fatalf("Register error: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestRegistryTypeIDFor(t *testing.T) {
 func TestRegistryNewValue(t *testing.T) {
 	r := NewRegistry()
 
-	id, err := r.RegisterType(reflect.TypeOf(Person{}))
+	id, err := r.RegisterType(reflect.TypeFor[Person]())
 	if err != nil {
 		t.Fatalf("Register error: %v", err)
 	}
@@ -194,28 +194,28 @@ func TestRegistryInterface(t *testing.T) {
 	r := NewRegistry()
 
 	// Register interface
-	flyerType := reflect.TypeOf((*Flyer)(nil)).Elem()
+	flyerType := reflect.TypeFor[Flyer]()
 	err := r.RegisterInterfaceType(flyerType)
 	if err != nil {
 		t.Fatalf("RegisterInterface error: %v", err)
 	}
 
 	// Register implementing types
-	_, err = r.RegisterType(reflect.TypeOf(Bird{}))
+	_, err = r.RegisterType(reflect.TypeFor[Bird]())
 	if err != nil {
 		t.Fatalf("Register Bird error: %v", err)
 	}
-	_, err = r.RegisterType(reflect.TypeOf(Plane{}))
+	_, err = r.RegisterType(reflect.TypeFor[Plane]())
 	if err != nil {
 		t.Fatalf("Register Plane error: %v", err)
 	}
 
 	// Register implementations
-	err = r.RegisterImplementation(flyerType, reflect.TypeOf(Bird{}))
+	err = r.RegisterImplementation(flyerType, reflect.TypeFor[Bird]())
 	if err != nil {
 		t.Fatalf("RegisterImplementation Bird error: %v", err)
 	}
-	err = r.RegisterImplementation(flyerType, reflect.TypeOf(Plane{}))
+	err = r.RegisterImplementation(flyerType, reflect.TypeFor[Plane]())
 	if err != nil {
 		t.Fatalf("RegisterImplementation Plane error: %v", err)
 	}
@@ -230,18 +230,18 @@ func TestRegistryInterface(t *testing.T) {
 func TestRegistryImplementationErrors(t *testing.T) {
 	r := NewRegistry()
 
-	flyerType := reflect.TypeOf((*Flyer)(nil)).Elem()
+	flyerType := reflect.TypeFor[Flyer]()
 
 	// Register implementation for unregistered interface
-	r.RegisterType(reflect.TypeOf(Bird{}))
-	err := r.RegisterImplementation(flyerType, reflect.TypeOf(Bird{}))
+	r.RegisterType(reflect.TypeFor[Bird]())
+	err := r.RegisterImplementation(flyerType, reflect.TypeFor[Bird]())
 	if err == nil {
 		t.Error("Should fail for unregistered interface")
 	}
 
 	// Register interface, then try unregistered type
 	r.RegisterInterfaceType(flyerType)
-	err = r.RegisterImplementation(flyerType, reflect.TypeOf(Plane{}))
+	err = r.RegisterImplementation(flyerType, reflect.TypeFor[Plane]())
 	if err == nil {
 		t.Error("Should fail for unregistered implementation type")
 	}
@@ -251,7 +251,7 @@ func TestRegistryNonInterface(t *testing.T) {
 	r := NewRegistry()
 
 	// Try to register non-interface as interface
-	err := r.RegisterInterfaceType(reflect.TypeOf(Person{}))
+	err := r.RegisterInterfaceType(reflect.TypeFor[Person]())
 	if err == nil {
 		t.Error("RegisterInterface with non-interface should fail")
 	}
@@ -260,9 +260,9 @@ func TestRegistryNonInterface(t *testing.T) {
 func TestRegistryAll(t *testing.T) {
 	r := NewRegistry()
 
-	r.RegisterType(reflect.TypeOf(Person{}))
-	r.RegisterType(reflect.TypeOf(Animal{}))
-	r.RegisterType(reflect.TypeOf(Bird{}))
+	r.RegisterType(reflect.TypeFor[Person]())
+	r.RegisterType(reflect.TypeFor[Animal]())
+	r.RegisterType(reflect.TypeFor[Bird]())
 
 	all := r.All()
 	if len(all) != 3 {
@@ -277,12 +277,12 @@ func TestRegistrySize(t *testing.T) {
 		t.Errorf("Size() = %d, want 0", r.Size())
 	}
 
-	r.RegisterType(reflect.TypeOf(Person{}))
+	r.RegisterType(reflect.TypeFor[Person]())
 	if r.Size() != 1 {
 		t.Errorf("Size() = %d, want 1", r.Size())
 	}
 
-	r.RegisterType(reflect.TypeOf(Animal{}))
+	r.RegisterType(reflect.TypeFor[Animal]())
 	if r.Size() != 2 {
 		t.Errorf("Size() = %d, want 2", r.Size())
 	}
@@ -291,8 +291,8 @@ func TestRegistrySize(t *testing.T) {
 func TestRegistryClear(t *testing.T) {
 	r := NewRegistry()
 
-	r.RegisterType(reflect.TypeOf(Person{}))
-	r.RegisterType(reflect.TypeOf(Animal{}))
+	r.RegisterType(reflect.TypeFor[Person]())
+	r.RegisterType(reflect.TypeFor[Animal]())
 
 	r.Clear()
 
@@ -301,7 +301,7 @@ func TestRegistryClear(t *testing.T) {
 	}
 
 	// Should be able to register again
-	_, err := r.RegisterType(reflect.TypeOf(Person{}))
+	_, err := r.RegisterType(reflect.TypeFor[Person]())
 	if err != nil {
 		t.Fatalf("Register after Clear error: %v", err)
 	}
@@ -311,17 +311,17 @@ func TestRegistryConcurrency(t *testing.T) {
 	r := NewRegistry()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
 
 			// Register
-			r.RegisterTypeWithID(reflect.TypeOf(Person{}), TypeID(128+i))
+			r.RegisterTypeWithID(reflect.TypeFor[Person](), TypeID(128+i))
 
 			// Lookup
 			r.Lookup(TypeID(128 + i))
-			r.LookupType(reflect.TypeOf(Person{}))
+			r.LookupType(reflect.TypeFor[Person]())
 			r.TypeIDFor(Person{})
 			r.All()
 			r.Size()
@@ -351,14 +351,14 @@ func TestDefaultRegistry(t *testing.T) {
 func TestAutoIncrementID(t *testing.T) {
 	r := NewRegistry()
 
-	r.RegisterType(reflect.TypeOf(Person{}))
-	r.RegisterType(reflect.TypeOf(Animal{}))
-	r.RegisterType(reflect.TypeOf(Bird{}))
+	r.RegisterType(reflect.TypeFor[Person]())
+	r.RegisterType(reflect.TypeFor[Animal]())
+	r.RegisterType(reflect.TypeFor[Bird]())
 
 	// IDs should be sequential starting from TypeIDUserStart
-	reg1, _ := r.LookupType(reflect.TypeOf(Person{}))
-	reg2, _ := r.LookupType(reflect.TypeOf(Animal{}))
-	reg3, _ := r.LookupType(reflect.TypeOf(Bird{}))
+	reg1, _ := r.LookupType(reflect.TypeFor[Person]())
+	reg2, _ := r.LookupType(reflect.TypeFor[Animal]())
+	reg3, _ := r.LookupType(reflect.TypeFor[Bird]())
 
 	if reg1.ID != TypeIDUserStart {
 		t.Errorf("First ID = %d, want %d", reg1.ID, TypeIDUserStart)
@@ -375,13 +375,13 @@ func TestRegisterPointerType(t *testing.T) {
 	r := NewRegistry()
 
 	// Register struct type
-	_, err := r.RegisterType(reflect.TypeOf(Person{}))
+	_, err := r.RegisterType(reflect.TypeFor[Person]())
 	if err != nil {
 		t.Fatalf("RegisterType error: %v", err)
 	}
 
 	// Looking up pointer should find the same registration
-	reg, ok := r.LookupType(reflect.TypeOf(&Person{}))
+	reg, ok := r.LookupType(reflect.TypeFor[*Person]())
 	if !ok {
 		t.Error("LookupType for pointer should work")
 	}
@@ -424,7 +424,7 @@ func TestRegistryNilValidation(t *testing.T) {
 
 func BenchmarkRegistryLookup(b *testing.B) {
 	r := NewRegistry()
-	id, _ := r.RegisterType(reflect.TypeOf(Person{}))
+	id, _ := r.RegisterType(reflect.TypeFor[Person]())
 
 	b.Run("ByID", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -433,7 +433,7 @@ func BenchmarkRegistryLookup(b *testing.B) {
 	})
 
 	b.Run("ByType", func(b *testing.B) {
-		t := reflect.TypeOf(Person{})
+		t := reflect.TypeFor[Person]()
 		for i := 0; i < b.N; i++ {
 			r.LookupType(t)
 		}

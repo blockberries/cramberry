@@ -1,10 +1,13 @@
 package schema
 
 import (
+	"bufio"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/blockberries/cramberry/internal/atomicfile"
@@ -44,10 +47,8 @@ func (l *Loader) LoadFile(path string) (*Schema, []error) {
 // loadFileInternal loads a schema file, tracking the import chain to detect cycles.
 func (l *Loader) loadFileInternal(absPath string, importChain []string) (*Schema, []error) {
 	// Check for circular imports
-	for _, p := range importChain {
-		if p == absPath {
-			return nil, []error{fmt.Errorf("circular import detected: %s", strings.Join(append(importChain, absPath), " -> "))}
-		}
+	if slices.Contains(importChain, absPath) {
+		return nil, []error{fmt.Errorf("circular import detected: %s", strings.Join(append(importChain, absPath), " -> "))}
 	}
 
 	// Return cached schema if available
@@ -103,12 +104,16 @@ func (l *Loader) loadFileInternal(absPath string, importChain []string) (*Schema
 		}
 	}
 
-	// Validate with imports
+	// Validate with imports.
+	//
+	// Both errors AND warnings propagate up to the caller — the CLI's
+	// validate command relies on warnings being visible so users see
+	// notes about reserved field numbers (19000-19999), schema-evolution
+	// risks, and the like. Filtering them here silently dropped every
+	// warning the validator emitted.
 	valErrors := ValidateWithImports(schema, importedSchemas)
 	for _, e := range valErrors {
-		if e.Severity == SeverityError {
-			allErrors = append(allErrors, e)
-		}
+		allErrors = append(allErrors, e)
 	}
 
 	l.loadedErrors[absPath] = allErrors
@@ -170,9 +175,7 @@ func containedAbs(root, rel string) string {
 // AllSchemas returns all loaded schemas.
 func (l *Loader) AllSchemas() map[string]*Schema {
 	result := make(map[string]*Schema, len(l.loaded))
-	for k, v := range l.loaded {
-		result[k] = v
-	}
+	maps.Copy(result, l.loaded)
 	return result
 }
 
@@ -230,53 +233,68 @@ func (w *Writer) SetIndent(indent string) {
 }
 
 // WriteSchema writes a schema to the writer.
-func (w *Writer) WriteSchema(out io.Writer, schema *Schema) error {
+//
+// Wraps `out` in a bufio.Writer so the dozens of internal Fprintf
+// calls don't each have to error-check explicitly: bufio.Writer
+// caches the first underlying-write error and turns all subsequent
+// operations into no-ops returning that error, which the final
+// Flush() surfaces. Without this wrapper, the prior implementation
+// silently swallowed I/O errors (disk full, broken pipe, quota
+// exceeded) and returned `nil` while producing a truncated file.
+func (w *Writer) WriteSchema(out io.Writer, schema *Schema) (retErr error) {
+	bw := bufio.NewWriter(out)
+	defer func() {
+		if err := bw.Flush(); err != nil && retErr == nil {
+			retErr = err
+		}
+	}()
+
 	// Write package
 	if schema.Package != nil {
-		fmt.Fprintf(out, "package %s;\n\n", schema.Package.Name)
+		fmt.Fprintf(bw, "package %s;\n\n", schema.Package.Name)
 	}
 
 	// Write imports
 	for _, imp := range schema.Imports {
 		if imp.Alias != "" {
-			fmt.Fprintf(out, "import %q as %s;\n", imp.Path, imp.Alias)
+			fmt.Fprintf(bw, "import %q as %s;\n", imp.Path, imp.Alias)
 		} else {
-			fmt.Fprintf(out, "import %q;\n", imp.Path)
+			fmt.Fprintf(bw, "import %q;\n", imp.Path)
 		}
 	}
 	if len(schema.Imports) > 0 {
-		fmt.Fprintln(out)
+		fmt.Fprintln(bw)
 	}
 
 	// Write options
 	for _, opt := range schema.Options {
-		fmt.Fprintf(out, "option %s = %s;\n", opt.Name, w.formatValue(opt.Value))
+		fmt.Fprintf(bw, "option %s = %s;\n", opt.Name, w.formatValue(opt.Value))
 	}
 	if len(schema.Options) > 0 {
-		fmt.Fprintln(out)
+		fmt.Fprintln(bw)
 	}
 
 	// Write messages
 	for i, msg := range schema.Messages {
-		w.writeMessage(out, msg)
+		w.writeMessage(bw, msg)
 		if i < len(schema.Messages)-1 || len(schema.Enums) > 0 || len(schema.Interfaces) > 0 {
-			fmt.Fprintln(out)
+			fmt.Fprintln(bw)
 		}
 	}
 
 	// Write enums
 	for i, enum := range schema.Enums {
-		w.writeEnum(out, enum)
+		w.writeEnum(bw, enum)
 		if i < len(schema.Enums)-1 || len(schema.Interfaces) > 0 {
-			fmt.Fprintln(out)
+			fmt.Fprintln(bw)
 		}
 	}
 
 	// Write interfaces
 	for i, iface := range schema.Interfaces {
-		w.writeInterface(out, iface)
+		w.writeInterface(bw, iface)
 		if i < len(schema.Interfaces)-1 {
-			fmt.Fprintln(out)
+			fmt.Fprintln(bw)
 		}
 	}
 

@@ -904,7 +904,7 @@ func (r *Reader) ReadPackedFloat32(count int) []float32 {
 	}
 
 	result := make([]float32, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		// Little-endian decode
 		v := uint32(r.data[r.pos]) |
 			uint32(r.data[r.pos+1])<<8 |
@@ -933,7 +933,7 @@ func (r *Reader) ReadPackedFloat64(count int) []float64 {
 	}
 
 	result := make([]float64, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		// Little-endian decode
 		v := uint64(r.data[r.pos]) |
 			uint64(r.data[r.pos+1])<<8 |
@@ -966,7 +966,7 @@ func (r *Reader) ReadPackedFixed32(count int) []uint32 {
 	}
 
 	result := make([]uint32, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		// Little-endian decode
 		result[i] = uint32(r.data[r.pos]) |
 			uint32(r.data[r.pos+1])<<8 |
@@ -994,7 +994,7 @@ func (r *Reader) ReadPackedFixed64(count int) []uint64 {
 	}
 
 	result := make([]uint64, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		// Little-endian decode
 		result[i] = uint64(r.data[r.pos]) |
 			uint64(r.data[r.pos+1])<<8 |

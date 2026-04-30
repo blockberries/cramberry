@@ -21,8 +21,10 @@ type AnyEncoder = Box<dyn Fn(&mut Writer, &dyn std::any::Any) -> Result<()> + Se
 type AnyDecoder = Box<dyn Fn(&mut Reader) -> Result<Box<dyn std::any::Any + Send + Sync>> + Send + Sync>;
 
 /// Registration information for a type.
+///
+/// The TypeId itself isn't stored on the registration — entries live in
+/// `by_id: HashMap<TypeId, TypeRegistration>`, which already keys by id.
 struct TypeRegistration {
-    type_id: TypeId,
     name: String,
     encoder: AnyEncoder,
     decoder: AnyDecoder,
@@ -106,7 +108,6 @@ impl Registry {
         });
 
         let registration = TypeRegistration {
-            type_id,
             name: name.to_string(),
             encoder: any_encoder,
             decoder: any_decoder,
@@ -165,7 +166,7 @@ impl Registry {
         inner.by_id
             .get(&type_id)
             .map(|r| r.name.clone())
-            .ok_or_else(|| Error::UnknownTypeId(type_id))
+            .ok_or(Error::UnknownTypeId(type_id))
     }
 
     /// Checks if a type name is registered.
@@ -183,7 +184,7 @@ impl Registry {
     }
 
     /// Encodes a polymorphic value with its type ID.
-    /// In V2 format, type references are encoded as Bytes with [type_id + length-prefixed data].
+    /// Type references are encoded as Bytes with [type_id + length-prefixed data].
     /// Thread-safe: acquires read lock.
     pub fn encode_polymorphic<T>(
         &self,
@@ -202,7 +203,7 @@ impl Registry {
             .ok_or_else(|| Error::TypeNotRegistered(name.to_string()))?;
         let reg = inner.by_id.get(&type_id).unwrap();
 
-        // Write field tag with Bytes wire type (V2 format)
+        // Write field tag with Bytes wire type
         writer.write_tag(field_number, WireType::Bytes)?;
 
         // Create a temporary writer for the type ref content
@@ -235,7 +236,7 @@ impl Registry {
         let reg = inner
             .by_id
             .get(&type_id)
-            .ok_or_else(|| Error::UnknownTypeId(type_id))?;
+            .ok_or(Error::UnknownTypeId(type_id))?;
 
         // Read length-prefixed value
         let length = reader.read_varint()? as usize;

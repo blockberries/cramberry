@@ -18,7 +18,7 @@ func TestSecurityVarintOverflow(t *testing.T) {
 	t.Run("TooManyBytes", func(t *testing.T) {
 		// 11 bytes with continuation bits set - should fail
 		data := make([]byte, 11)
-		for i := 0; i < 11; i++ {
+		for i := range 11 {
 			data[i] = 0x80 // continuation bit set, value 0
 		}
 		data[10] = 0x00 // terminate at byte 11
@@ -179,7 +179,7 @@ func TestSecuritySkipVarintOverflow(t *testing.T) {
 	t.Run("TooManyVarintBytes", func(t *testing.T) {
 		// 11 bytes all with continuation bit
 		data := make([]byte, 11)
-		for i := 0; i < 11; i++ {
+		for i := range 11 {
 			data[i] = 0x80
 		}
 
@@ -254,7 +254,7 @@ func TestSecurityDepthLimiting(t *testing.T) {
 		// Build 200 levels of nesting (limit is 100)
 		root := &Nested{Value: 1}
 		current := root
-		for i := 0; i < 200; i++ {
+		for i := range 200 {
 			current.Inner = &Nested{Value: int32(i + 2)}
 			current = current.Inner
 		}
@@ -284,7 +284,7 @@ func TestSecurityDepthLimiting(t *testing.T) {
 		// Build 50 levels of nesting (within limit of 100)
 		root := &Nested{Value: 1}
 		current := root
-		for i := 0; i < 50; i++ {
+		for i := range 50 {
 			current.Inner = &Nested{Value: int32(i + 2)}
 			current = current.Inner
 		}
@@ -431,7 +431,7 @@ func TestSecurityNaNMapKeys(t *testing.T) {
 		if err != nil {
 			t.Fatalf("marshal failed: %v", err)
 		}
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			data2, err := Marshal(m)
 			if err != nil {
 				t.Fatalf("marshal failed: %v", err)

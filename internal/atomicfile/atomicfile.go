@@ -64,12 +64,22 @@ func Write(path string, perm os.FileMode, write func(io.Writer) error) (retErr e
 	committed = true
 
 	// fsync the parent directory so the new entry survives a power loss.
-	// Skip on Windows (no equivalent semantics) and treat any failure as
-	// non-fatal: the rename succeeded; durability is best-effort.
+	// Skip on Windows (no equivalent semantics). On POSIX, propagate any
+	// error: the rename is on disk, but its parent-dir entry may not be,
+	// and silently swallowing the error means the caller can't know that
+	// "Write returned nil" doesn't actually mean "durable on disk."
 	if runtime.GOOS != "windows" {
-		if dirF, err := os.Open(dir); err == nil {
-			_ = dirF.Sync()
-			_ = dirF.Close()
+		dirF, err := os.Open(dir)
+		if err != nil {
+			return fmt.Errorf("atomicfile: open dir for fsync: %w", err)
+		}
+		syncErr := dirF.Sync()
+		closeErr := dirF.Close()
+		if syncErr != nil {
+			return fmt.Errorf("atomicfile: dir fsync: %w", syncErr)
+		}
+		if closeErr != nil {
+			return fmt.Errorf("atomicfile: dir close: %w", closeErr)
 		}
 	}
 	return nil

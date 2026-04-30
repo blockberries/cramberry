@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"bytes"
+	"slices"
 	"strings"
 	"testing"
 
@@ -400,13 +401,7 @@ func TestGeneratorRegistry(t *testing.T) {
 
 	// Check languages list
 	langs := Languages()
-	found := false
-	for _, l := range langs {
-		if l == LanguageGo {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(langs, LanguageGo)
 	if !found {
 		t.Error("Go not in languages list")
 	}
@@ -879,10 +874,7 @@ func TestJSONCommaUsesPositionNotTag(t *testing.T) {
 	}
 	// The 200 chars before the alpha emission must NOT contain a comma write.
 	// The previous emission would be `buf.WriteString("{")` then `buf.WriteString(",")`.
-	start := first - 300
-	if start < 0 {
-		start = 0
-	}
+	start := max(first-300, 0)
 	preamble := out[start:first]
 	if strings.Contains(preamble, `buf.WriteString(",")`) &&
 		!strings.Contains(preamble, `"beta":`) {
@@ -899,5 +891,80 @@ func TestJSONCommaUsesPositionNotTag(t *testing.T) {
 	between := out[betweenStart:second]
 	if !strings.Contains(between, `buf.WriteString(",")`) {
 		t.Errorf("second field missing leading comma; between:\n%s", between)
+	}
+}
+
+// Regression: JSON helpers for an interface field used to emit
+// `m.Pet.ToJSON()` and `var msg Animal; msg.FromJSON(...)`. Both fail
+// to compile because Animal is a bare interface — ToJSON/FromJSON
+// live on each concrete impl. The generator now emits a polymorphic
+// `ToJSONAnimal(v Animal)` / `FromJSONAnimal(s string) (Animal, error)`
+// pair and routes the field codec through them.
+func TestGoGenerator_JSONInterfaceFieldCompiles(t *testing.T) {
+	s := &schema.Schema{
+		Package: &schema.Package{Name: "test"},
+		Messages: []*schema.Message{
+			{Name: "Dog", Fields: []*schema.Field{
+				{Name: "name", Number: 1, Type: &schema.ScalarType{Name: "string"}},
+			}},
+			{Name: "Cat", Fields: []*schema.Field{
+				{Name: "name", Number: 1, Type: &schema.ScalarType{Name: "string"}},
+			}},
+			{Name: "Zoo", Fields: []*schema.Field{
+				{Name: "pet", Number: 1, Type: &schema.NamedType{Name: "Animal"}},
+			}},
+		},
+		Interfaces: []*schema.Interface{
+			{Name: "Animal", Implementations: []*schema.Implementation{
+				{TypeID: 128, Type: &schema.NamedType{Name: "Dog"}},
+				{TypeID: 129, Type: &schema.NamedType{Name: "Cat"}},
+			}},
+		},
+	}
+	gen := NewGoGenerator()
+	var buf bytes.Buffer
+	opts := DefaultOptions()
+	opts.Package = "test"
+	if err := gen.Generate(&buf, s, opts); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	out := buf.String()
+	// The polymorphic JSON helpers must exist:
+	if !strings.Contains(out, "func ToJSONAnimal(") {
+		t.Errorf("expected ToJSONAnimal helper; output:\n%s", out)
+	}
+	if !strings.Contains(out, "func FromJSONAnimal(") {
+		t.Errorf("expected FromJSONAnimal helper; output:\n%s", out)
+	}
+	// The field-level call must dispatch to the helper, not call
+	// ToJSON on the bare interface.
+	if strings.Contains(out, "m.Pet.ToJSON()") {
+		t.Errorf("field codegen still calls ToJSON on bare interface:\n%s", out)
+	}
+}
+
+// Regression: previous round added `bytes.Equal` to the JSON pointer
+// helper and added "bytes" to the unconditional import block.
+// Schemas without optional pointer fields ended up with an unused
+// import — Go's strict-import check failed the build. Now the
+// import is gated on `hasOptionalPointer`.
+func TestGoGenerator_NoOptionalPointer_NoBytesImport(t *testing.T) {
+	s := &schema.Schema{
+		Package: &schema.Package{Name: "test"},
+		Messages: []*schema.Message{
+			{Name: "M", Fields: []*schema.Field{
+				{Name: "name", Number: 1, Type: &schema.ScalarType{Name: "string"}},
+			}},
+		},
+	}
+	gen := NewGoGenerator()
+	var buf bytes.Buffer
+	opts := DefaultOptions()
+	if err := gen.Generate(&buf, s, opts); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	out := buf.String()
+	if strings.Contains(out, `"bytes"`) {
+		t.Errorf("schema without optional pointer must not import \"bytes\":\n%s", out)
 	}
 }

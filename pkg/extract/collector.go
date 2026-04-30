@@ -158,9 +158,17 @@ func (c *TypeCollector) collectType(typeName *types.TypeName, pkgPath string, do
 			info.TypeID = typeID
 		}
 
-		// Collect fields
+		// Collect fields. Anonymous (embedded) fields are skipped: their
+		// "name" is the type name, they have no meaningful field number,
+		// and re-emitting them as named fields in the schema would
+		// silently lose the embedding semantic on round-trip. Users who
+		// want an embedded type to participate in the wire format must
+		// declare it as a named field explicitly.
 		for i := 0; i < t.NumFields(); i++ {
 			field := t.Field(i)
+			if field.Anonymous() {
+				continue
+			}
 			if !c.config.IncludePrivate && !field.Exported() {
 				continue
 			}
@@ -196,8 +204,8 @@ func (c *TypeCollector) collectType(typeName *types.TypeName, pkgPath string, do
 				Doc:     doc,
 			}
 
-			for i := 0; i < t.NumMethods(); i++ {
-				info.Methods = append(info.Methods, t.Method(i).Name())
+			for method := range t.Methods() {
+				info.Methods = append(info.Methods, method.Name())
 			}
 
 			c.interfaces[qualifiedName] = info

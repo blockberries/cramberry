@@ -84,7 +84,7 @@ impl Writer {
         self.buffer.clear();
     }
 
-    /// Writes a V2 compact field tag.
+    /// Writes a compact field tag.
     ///
     /// Field number 0 is reserved for the end marker; calling
     /// `write_tag(0, ...)` is a programming error and used to silently

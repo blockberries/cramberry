@@ -422,7 +422,7 @@ func TestEncodingDeterminism(t *testing.T) {
 
 	for _, v := range values {
 		first := AppendFloat64(nil, v)
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			second := AppendFloat64(nil, v)
 			if !bytes.Equal(first, second) {
 				t.Errorf("Non-deterministic encoding for %v: %v != %v", v, first, second)
@@ -434,7 +434,7 @@ func TestEncodingDeterminism(t *testing.T) {
 	// NaN should always produce canonical encoding
 	nan := math.NaN()
 	firstNaN := AppendFloat64(nil, nan)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		secondNaN := AppendFloat64(nil, nan)
 		if !bytes.Equal(firstNaN, secondNaN) {
 			t.Errorf("Non-deterministic NaN encoding: %v != %v", firstNaN, secondNaN)
@@ -447,35 +447,35 @@ func TestEncodingDeterminism(t *testing.T) {
 
 func BenchmarkAppendFixed32(b *testing.B) {
 	buf := make([]byte, 0, 8)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		buf = AppendFixed32(buf[:0], 0x12345678)
 	}
 }
 
 func BenchmarkAppendFixed64(b *testing.B) {
 	buf := make([]byte, 0, 16)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		buf = AppendFixed64(buf[:0], 0x123456789ABCDEF0)
 	}
 }
 
 func BenchmarkDecodeFixed32(b *testing.B) {
 	data := []byte{0x78, 0x56, 0x34, 0x12}
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = DecodeFixed32(data)
 	}
 }
 
 func BenchmarkDecodeFixed64(b *testing.B) {
 	data := []byte{0xF0, 0xDE, 0xBC, 0x9A, 0x78, 0x56, 0x34, 0x12}
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = DecodeFixed64(data)
 	}
 }
 
 func BenchmarkAppendFloat64(b *testing.B) {
 	buf := make([]byte, 0, 16)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		buf = AppendFloat64(buf[:0], math.Pi)
 	}
 }
@@ -483,14 +483,14 @@ func BenchmarkAppendFloat64(b *testing.B) {
 func BenchmarkAppendFloat64_NaN(b *testing.B) {
 	buf := make([]byte, 0, 16)
 	nan := math.NaN()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		buf = AppendFloat64(buf[:0], nan)
 	}
 }
 
 func BenchmarkDecodeFloat64(b *testing.B) {
 	data := AppendFloat64(nil, math.Pi)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = DecodeFloat64(data)
 	}
 }

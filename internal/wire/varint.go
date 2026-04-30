@@ -3,9 +3,9 @@ package wire
 
 import "errors"
 
-// Maximum number of bytes for a varint-encoded uint64.
-// A uint64 has 64 bits, and each varint byte encodes 7 bits,
-// so we need ceil(64/7) = 10 bytes maximum.
+// MaxVarintLen64 is the maximum number of bytes for a varint-encoded uint64.
+// A uint64 has 64 bits, and each varint byte encodes 7 bits, so we need
+// ceil(64/7) = 10 bytes maximum.
 const MaxVarintLen64 = 10
 
 // Errors for varint decoding.
@@ -79,7 +79,7 @@ func DecodeUvarint(data []byte) (uint64, int, error) {
 	var v uint64
 	var shift uint
 
-	for i := 0; i < len(data); i++ {
+	for i := range data {
 		if i >= MaxVarintLen64 {
 			return 0, 0, ErrVarintTooLong
 		}

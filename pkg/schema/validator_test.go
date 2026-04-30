@@ -1184,3 +1184,79 @@ message Foo @128 {
 		}
 	}
 }
+
+// Regression: empty enum was silently accepted. The codegen would
+// emit `const ()` (legal Go but useless). Now rejected at validate
+// time.
+func TestValidate_EmptyEnumRejected(t *testing.T) {
+	s := &Schema{
+		Package: &Package{Name: "x"},
+		Enums: []*Enum{
+			{Name: "E", Values: nil},
+		},
+	}
+	errs := Validate(s)
+	if len(errs) == 0 {
+		t.Fatal("empty enum should be rejected")
+	}
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Message, "must have at least one value") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected 'must have at least one value' error, got: %v", errs)
+	}
+}
+
+// Regression: TypeID > wire.MaxFieldNumber was silently accepted. The
+// validator now caps both message TypeIDs and interface-impl TypeIDs.
+func TestValidate_TypeIDExceedsMaxRejected(t *testing.T) {
+	cases := []struct {
+		name   string
+		schema *Schema
+	}{
+		{
+			name: "message TypeID",
+			schema: &Schema{
+				Package: &Package{Name: "x"},
+				Messages: []*Message{
+					{Name: "M", TypeID: 999999999, Fields: []*Field{
+						{Name: "x", Number: 1, Type: &NamedType{Name: "int32"}},
+					}},
+				},
+			},
+		},
+		{
+			name: "interface impl TypeID",
+			schema: &Schema{
+				Package: &Package{Name: "x"},
+				Messages: []*Message{{Name: "Dog", Fields: []*Field{
+					{Name: "name", Number: 1, Type: &NamedType{Name: "string"}},
+				}}},
+				Interfaces: []*Interface{
+					{Name: "I", Implementations: []*Implementation{
+						{TypeID: 999999999, Type: &NamedType{Name: "Dog"}},
+					}},
+				},
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			errs := Validate(tc.schema)
+			found := false
+			for _, e := range errs {
+				if strings.Contains(e.Message, "exceeds maximum") {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("expected 'exceeds maximum' error, got: %v", errs)
+			}
+		})
+	}
+}

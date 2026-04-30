@@ -141,8 +141,30 @@ The `Registry` maps a `TypeID` to a Go/TS/Rust type:
 - `0–63` reserved for built-in primitives.
 - `64–127` reserved for stdlib.
 - `128+` for user types.
+- TypeID upper bound: `wire.MaxFieldNumber` (2³⁰ − 1). Validator
+  rejects schemas declaring `@TypeID` outside `[128, 2³⁰−1]`.
 
-Generated `EncodeAny` / `DecodeAny` use the registry to dispatch on `TypeID`.
+A schema with `interface Animal { 128 = Dog; 129 = Cat; }` plus a
+field `Animal pet = 1` causes each generator to emit:
+
+- A polymorphic *type* representation (Go interface, Rust enum,
+  TS tagged union with a `kind` discriminator and `Animal.dog(...)`
+  factory helpers).
+- An `Encode<Iface>` / `Decode<Iface>` pair that writes
+  `[type_id varint] [concrete-body 0x00]` inside the surrounding
+  length-prefix. Mirrors the Go reflection marshaller's
+  `encodeInterface` so all runtimes produce byte-identical wire
+  output.
+- (when `-json` is enabled) `ToJSON<Iface>` / `FromJSON<Iface>`
+  pair that emits a tagged JSON object
+  `{"_type": "Variant", ...inner-fields-flat}`. The discriminator
+  is spliced in by the codegen, NOT by serde / runtime JSON, so
+  cramberry's deterministic-JSON rules (integers-as-strings,
+  base64 bytes, sorted map keys) are honoured uniformly.
+
+The runtime `Registry` is the source of truth for the reflection
+path; the codegen path knows the TypeIDs from the schema directly
+and doesn't need a runtime registration.
 
 ## Streaming
 
@@ -220,13 +242,25 @@ Hand-written, recursive-descent parser. Lexer accepts hex literals
 
 Validator catches:
 - Duplicate field numbers, undefined types, broken enum values.
+- Duplicate `@TypeID` across messages (would route polymorphic
+  decoding to whichever was registered last and silently corrupt).
+- TypeIDs outside `[128, wire.MaxFieldNumber]`: rejects both
+  reserved-range (1-127) and beyond-spec (≥ 2³⁰) values for
+  messages and interface implementations alike.
 - Illegal map key types (bytes / floats / complex / **bool** are rejected).
 - Stacked field modifiers (`required repeated`, `optional repeated`).
-- Reserved type-ID range usage: user-declared `@N` IDs must be ≥ 128
-  (1-63 builtin reserved, 64-127 stdlib reserved).
+- Field-modifier evolution that would silently break decoders:
+  `optional → required` is reported as breaking; the reverse
+  emits a warning.
+- Empty enums (zero-variant enums compile to `const ()` blocks
+  that are useless; rejected up front).
 - Enums missing a 0-valued variant (cross-language default consistency).
 - Imports that escape the importing file's directory and any search-path
   entry (containment check; `import "../../etc/passwd"` is rejected).
+
+Warnings (e.g. field number in protobuf-reserved range 19000-19999)
+are propagated through the loader to the CLI; `cramberry validate`
+exits 0 on clean schemas, 1 on errors, 2 on warnings-only.
 
 `compat.go` checks schema evolution (added/removed fields, type changes).
 `schema.WriteToFile` is atomic via `internal/atomicfile` (temp + rename
@@ -257,16 +291,26 @@ output that wouldn't compile.
 **3. Byte-parity (`make codegen-parity-check`)**
 
 End-to-end probe: generate Go, Rust, and TypeScript code from
-`scripts/parity_fixture.cram` (a schema covering all common drift
-hotspots — scalars, repeated, nested, maps, optional, enum, recursive),
-encode the same logical fixture through each, and assert every byte is
-identical:
+`scripts/parity_fixture.cram` (a schema covering every common drift
+hotspot — scalars, repeated of scalar, repeated of message, nested
+struct, maps with string- and int- keys, optional pointer / non-pointer,
+enum with 0-default, recursive type, polymorphic interface field,
+multi-byte varint length prefix, omit-empty paths), encode the same
+logical fixture through each, and assert byte-identical output for
+BOTH the wire-format *and* the deterministic-JSON output:
 
 ```
 Go reflection == Go codegen == Rust codegen == TS codegen
+                  (binary)
+                  (JSON)
 ```
 
-Any byte-stream divergence — even one byte — fails the build.
+Any byte-stream divergence — wire or JSON — fails the build. The
+JSON byte-parity check was the most productive layer of testing
+this stack has: enabling it turned up multiple cross-runtime
+divergences (Rust polymorphic JSON using serde_json numeric
+formatting, TS encoding enums by number instead of name, etc.)
+that the wire-format-only check missed.
 
 `make integration-test` runs all three layers.
 
@@ -277,3 +321,20 @@ Any byte-stream divergence — even one byte — fails the build.
 - Field-info cache keyed by `reflect.Type` — first marshal of a type pays
   introspection cost; subsequent ones do not.
 - Zero-copy reads avoid a `[]byte`→`string` copy for hot reads.
+
+## Benchmarks
+
+`internal/bench/` is a cross-language benchmark suite that compares
+Cramberry's encode/decode against Protocol Buffers and JSON in all
+three runtimes:
+
+| Command            | What it runs                                             |
+|--------------------|----------------------------------------------------------|
+| `make bench`       | Go: cramberry codegen + reflection vs protobuf vs JSON   |
+| `make bench-rust`  | Rust criterion: cramberry codegen vs prost vs serde_json |
+| `make bench-ts`    | TypeScript tinybench: cramberry vs protobufjs vs JSON    |
+| `make bench-cross` | All three languages, sequentially                        |
+
+Seven scenarios cover the typical shape range (SmallMessage 18 B →
+Batch1000 17 KB). See `internal/bench/README.md` for setup notes
+and result interpretation.

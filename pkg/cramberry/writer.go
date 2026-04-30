@@ -105,6 +105,13 @@ func (w *Writer) Reset() {
 	w.depth = 0
 	w.err = nil
 	w.frozen = false
+	// Restore opts to DefaultOptions: a writer returned to the pool
+	// after SetOptions(SecureLimits) would otherwise hand the next
+	// pool consumer the prior caller's tighter caps and silently
+	// reject otherwise-valid input. MarshalWithOptions calls
+	// SetOptions immediately after GetWriter, so it's unaffected;
+	// users who call GetWriter directly are.
+	w.opts = DefaultOptions
 }
 
 // SetOptions updates the writer's options.
@@ -178,10 +185,7 @@ func (w *Writer) grow(n int) {
 		return
 	}
 	// Grow by doubling, with a minimum growth
-	newCap := cap(w.buf) * 2
-	if newCap < len(w.buf)+n {
-		newCap = len(w.buf) + n
-	}
+	newCap := max(cap(w.buf)*2, len(w.buf)+n)
 	// Cap growth to avoid excessive allocation
 	if newCap > 256*1024*1024 {
 		newCap = len(w.buf) + n

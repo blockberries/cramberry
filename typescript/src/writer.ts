@@ -62,7 +62,7 @@ export class Writer {
   }
 
   /**
-   * Writes a V2 compact field tag.
+   * Writes a compact field tag.
    */
   writeTag(fieldNumber: number, wireType: WireType): void {
     const tagBytes = encodeTag(fieldNumber, wireType);
@@ -350,7 +350,7 @@ export class Writer {
 
   /**
    * Writes a tagged field with a type reference value.
-   * In V2 format, type references are encoded as Bytes with type ID prefix.
+   * Type references are encoded as Bytes with type ID prefix.
    */
   writeTypeRefField(fieldNumber: number, typeId: TypeID, data: Uint8Array): void {
     this.writeTag(fieldNumber, WireType.Bytes);

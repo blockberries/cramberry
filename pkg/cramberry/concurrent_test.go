@@ -24,11 +24,11 @@ func TestConcurrentMarshal(t *testing.T) {
 	var wg sync.WaitGroup
 	errors := make(chan error, goroutines*iterations)
 
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				data := ConcurrentStruct{
 					ID:      int64(id*iterations + i),
 					Name:    "test",
@@ -72,11 +72,9 @@ func TestConcurrentUnmarshal(t *testing.T) {
 	errors := make(chan error, goroutines*iterations)
 	mismatches := make(chan string, goroutines*iterations)
 
-	for g := 0; g < goroutines; g++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+	for range goroutines {
+		wg.Go(func() {
+			for range iterations {
 				var result ConcurrentStruct
 				if err := Unmarshal(data, &result); err != nil {
 					errors <- err
@@ -89,7 +87,7 @@ func TestConcurrentUnmarshal(t *testing.T) {
 					mismatches <- "Name mismatch"
 				}
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -112,11 +110,11 @@ func TestConcurrentMarshalUnmarshal(t *testing.T) {
 	errors := make(chan error, goroutines*2)
 
 	// Half the goroutines marshal
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				data := ConcurrentStruct{
 					ID:     int64(id*100 + i),
 					Name:   "marshal",
@@ -164,13 +162,13 @@ func TestConcurrentRegistryAccess(t *testing.T) {
 	errors := make(chan error, goroutines*3)
 
 	// Concurrent registrations
-	for g := 0; g < goroutines; g++ {
+	for range goroutines {
 		wg.Add(3)
 
 		// Register different types concurrently
 		go func() {
 			defer wg.Done()
-			_, err := r.RegisterType(reflect.TypeOf(TestType1{}))
+			_, err := r.RegisterType(reflect.TypeFor[TestType1]())
 			if err != nil && err.Error() != "type already registered" {
 				// Ignore "already registered" errors from concurrent registration
 				if _, ok := err.(*RegistrationError); !ok {
@@ -181,7 +179,7 @@ func TestConcurrentRegistryAccess(t *testing.T) {
 
 		go func() {
 			defer wg.Done()
-			_, err := r.RegisterType(reflect.TypeOf(TestType2{}))
+			_, err := r.RegisterType(reflect.TypeFor[TestType2]())
 			if err != nil && err.Error() != "type already registered" {
 				if _, ok := err.(*RegistrationError); !ok {
 					errors <- err
@@ -191,7 +189,7 @@ func TestConcurrentRegistryAccess(t *testing.T) {
 
 		go func() {
 			defer wg.Done()
-			_, err := r.RegisterType(reflect.TypeOf(TestType3{}))
+			_, err := r.RegisterType(reflect.TypeFor[TestType3]())
 			if err != nil && err.Error() != "type already registered" {
 				if _, ok := err.(*RegistrationError); !ok {
 					errors <- err
@@ -218,7 +216,7 @@ func TestConcurrentRegistryLookup(t *testing.T) {
 	r := NewRegistry()
 
 	type LookupType struct{ Value int }
-	id, err := r.RegisterType(reflect.TypeOf(LookupType{}))
+	id, err := r.RegisterType(reflect.TypeFor[LookupType]())
 	if err != nil {
 		t.Fatalf("RegisterType error: %v", err)
 	}
@@ -229,11 +227,9 @@ func TestConcurrentRegistryLookup(t *testing.T) {
 	var wg sync.WaitGroup
 	errors := make(chan error, goroutines*iterations)
 
-	for g := 0; g < goroutines; g++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+	for range goroutines {
+		wg.Go(func() {
+			for i := range iterations {
 				// Lookup by ID
 				reg, ok := r.Lookup(id)
 				if !ok || reg == nil {
@@ -241,7 +237,7 @@ func TestConcurrentRegistryLookup(t *testing.T) {
 				}
 
 				// Lookup by type
-				reg, ok = r.LookupType(reflect.TypeOf(LookupType{}))
+				reg, ok = r.LookupType(reflect.TypeFor[LookupType]())
 				if !ok || reg == nil {
 					errors <- NewDecodeError("Lookup by type failed", nil)
 				}
@@ -252,7 +248,7 @@ func TestConcurrentRegistryLookup(t *testing.T) {
 					errors <- NewDecodeError("TypeIDFor mismatch", nil)
 				}
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -270,11 +266,11 @@ func TestConcurrentWriterPool(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				w := GetWriter()
 				w.WriteString("test data")
 				w.WriteInt32(int32(id*iterations + i))
@@ -307,11 +303,9 @@ func TestConcurrentReaderUsage(t *testing.T) {
 	var wg sync.WaitGroup
 	errors := make(chan error, goroutines*iterations)
 
-	for g := 0; g < goroutines; g++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+	for range goroutines {
+		wg.Go(func() {
+			for range iterations {
 				r := NewReader(testData)
 				s := r.ReadString()
 				if r.Err() != nil {
@@ -330,7 +324,7 @@ func TestConcurrentReaderUsage(t *testing.T) {
 					errors <- NewDecodeError("int32 mismatch", nil)
 				}
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -362,12 +356,12 @@ func TestConcurrentStructInfoCache(t *testing.T) {
 	var wg sync.WaitGroup
 	errors := make(chan error, goroutines*iterations*3)
 
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		wg.Add(3)
 
 		go func(id int) {
 			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				data := CacheTest1{A: int32(id*iterations + i), B: "test"}
 				encoded, err := Marshal(data)
 				if err != nil {
@@ -383,7 +377,7 @@ func TestConcurrentStructInfoCache(t *testing.T) {
 
 		go func(id int) {
 			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				data := CacheTest2{X: float64(id*iterations + i), Y: []byte{1, 2, 3}}
 				encoded, err := Marshal(data)
 				if err != nil {
@@ -399,7 +393,7 @@ func TestConcurrentStructInfoCache(t *testing.T) {
 
 		go func(id int) {
 			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				data := CacheTest3{M: map[string]int32{"k": int32(id*iterations + i)}}
 				encoded, err := Marshal(data)
 				if err != nil {

@@ -500,13 +500,13 @@ func TestStreamWriterBufferSize(t *testing.T) {
 	sw := NewStreamWriterSize(&buf, 16) // Small buffer
 
 	// Write more than buffer size
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		sw.WriteUint32(uint32(i))
 	}
 	sw.Flush()
 
 	sr := NewStreamReader(&buf)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		if v := sr.ReadUint32(); v != uint32(i) {
 			t.Errorf("at %d: expected %d, got %d", i, i, v)
 		}
@@ -541,8 +541,7 @@ func BenchmarkStreamWriter(b *testing.B) {
 	var buf bytes.Buffer
 	sw := NewStreamWriter(&buf)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		buf.Reset()
 		sw.Reset(&buf)
 		sw.WriteUint64(uint64(i))
@@ -561,8 +560,7 @@ func BenchmarkStreamReader(b *testing.B) {
 	sw.Flush()
 	data := buf.Bytes()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sr := NewStreamReader(bytes.NewReader(data))
 		sr.ReadUint64()
 		sr.ReadString()
@@ -640,5 +638,56 @@ func TestStreamReaderSlowSource(t *testing.T) {
 	}
 	if sr.Err() != nil {
 		t.Fatalf("unexpected error: %v", sr.Err())
+	}
+}
+
+// Regression test: StreamReader.ReadUvarint must reject non-canonical
+// (overlong) varints. The non-stream Reader, the Rust stream, and the
+// TS stream all enforce this; the Go stream layer was the odd one out.
+//
+// Triggers: a peer sends a 2-byte varint encoding 0 (0x80 0x00) where
+// the canonical encoding is a single 0x00 byte. Accepting it would let
+// the same logical value hash to different bytes across runtimes.
+func TestStreamReader_RejectsNonCanonicalVarint(t *testing.T) {
+	cases := []struct {
+		name string
+		in   []byte
+	}{
+		{"overlong zero", []byte{0x80, 0x00}},
+		{"overlong one", []byte{0x81, 0x00}},
+		{"three-byte overlong", []byte{0x80, 0x80, 0x00}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sr := NewStreamReader(bytes.NewReader(tc.in))
+			_ = sr.ReadUvarint()
+			if sr.Err() == nil {
+				t.Fatalf("expected non-canonical-varint error for %x, got nil", tc.in)
+			}
+		})
+	}
+}
+
+// Canonical encodings still decode correctly.
+func TestStreamReader_AcceptsCanonicalVarint(t *testing.T) {
+	cases := []struct {
+		in   []byte
+		want uint64
+	}{
+		{[]byte{0x00}, 0},
+		{[]byte{0x01}, 1},
+		{[]byte{0x7f}, 127},
+		{[]byte{0x80, 0x01}, 128},
+		{[]byte{0xac, 0x02}, 300},
+	}
+	for _, tc := range cases {
+		sr := NewStreamReader(bytes.NewReader(tc.in))
+		got := sr.ReadUvarint()
+		if sr.Err() != nil {
+			t.Fatalf("unexpected error decoding %x: %v", tc.in, sr.Err())
+		}
+		if got != tc.want {
+			t.Errorf("decoded %x = %d, want %d", tc.in, got, tc.want)
+		}
 	}
 }

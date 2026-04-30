@@ -22,6 +22,24 @@ message Address {
   string city = 2;
 }
 
+// Polymorphic dispatch: an Animal field carries a TypeID + concrete
+// body. Each generator emits a Encode<Animal>/Decode<Animal> pair that
+// matches the reflection marshaller's encodeInterface. Without this
+// fixture, codegen for interface fields never gets exercised by
+// codegen-parity-check, and bugs in the polymorphic path slip
+// through (the first round of the polymorphism work missed exactly
+// this and produced uncompilable output for all three runtimes).
+message Dog {
+  string name = 1;
+}
+message Cat {
+  string name = 1;
+}
+interface Animal {
+  130 = Dog;
+  131 = Cat;
+}
+
 // Recursive type — message contains a list of itself. Each generator
 // must emit a type definition that can hold its own instances; the
 // parity-check confirms a small tree round-trips byte-identically.
@@ -61,4 +79,24 @@ message Sample {
   int64 zero_count = 26;
   float64 zero_ratio = 27;
   Tree forest = 28;
+  // Repeated scalar with non-Bytes element wire type. Without the
+  // generator's `if f.Repeated → WireType::Bytes` override, the field
+  // tag would carry the element's underlying wire type (SVarint here),
+  // diverging from Go's `WireBytes` and producing different bytes on
+  // decode. Both Rust and TS had this bug at different times; this
+  // field locks it down across all four runtimes.
+  repeated int64 ratings = 29;
+  // Long string whose length prefix exceeds 5 varint bytes... ish.
+  // The fixture builder fills this with 20_000 bytes, requiring a
+  // 3-byte varint length (`varint(20000) = 0xa0 0x9c 0x01`). Anchors
+  // the multi-byte length-prefix decode path on every runtime.
+  // Catches: a 32-bit-capped length-prefix reader (the recent TS
+  // skipValue / readTypeRef bug) would still decode 20_000 fine,
+  // but the codepath at least exercises a non-trivial varint length.
+  string long_string = 30;
+  // Polymorphic interface field. Each runtime emits an
+  // Encode<Animal>/Decode<Animal> helper that writes
+  // [type_id varint][concrete-body 0x00] inside the outer
+  // length-prefix. The fixture always picks Dog (TypeID 130).
+  Animal pet = 31;
 }

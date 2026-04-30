@@ -6,14 +6,14 @@
 //! use cramberry::{Writer, Reader, Result, WireType};
 //!
 //! fn main() -> Result<()> {
-//!     // Encoding (V2 format with end marker)
+//!     // Encoding
 //!     let mut writer = Writer::new();
 //!     writer.write_int32_field(1, 42)?;
 //!     writer.write_string_field(2, "hello")?;
 //!     writer.write_end_marker()?;
 //!     let data = writer.into_bytes();
 //!
-//!     // Decoding (V2 format uses end marker)
+//!     // Decoding
 //!     let mut reader = Reader::new(&data);
 //!     while reader.has_more() {
 //!         let tag = reader.read_tag()?;

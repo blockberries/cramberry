@@ -120,9 +120,15 @@ func TestTypeScriptGeneratorInterface(t *testing.T) {
 
 	output := buf.String()
 
-	// Check union type
-	if !strings.Contains(output, "export type Animal = Dog | Cat;") {
-		t.Errorf("expected Animal union type, got: %s", output)
+	// Check tagged-union type. The earlier assertion expected
+	// `Animal = Dog | Cat` — but that bare-union has no runtime
+	// discriminator, so the encoder couldn't dispatch correctly.
+	// The generator now emits a tagged union with a `kind` field.
+	if !strings.Contains(output, "kind: 'Dog'") || !strings.Contains(output, "kind: 'Cat'") {
+		t.Errorf("expected tagged-union variants for Animal, got: %s", output)
+	}
+	if !strings.Contains(output, "value: Dog") || !strings.Contains(output, "value: Cat") {
+		t.Errorf("expected tagged-union value field for Animal, got: %s", output)
 	}
 
 	// Check type ID mapping
@@ -131,6 +137,14 @@ func TestTypeScriptGeneratorInterface(t *testing.T) {
 	}
 	if !strings.Contains(output, "Dog: 128,") {
 		t.Error("expected Dog type ID")
+	}
+
+	// Check polymorphic encode/decode helpers exist.
+	if !strings.Contains(output, "export function encodeAnimal(") {
+		t.Errorf("expected encodeAnimal function, got: %s", output)
+	}
+	if !strings.Contains(output, "export function decodeAnimal(") {
+		t.Errorf("expected decodeAnimal function, got: %s", output)
 	}
 }
 
@@ -346,5 +360,60 @@ func TestTypeScriptMapWithNonStringKey(t *testing.T) {
 	// Non-string keys should use Map instead of Record
 	if !strings.Contains(output, "intMap: Map<number, string>;") {
 		t.Errorf("expected Map for non-string key, got: %s", output)
+	}
+}
+
+// Regression test: non-optional NamedType / MapType / ArrayType fields
+// must emit unconditionally in TypeScript, matching the Go and Rust
+// generators byte-for-byte. Earlier the TS template wrapped every field
+// in `if (presence)`, silently skipping non-optional composite fields
+// when a type-violating caller passed `undefined` — diverging from
+// Go/Rust which always emit.
+func TestTypeScriptGenerator_NonOptionalComposite_EmitsUnconditionally(t *testing.T) {
+	s := &schema.Schema{
+		Messages: []*schema.Message{
+			{
+				Name: "Inner",
+				Fields: []*schema.Field{
+					{Name: "x", Number: 1, Type: &schema.ScalarType{Name: "int32"}},
+				},
+			},
+			{
+				Name: "Outer",
+				Fields: []*schema.Field{
+					// Non-optional nested message — must always emit.
+					{Name: "inner", Number: 1, Type: &schema.NamedType{Name: "Inner"}},
+					// Non-optional map — must always emit.
+					{Name: "tags", Number: 2, Type: &schema.MapType{
+						Key:   &schema.ScalarType{Name: "string"},
+						Value: &schema.ScalarType{Name: "string"},
+					}},
+				},
+			},
+		},
+	}
+
+	gen := NewTypeScriptGenerator()
+	var buf bytes.Buffer
+	if err := gen.Generate(&buf, s, DefaultOptions()); err != nil {
+		t.Fatalf("generate error: %v", err)
+	}
+	output := buf.String()
+
+	// The non-optional `inner` field must NOT be wrapped in a presence
+	// check. The exact pattern of an unconditional emit is the writeTag
+	// call appearing on a line with no preceding `if` on the same field.
+	if strings.Contains(output, "if (msg.inner !== undefined && msg.inner !== null)") {
+		t.Errorf("non-optional NamedType field 'inner' must emit unconditionally; output wraps it in presence check:\n%s", output)
+	}
+	if strings.Contains(output, "if (msg.tags !== undefined && msg.tags !== null)") {
+		t.Errorf("non-optional MapType field 'tags' must emit unconditionally; output wraps it in presence check:\n%s", output)
+	}
+	// Sanity: the unconditional writeTag MUST still appear for both fields.
+	if !strings.Contains(output, "writer.writeTag(1, WireType.Bytes)") {
+		t.Errorf("expected writeTag for inner field; got:\n%s", output)
+	}
+	if !strings.Contains(output, "writer.writeTag(2, WireType.Bytes)") {
+		t.Errorf("expected writeTag for tags field; got:\n%s", output)
 	}
 }

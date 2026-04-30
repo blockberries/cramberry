@@ -263,20 +263,25 @@ export class StreamReader implements AsyncIterable<Uint8Array> {
   }
 
   /**
-   * Reads a varint from the buffer.
-   * Returns null if at end of stream.
-   * @throws EndOfStreamError if varint is incomplete
+   * Reads a length-delimited-message length prefix (varint64).
+   *
+   * Returns null at clean EOF (no varint started). Throws on partial
+   * varint, on overlong (>10 bytes), on non-canonical encoding (overlong
+   * trailing zero), or when the value exceeds Number.MAX_SAFE_INTEGER.
+   * Mirrors `Reader.readVarint64` + `Reader.readSafeLength` so a stream
+   * receiver decodes Go-encoded frames byte-identically.
    */
   private readVarint(): number | null {
     if (this.pos >= this.buffer.length) {
       return null; // Clean EOF
     }
 
-    let result = 0;
-    let shift = 0;
+    let result = 0n;
+    let shift = 0n;
     const startPos = this.pos;
+    let last = 0;
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 10; i++) {
       if (this.pos >= this.buffer.length) {
         // Incomplete varint - restore position and throw
         this.pos = startPos;
@@ -284,14 +289,35 @@ export class StreamReader implements AsyncIterable<Uint8Array> {
       }
 
       const b = this.buffer[this.pos++];
-      result |= (b & 0x7f) << shift;
-      if ((b & 0x80) === 0) {
-        return result >>> 0; // Ensure unsigned
+      last = b;
+
+      // 10th byte (index 9) can only contribute one more bit of a u64.
+      if (i === 9) {
+        if (b >= 0x80) {
+          throw new DecodeError("Varint overflow: exceeded 10 bytes for message length");
+        }
+        if (b > 1) {
+          throw new DecodeError("Varint overflow: 10th byte must be 0 or 1");
+        }
       }
-      shift += 7;
+
+      result |= (BigInt(b) & 0x7fn) << shift;
+      if ((b & 0x80) === 0) {
+        // Reject non-canonical varints (overlong encoding ending in 0).
+        if (i > 0 && last === 0) {
+          throw new DecodeError("non-canonical varint");
+        }
+        if (result > BigInt(Number.MAX_SAFE_INTEGER)) {
+          throw new DecodeError(
+            `length ${result} exceeds Number.MAX_SAFE_INTEGER`,
+          );
+        }
+        return Number(result);
+      }
+      shift += 7n;
     }
 
-    throw new DecodeError("Varint overflow: exceeded 5 bytes for message length");
+    throw new DecodeError("Varint overflow: exceeded 10 bytes for message length");
   }
 
   /**

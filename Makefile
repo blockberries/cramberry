@@ -1,4 +1,4 @@
-.PHONY: all build test test-short bench lint fmt fmt-check vet generate clean install coverage help
+.PHONY: all build test test-short bench bench-go bench-rust bench-ts bench-cross bench-sizes lint fmt fmt-check vet generate clean install coverage help
 .PHONY: tidy deps verify check ci pre-commit generate-test generate-fixtures
 .PHONY: examples example-basic example-streaming example-polymorphic
 .PHONY: schema-generate schema-extract
@@ -52,8 +52,26 @@ test: ## Run tests with race detection and coverage
 test-short: ## Run tests without race detection (faster)
 	$(GO) test -short $(PKG)
 
-bench: ## Run benchmarks
-	$(GO) test $(BENCHFLAGS) $(PKG)
+bench: bench-go ## Run Go benchmarks (alias for bench-go)
+
+bench-go: ## Run Go benchmarks (cramberry codegen + reflection vs protobuf vs JSON)
+	$(GO) test $(BENCHFLAGS) ./internal/bench/...
+
+bench-rust: ## Run Rust criterion benchmarks (cramberry codegen vs prost vs serde_json). Requires protoc.
+	@command -v protoc >/dev/null 2>&1 || { \
+		echo "protoc is required for Rust benchmarks (prost-build dependency)."; \
+		echo "Install with: brew install protobuf"; \
+		exit 1; \
+	}
+	@cd internal/bench/rust && cargo bench --bench encode_decode
+
+bench-ts: ts-build ## Run TypeScript tinybench benchmarks (cramberry codegen vs protobufjs vs JSON)
+	@cd internal/bench/ts && npm install --silent --no-audit --no-fund && npx --no -- tsx src/bench.ts
+
+bench-cross: bench-go bench-rust bench-ts ## Run benchmarks across Go, Rust, and TypeScript
+
+bench-sizes: ## Print encoded-size comparison for every benchmark fixture
+	$(GO) test ./internal/bench/... -run TestEncodedSizes -v
 
 coverage: test ## Generate coverage report
 	$(GO) tool cover -html=coverage.out -o coverage.html

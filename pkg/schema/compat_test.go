@@ -393,3 +393,79 @@ func TestBreakingChange_Error(t *testing.T) {
 		t.Error("Error() should not return empty string")
 	}
 }
+
+// optional → required is breaking: an old encoder that omitted the
+// field would produce a message a new (strict) decoder rejects.
+func TestCheckCompatibility_OptionalToRequired(t *testing.T) {
+	old := &Schema{
+		Messages: []*Message{
+			{
+				Name: "User",
+				Fields: []*Field{
+					{Name: "email", Number: 1, Type: &NamedType{Name: "string"}, Optional: true},
+				},
+			},
+		},
+	}
+
+	new := &Schema{
+		Messages: []*Message{
+			{
+				Name: "User",
+				Fields: []*Field{
+					{Name: "email", Number: 1, Type: &NamedType{Name: "string"}, Required: true},
+				},
+			},
+		},
+	}
+
+	report := CheckCompatibility(old, new)
+	if report.IsCompatible() {
+		t.Fatal("optional → required must be flagged as breaking")
+	}
+	found := false
+	for _, b := range report.Breaking {
+		if b.Type == FieldOptionalToRequired {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected FieldOptionalToRequired, got %v", report.Breaking)
+	}
+}
+
+// required → optional is wire-compatible but worth a warning so the
+// schema author knows downstream consumers can no longer assume
+// presence.
+func TestCheckCompatibility_RequiredToOptional(t *testing.T) {
+	old := &Schema{
+		Messages: []*Message{
+			{
+				Name: "User",
+				Fields: []*Field{
+					{Name: "email", Number: 1, Type: &NamedType{Name: "string"}, Required: true},
+				},
+			},
+		},
+	}
+
+	new := &Schema{
+		Messages: []*Message{
+			{
+				Name: "User",
+				Fields: []*Field{
+					{Name: "email", Number: 1, Type: &NamedType{Name: "string"}, Optional: true},
+				},
+			},
+		},
+	}
+
+	report := CheckCompatibility(old, new)
+	if !report.IsCompatible() {
+		t.Errorf("required → optional should be compatible (warning only), got breaking: %v", report.Breaking)
+	}
+	if len(report.Warnings) == 0 {
+		t.Error("expected a warning for required → optional relaxation")
+	}
+}

@@ -96,28 +96,28 @@ var (
 // Marshal benchmarks
 func BenchmarkMarshalSmall(b *testing.B) {
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = Marshal(benchSmall)
 	}
 }
 
 func BenchmarkMarshalMedium(b *testing.B) {
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = Marshal(benchMedium)
 	}
 }
 
 func BenchmarkMarshalLarge(b *testing.B) {
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = Marshal(benchLarge)
 	}
 }
 
 func BenchmarkMarshalNested(b *testing.B) {
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = Marshal(benchNested)
 	}
 }
@@ -126,8 +126,8 @@ func BenchmarkMarshalNested(b *testing.B) {
 func BenchmarkUnmarshalSmall(b *testing.B) {
 	data, _ := Marshal(benchSmall)
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		var result BenchSmall
 		_ = Unmarshal(data, &result)
 	}
@@ -136,8 +136,8 @@ func BenchmarkUnmarshalSmall(b *testing.B) {
 func BenchmarkUnmarshalMedium(b *testing.B) {
 	data, _ := Marshal(benchMedium)
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		var result BenchMedium
 		_ = Unmarshal(data, &result)
 	}
@@ -146,8 +146,8 @@ func BenchmarkUnmarshalMedium(b *testing.B) {
 func BenchmarkUnmarshalLarge(b *testing.B) {
 	data, _ := Marshal(benchLarge)
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		var result BenchLarge
 		_ = Unmarshal(data, &result)
 	}
@@ -156,8 +156,8 @@ func BenchmarkUnmarshalLarge(b *testing.B) {
 func BenchmarkUnmarshalNested(b *testing.B) {
 	data, _ := Marshal(benchNested)
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		var result BenchNested
 		_ = Unmarshal(data, &result)
 	}
@@ -166,7 +166,7 @@ func BenchmarkUnmarshalNested(b *testing.B) {
 // Writer pool benchmarks
 func BenchmarkMarshalWithPool(b *testing.B) {
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		w := GetWriter()
 		// Manually encode using writer
 		w.WriteUvarint(2) // field count
@@ -186,8 +186,8 @@ func BenchmarkMarshalInt32Slice(b *testing.B) {
 		slice[i] = int32(i * 2)
 	}
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_, _ = Marshal(slice)
 	}
 }
@@ -199,8 +199,8 @@ func BenchmarkUnmarshalInt32Slice(b *testing.B) {
 	}
 	data, _ := Marshal(slice)
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		var result []int32
 		_ = Unmarshal(data, &result)
 	}
@@ -212,8 +212,8 @@ func BenchmarkMarshalStringSlice(b *testing.B) {
 		slice[i] = "string number " + string(rune('0'+i%10))
 	}
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_, _ = Marshal(slice)
 	}
 }
@@ -221,25 +221,25 @@ func BenchmarkMarshalStringSlice(b *testing.B) {
 // Map benchmarks
 func BenchmarkMarshalMap(b *testing.B) {
 	m := make(map[string]int32, 20)
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		m["key"+string(rune('a'+i))] = int32(i * 10)
 	}
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_, _ = Marshal(m)
 	}
 }
 
 func BenchmarkUnmarshalMap(b *testing.B) {
 	m := make(map[string]int32, 20)
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		m["key"+string(rune('a'+i))] = int32(i * 10)
 	}
 	data, _ := Marshal(m)
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		var result map[string]int32
 		_ = Unmarshal(data, &result)
 	}
@@ -248,7 +248,7 @@ func BenchmarkUnmarshalMap(b *testing.B) {
 // Comparison with JSON
 func BenchmarkJSONMarshalSmall(b *testing.B) {
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = json.Marshal(benchSmall)
 	}
 }
@@ -256,8 +256,8 @@ func BenchmarkJSONMarshalSmall(b *testing.B) {
 func BenchmarkJSONUnmarshalSmall(b *testing.B) {
 	data, _ := json.Marshal(benchSmall)
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		var result BenchSmall
 		_ = json.Unmarshal(data, &result)
 	}
@@ -265,7 +265,7 @@ func BenchmarkJSONUnmarshalSmall(b *testing.B) {
 
 func BenchmarkJSONMarshalMedium(b *testing.B) {
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = json.Marshal(benchMedium)
 	}
 }
@@ -273,8 +273,8 @@ func BenchmarkJSONMarshalMedium(b *testing.B) {
 func BenchmarkJSONUnmarshalMedium(b *testing.B) {
 	data, _ := json.Marshal(benchMedium)
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		var result BenchMedium
 		_ = json.Unmarshal(data, &result)
 	}
@@ -282,7 +282,7 @@ func BenchmarkJSONUnmarshalMedium(b *testing.B) {
 
 func BenchmarkJSONMarshalLarge(b *testing.B) {
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = json.Marshal(benchLarge)
 	}
 }
@@ -290,8 +290,8 @@ func BenchmarkJSONMarshalLarge(b *testing.B) {
 func BenchmarkJSONUnmarshalLarge(b *testing.B) {
 	data, _ := json.Marshal(benchLarge)
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		var result BenchLarge
 		_ = json.Unmarshal(data, &result)
 	}
@@ -301,8 +301,8 @@ func BenchmarkJSONUnmarshalLarge(b *testing.B) {
 func BenchmarkStreamWriteMedium(b *testing.B) {
 	var buf bytes.Buffer
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		buf.Reset()
 		sw := NewStreamWriter(&buf)
 		sw.WriteDelimited(&benchMedium)
@@ -318,8 +318,8 @@ func BenchmarkStreamReadMedium(b *testing.B) {
 	data := buf.Bytes()
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		sr := NewStreamReader(bytes.NewReader(data))
 		var result BenchMedium
 		sr.ReadDelimited(&result)
@@ -329,11 +329,11 @@ func BenchmarkStreamReadMedium(b *testing.B) {
 func BenchmarkStreamWriteMultiple(b *testing.B) {
 	var buf bytes.Buffer
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		buf.Reset()
 		sw := NewStreamWriter(&buf)
-		for j := 0; j < 10; j++ {
+		for range 10 {
 			sw.WriteDelimited(&benchSmall)
 		}
 		sw.Flush()
@@ -343,17 +343,17 @@ func BenchmarkStreamWriteMultiple(b *testing.B) {
 func BenchmarkStreamReadMultiple(b *testing.B) {
 	var buf bytes.Buffer
 	sw := NewStreamWriter(&buf)
-	for j := 0; j < 10; j++ {
+	for range 10 {
 		sw.WriteDelimited(&benchSmall)
 	}
 	sw.Flush()
 	data := buf.Bytes()
 
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		sr := NewStreamReader(bytes.NewReader(data))
-		for j := 0; j < 10; j++ {
+		for range 10 {
 			var result BenchSmall
 			sr.ReadDelimited(&result)
 		}
@@ -410,8 +410,8 @@ func TestEncodingSizeComparison(t *testing.T) {
 func BenchmarkWriteInt32(b *testing.B) {
 	w := NewWriter()
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for i := 0; b.Loop(); i++ {
 		w.Reset()
 		w.WriteInt32(int32(i))
 	}
@@ -421,8 +421,8 @@ func BenchmarkWriteString(b *testing.B) {
 	s := "this is a test string for benchmarking"
 	w := NewWriter()
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		w.Reset()
 		w.WriteString(s)
 	}
@@ -433,8 +433,8 @@ func BenchmarkReadInt32(b *testing.B) {
 	w.WriteSvarint(12345)
 	data := w.BytesCopy()
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		r := NewReader(data)
 		r.ReadInt32()
 	}
@@ -445,8 +445,8 @@ func BenchmarkReadString(b *testing.B) {
 	w.WriteString("this is a test string for benchmarking")
 	data := w.BytesCopy()
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		r := NewReader(data)
 		r.ReadString()
 	}

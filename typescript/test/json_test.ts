@@ -15,7 +15,8 @@ import {
   parseNumberFromJSON,
   sortMapKeysLexicographic,
   escapeJSONString,
-} from 'cramberry';
+} from '@cramberry/runtime';
+import type { ReaderOptions } from '@cramberry/runtime';
 
 // Helper functions for encoding/decoding
 function writeArray<T>(writer: Writer, arr: T[], writeElem: (w: Writer, v: T) => void): void {
@@ -29,8 +30,9 @@ function writeArray<T>(writer: Writer, arr: T[], writeElem: (w: Writer, v: T) =>
 
 function readArray<T>(reader: Reader, readElem: (r: Reader) => T): T[] {
   const data = reader.readLengthPrefixedBytes();
-  const subReader = new Reader(data);
+  const subReader = new Reader(data, { limits: reader.getLimits(), validateUtf8: reader.getValidateUtf8() });
   const len = subReader.readVarint();
+  subReader.checkArrayLimit(len);
   const result: T[] = [];
   for (let i = 0; i < len; i++) {
     result.push(readElem(subReader));
@@ -38,9 +40,44 @@ function readArray<T>(reader: Reader, readElem: (r: Reader) => T): T[] {
   return result;
 }
 
+// compareMapKeys provides the canonical map-key ordering used on the wire.
+// String keys compare by UTF-8 byte order (matching Go's sort.Strings).
+// Numeric keys compare numerically with NaN sorted last and -0 == +0.
+// BigInt keys compare numerically. Boolean keys order false before true.
+const __mapKeyEncoder = new TextEncoder();
+function compareMapKeys(a: unknown, b: unknown): number {
+  if (typeof a === 'string' && typeof b === 'string') {
+    const ab = __mapKeyEncoder.encode(a);
+    const bb = __mapKeyEncoder.encode(b);
+    const n = Math.min(ab.length, bb.length);
+    for (let i = 0; i < n; i++) if (ab[i] !== bb[i]) return ab[i] - bb[i];
+    return ab.length - bb.length;
+  }
+  if (typeof a === 'number' && typeof b === 'number') {
+    const aNaN = Number.isNaN(a), bNaN = Number.isNaN(b);
+    if (aNaN && bNaN) return 0; // payloads are not observable in JS
+    if (aNaN) return 1;
+    if (bNaN) return -1;
+    return a < b ? -1 : a > b ? 1 : 0; // -0 and +0 compare equal here
+  }
+  if (typeof a === 'bigint' && typeof b === 'bigint') {
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+  if (typeof a === 'boolean' && typeof b === 'boolean') {
+    return a === b ? 0 : a ? 1 : -1;
+  }
+  // Mixed types: fall back to string comparison so the ordering is at least
+  // total, even if the schema validator should have rejected this.
+  return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
+}
+
 function writeMap<K, V>(writer: Writer, map: Map<K, V> | Record<string, V>, writeKey: (w: Writer, k: K) => void, writeVal: (w: Writer, v: V) => void): void {
   const subWriter = new Writer();
   const entries = map instanceof Map ? Array.from(map.entries()) : Object.entries(map);
+  // Sort by key for deterministic output. Map iteration order is
+  // implementation-defined and varies per insertion order; the wire format
+  // requires a canonical order matching the Go reflection marshaller.
+  entries.sort((a, b) => compareMapKeys(a[0], b[0]));
   subWriter.writeVarint(entries.length);
   for (const [k, v] of entries) {
     writeKey(subWriter, k as K);
@@ -51,8 +88,9 @@ function writeMap<K, V>(writer: Writer, map: Map<K, V> | Record<string, V>, writ
 
 function readMap<K, V>(reader: Reader, readKey: (r: Reader) => K, readVal: (r: Reader) => V): Map<K, V> {
   const data = reader.readLengthPrefixedBytes();
-  const subReader = new Reader(data);
+  const subReader = new Reader(data, { limits: reader.getLimits(), validateUtf8: reader.getValidateUtf8() });
   const len = subReader.readVarint();
+  subReader.checkMapLimit(len);
   const result = new Map<K, V>();
   for (let i = 0; i < len; i++) {
     const k = readKey(subReader);
@@ -89,83 +127,83 @@ stringVal: string;
 bytesVal: Uint8Array;
 }
 
-/** Encodes a ScalarTypes to the writer using V2 wire format. */
+/** Encodes a ScalarTypes to the writer. */
 export function encodeScalarTypes(writer: Writer, msg: ScalarTypes): void {
 
   // Field 1: bool_val
-  if (msg.boolVal !== undefined && msg.boolVal !== null) {
+  if (msg.boolVal !== undefined && msg.boolVal !== null && msg.boolVal) {
     writer.writeTag(1, WireType.Varint);
     writer.writeBool(msg.boolVal);
   }
 
   // Field 2: int8_val
-  if (msg.int8Val !== undefined && msg.int8Val !== null) {
+  if (msg.int8Val !== undefined && msg.int8Val !== null && msg.int8Val !== 0) {
     writer.writeTag(2, WireType.SVarint);
     writer.writeSVarint(msg.int8Val);
   }
 
   // Field 3: int16_val
-  if (msg.int16Val !== undefined && msg.int16Val !== null) {
+  if (msg.int16Val !== undefined && msg.int16Val !== null && msg.int16Val !== 0) {
     writer.writeTag(3, WireType.SVarint);
     writer.writeSVarint(msg.int16Val);
   }
 
   // Field 4: int32_val
-  if (msg.int32Val !== undefined && msg.int32Val !== null) {
+  if (msg.int32Val !== undefined && msg.int32Val !== null && msg.int32Val !== 0) {
     writer.writeTag(4, WireType.SVarint);
     writer.writeSVarint(msg.int32Val);
   }
 
   // Field 5: int64_val
-  if (msg.int64Val !== undefined && msg.int64Val !== null) {
+  if (msg.int64Val !== undefined && msg.int64Val !== null && msg.int64Val !== 0n) {
     writer.writeTag(5, WireType.SVarint);
     writer.writeSVarint64(msg.int64Val);
   }
 
   // Field 6: uint8_val
-  if (msg.uint8Val !== undefined && msg.uint8Val !== null) {
+  if (msg.uint8Val !== undefined && msg.uint8Val !== null && msg.uint8Val !== 0) {
     writer.writeTag(6, WireType.Varint);
     writer.writeVarint(msg.uint8Val);
   }
 
   // Field 7: uint16_val
-  if (msg.uint16Val !== undefined && msg.uint16Val !== null) {
+  if (msg.uint16Val !== undefined && msg.uint16Val !== null && msg.uint16Val !== 0) {
     writer.writeTag(7, WireType.Varint);
     writer.writeVarint(msg.uint16Val);
   }
 
   // Field 8: uint32_val
-  if (msg.uint32Val !== undefined && msg.uint32Val !== null) {
+  if (msg.uint32Val !== undefined && msg.uint32Val !== null && msg.uint32Val !== 0) {
     writer.writeTag(8, WireType.Varint);
     writer.writeVarint(msg.uint32Val);
   }
 
   // Field 9: uint64_val
-  if (msg.uint64Val !== undefined && msg.uint64Val !== null) {
+  if (msg.uint64Val !== undefined && msg.uint64Val !== null && msg.uint64Val !== 0n) {
     writer.writeTag(9, WireType.Varint);
     writer.writeVarint64(msg.uint64Val);
   }
 
   // Field 10: float32_val
-  if (msg.float32Val !== undefined && msg.float32Val !== null) {
+  if (msg.float32Val !== undefined && msg.float32Val !== null && msg.float32Val !== 0) {
     writer.writeTag(10, WireType.Fixed32);
     writer.writeFloat32(msg.float32Val);
   }
 
   // Field 11: float64_val
-  if (msg.float64Val !== undefined && msg.float64Val !== null) {
+  if (msg.float64Val !== undefined && msg.float64Val !== null && msg.float64Val !== 0) {
     writer.writeTag(11, WireType.Fixed64);
     writer.writeFloat64(msg.float64Val);
   }
 
   // Field 12: string_val
-  if (msg.stringVal !== undefined && msg.stringVal !== null) {
+  if (msg.stringVal !== undefined && msg.stringVal !== null && msg.stringVal.length > 0) {
     writer.writeTag(12, WireType.Bytes);
     writer.writeString(msg.stringVal);
   }
 
   // Field 13: bytes_val
-  if (msg.bytesVal !== undefined && msg.bytesVal !== null) {
+  if (msg.bytesVal !== undefined && msg.bytesVal !== null && msg.bytesVal.length > 0) {
     writer.writeTag(13, WireType.Bytes);
     writer.writeLengthPrefixedBytes(msg.bytesVal);
   }
@@ -173,15 +211,15 @@ export function encodeScalarTypes(writer: Writer, msg: ScalarTypes): void {
   writer.writeEndMarker();
 }
 
-/** Decodes a ScalarTypes from the reader using V2 wire format. */
+/** Decodes a ScalarTypes from the reader. */
 export function decodeScalarTypes(reader: Reader): ScalarTypes {
   const result: Partial<ScalarTypes> = {};
 
   while (true) {
-    const { fieldNum, wireType } = reader.readTag();
-    if (fieldNum === 0) break; // End marker
+    const { fieldNumber, wireType } = reader.readTag();
+    if (fieldNumber === 0) break; // End marker
 
-    switch (fieldNum) {
+    switch (fieldNumber) {
       case 1:
         result.boolVal = reader.readBool();
         break;
@@ -237,8 +275,8 @@ export function marshalScalarTypes(msg: ScalarTypes): Uint8Array {
 }
 
 /** Unmarshals a ScalarTypes from bytes. */
-export function unmarshalScalarTypes(data: Uint8Array): ScalarTypes {
-  const reader = new Reader(data);
+export function unmarshalScalarTypes(data: Uint8Array, opts?: ReaderOptions): ScalarTypes {
+  const reader = new Reader(data, opts);
   return decodeScalarTypes(reader);
 }
 
@@ -308,8 +346,10 @@ export function fromJSON_ScalarTypes(json: string): ScalarTypes {
     throw new Error('expected JSON object');
   }
 
-  // Check for unknown fields (strict mode)
-  const allowedFields = new Set([
+  // Check for unknown fields (strict mode). Explicit string type
+  // arg keeps tsc --strict happy when the message has zero fields
+  // (otherwise the empty array literal infers as never[]).
+  const allowedFields = new Set<string>([
     'bool_val',
     'int8_val',
     'int16_val',
@@ -341,42 +381,42 @@ export function fromJSON_ScalarTypes(json: string): ScalarTypes {
 
   if ('int8_val' in obj) {
     const value = obj['int8_val'];
-    msg.int8Val = parseNumberFromJSON(value);
+    msg.int8Val = parseNumberFromJSON(value as string | number);
   }
 
   if ('int16_val' in obj) {
     const value = obj['int16_val'];
-    msg.int16Val = parseNumberFromJSON(value);
+    msg.int16Val = parseNumberFromJSON(value as string | number);
   }
 
   if ('int32_val' in obj) {
     const value = obj['int32_val'];
-    msg.int32Val = parseNumberFromJSON(value);
+    msg.int32Val = parseNumberFromJSON(value as string | number);
   }
 
   if ('int64_val' in obj) {
     const value = obj['int64_val'];
-    msg.int64Val = parseBigIntFromJSON(value);
+    msg.int64Val = parseBigIntFromJSON(value as string | number);
   }
 
   if ('uint8_val' in obj) {
     const value = obj['uint8_val'];
-    msg.uint8Val = parseNumberFromJSON(value);
+    msg.uint8Val = parseNumberFromJSON(value as string | number);
   }
 
   if ('uint16_val' in obj) {
     const value = obj['uint16_val'];
-    msg.uint16Val = parseNumberFromJSON(value);
+    msg.uint16Val = parseNumberFromJSON(value as string | number);
   }
 
   if ('uint32_val' in obj) {
     const value = obj['uint32_val'];
-    msg.uint32Val = parseNumberFromJSON(value);
+    msg.uint32Val = parseNumberFromJSON(value as string | number);
   }
 
   if ('uint64_val' in obj) {
     const value = obj['uint64_val'];
-    msg.uint64Val = parseBigIntFromJSON(value);
+    msg.uint64Val = parseBigIntFromJSON(value as string | number);
   }
 
   if ('float32_val' in obj) {
@@ -410,47 +450,47 @@ ints: bigint[];
 bools: boolean[];
 }
 
-/** Encodes a RepeatedTypes to the writer using V2 wire format. */
+/** Encodes a RepeatedTypes to the writer. */
 export function encodeRepeatedTypes(writer: Writer, msg: RepeatedTypes): void {
 
   // Field 1: strings
-  if (msg.strings !== undefined && msg.strings !== null) {
+  if (msg.strings !== undefined && msg.strings !== null && msg.strings.length > 0) {
     writer.writeTag(1, WireType.Bytes);
     writeArray(writer, msg.strings, (w, v) => { w.writeString(v) });
   }
 
   // Field 2: ints
-  if (msg.ints !== undefined && msg.ints !== null) {
-    writer.writeTag(2, WireType.SVarint);
+  if (msg.ints !== undefined && msg.ints !== null && msg.ints.length > 0) {
+    writer.writeTag(2, WireType.Bytes);
     writeArray(writer, msg.ints, (w, v) => { w.writeSVarint64(v) });
   }
 
   // Field 3: bools
-  if (msg.bools !== undefined && msg.bools !== null) {
-    writer.writeTag(3, WireType.Varint);
+  if (msg.bools !== undefined && msg.bools !== null && msg.bools.length > 0) {
+    writer.writeTag(3, WireType.Bytes);
     writeArray(writer, msg.bools, (w, v) => { w.writeBool(v) });
   }
 // End marker
   writer.writeEndMarker();
 }
 
-/** Decodes a RepeatedTypes from the reader using V2 wire format. */
+/** Decodes a RepeatedTypes from the reader. */
 export function decodeRepeatedTypes(reader: Reader): RepeatedTypes {
   const result: Partial<RepeatedTypes> = {};
 
   while (true) {
-    const { fieldNum, wireType } = reader.readTag();
-    if (fieldNum === 0) break; // End marker
+    const { fieldNumber, wireType } = reader.readTag();
+    if (fieldNumber === 0) break; // End marker
 
-    switch (fieldNum) {
+    switch (fieldNumber) {
       case 1:
-        result.strings = readArray(reader, (r) => reader.readString());
+        result.strings = readArray(reader, (r) => r.readString());
         break;
       case 2:
-        result.ints = readArray(reader, (r) => reader.readSVarint64());
+        result.ints = readArray(reader, (r) => r.readSVarint64());
         break;
       case 3:
-        result.bools = readArray(reader, (r) => reader.readBool());
+        result.bools = readArray(reader, (r) => r.readBool());
         break;
       default:
         reader.skipValue(wireType);
@@ -468,8 +508,8 @@ export function marshalRepeatedTypes(msg: RepeatedTypes): Uint8Array {
 }
 
 /** Unmarshals a RepeatedTypes from bytes. */
-export function unmarshalRepeatedTypes(data: Uint8Array): RepeatedTypes {
-  const reader = new Reader(data);
+export function unmarshalRepeatedTypes(data: Uint8Array, opts?: ReaderOptions): RepeatedTypes {
+  const reader = new Reader(data, opts);
   return decodeRepeatedTypes(reader);
 }
 
@@ -517,8 +557,10 @@ export function fromJSON_RepeatedTypes(json: string): RepeatedTypes {
     throw new Error('expected JSON object');
   }
 
-  // Check for unknown fields (strict mode)
-  const allowedFields = new Set([
+  // Check for unknown fields (strict mode). Explicit string type
+  // arg keeps tsc --strict happy when the message has zero fields
+  // (otherwise the empty array literal infers as never[]).
+  const allowedFields = new Set<string>([
     'strings',
     'ints',
     'bools',
@@ -550,7 +592,7 @@ export function fromJSON_RepeatedTypes(json: string): RepeatedTypes {
     msg.ints = [];
     for (const elem of value) {
       let decoded: bigint;
-      decoded = parseBigIntFromJSON(elem);
+      decoded = parseBigIntFromJSON(elem as string | number);
       msg.ints.push(decoded);
     }
   }
@@ -572,42 +614,54 @@ export function fromJSON_RepeatedTypes(json: string): RepeatedTypes {
 
 
 export interface MapTypes {
-stringMap: Record<string, string>;
-intMap: Record<string, bigint>;
+stringMap: Map<string, string>;
+intMap: Map<string, bigint>;
+intKeyed: Map<number, string>;
+uintKeyed: Map<bigint, string>;
 }
 
-/** Encodes a MapTypes to the writer using V2 wire format. */
+/** Encodes a MapTypes to the writer. */
 export function encodeMapTypes(writer: Writer, msg: MapTypes): void {
 
   // Field 1: string_map
-  if (msg.stringMap !== undefined && msg.stringMap !== null) {
-    writer.writeTag(1, WireType.Bytes);
-    writeMap(writer, msg.stringMap, (w, k) => { w.writeString(k) }, (w, v) => { w.writeString(v) });
-  }
+  writer.writeTag(1, WireType.Bytes);
+  writeMap(writer, msg.stringMap, (w, k) => { w.writeString(k) }, (w, v) => { w.writeString(v) });
 
   // Field 2: int_map
-  if (msg.intMap !== undefined && msg.intMap !== null) {
-    writer.writeTag(2, WireType.Bytes);
-    writeMap(writer, msg.intMap, (w, k) => { w.writeString(k) }, (w, v) => { w.writeSVarint64(v) });
-  }
+  writer.writeTag(2, WireType.Bytes);
+  writeMap(writer, msg.intMap, (w, k) => { w.writeString(k) }, (w, v) => { w.writeSVarint64(v) });
+
+  // Field 3: int_keyed
+  writer.writeTag(3, WireType.Bytes);
+  writeMap(writer, msg.intKeyed, (w, k) => { w.writeSVarint(k) }, (w, v) => { w.writeString(v) });
+
+  // Field 4: uint_keyed
+  writer.writeTag(4, WireType.Bytes);
+  writeMap(writer, msg.uintKeyed, (w, k) => { w.writeVarint64(k) }, (w, v) => { w.writeString(v) });
 // End marker
   writer.writeEndMarker();
 }
 
-/** Decodes a MapTypes from the reader using V2 wire format. */
+/** Decodes a MapTypes from the reader. */
 export function decodeMapTypes(reader: Reader): MapTypes {
   const result: Partial<MapTypes> = {};
 
   while (true) {
-    const { fieldNum, wireType } = reader.readTag();
-    if (fieldNum === 0) break; // End marker
+    const { fieldNumber, wireType } = reader.readTag();
+    if (fieldNumber === 0) break; // End marker
 
-    switch (fieldNum) {
+    switch (fieldNumber) {
       case 1:
-        result.stringMap = readMap(reader, (r) => reader.readString(), (r) => reader.readString());
+        result.stringMap = readMap(reader, (r) => r.readString(), (r) => r.readString());
         break;
       case 2:
-        result.intMap = readMap(reader, (r) => reader.readString(), (r) => reader.readSVarint64());
+        result.intMap = readMap(reader, (r) => r.readString(), (r) => r.readSVarint64());
+        break;
+      case 3:
+        result.intKeyed = readMap(reader, (r) => r.readSVarint(), (r) => r.readString());
+        break;
+      case 4:
+        result.uintKeyed = readMap(reader, (r) => r.readVarint64(), (r) => r.readString());
         break;
       default:
         reader.skipValue(wireType);
@@ -625,8 +679,8 @@ export function marshalMapTypes(msg: MapTypes): Uint8Array {
 }
 
 /** Unmarshals a MapTypes from bytes. */
-export function unmarshalMapTypes(data: Uint8Array): MapTypes {
-  const reader = new Reader(data);
+export function unmarshalMapTypes(data: Uint8Array, opts?: ReaderOptions): MapTypes {
+  const reader = new Reader(data, opts);
   return decodeMapTypes(reader);
 }
 
@@ -665,6 +719,38 @@ export function toJSON_MapTypes(msg: MapTypes): string {
     result += '}';
   }
 
+  result += ',';
+  result += '"int_keyed":';
+  {
+    result += '{';
+    const keys = Array.from(msg.intKeyed.keys());
+    const sortedKeys = sortMapKeysLexicographic(keys.map(k => formatNumberToString(k)));
+    for (let i = 0; i < sortedKeys.length; i++) {
+      if (i > 0) result += ',';
+      result += escapeJSONString(sortedKeys[i]) + ':';
+      const k = parseNumberFromJSON(sortedKeys[i]);
+      const v = msg.intKeyed.get(k)!;
+      result += escapeJSONString(v);
+    }
+    result += '}';
+  }
+
+  result += ',';
+  result += '"uint_keyed":';
+  {
+    result += '{';
+    const keys = Array.from(msg.uintKeyed.keys());
+    const sortedKeys = sortMapKeysLexicographic(keys.map(k => formatBigIntToString(k)));
+    for (let i = 0; i < sortedKeys.length; i++) {
+      if (i > 0) result += ',';
+      result += escapeJSONString(sortedKeys[i]) + ':';
+      const k = parseBigIntFromJSON(sortedKeys[i]);
+      const v = msg.uintKeyed.get(k)!;
+      result += escapeJSONString(v);
+    }
+    result += '}';
+  }
+
   result += '}';
   return result;
 }
@@ -676,10 +762,14 @@ export function fromJSON_MapTypes(json: string): MapTypes {
     throw new Error('expected JSON object');
   }
 
-  // Check for unknown fields (strict mode)
-  const allowedFields = new Set([
+  // Check for unknown fields (strict mode). Explicit string type
+  // arg keeps tsc --strict happy when the message has zero fields
+  // (otherwise the empty array literal infers as never[]).
+  const allowedFields = new Set<string>([
     'string_map',
     'int_map',
+    'int_keyed',
+    'uint_keyed',
   ]);
   for (const key of Object.keys(obj)) {
     if (!allowedFields.has(key)) {
@@ -710,8 +800,32 @@ export function fromJSON_MapTypes(json: string): MapTypes {
     for (const [keyStr, val] of Object.entries(value)) {
       const k = keyStr;
       let v: bigint;
-      v = parseBigIntFromJSON(val);
+      v = parseBigIntFromJSON(val as string | number);
       msg.intMap.set(k, v);
+    }
+  }
+
+  if ('int_keyed' in obj) {
+    const value = obj['int_keyed'];
+    if (typeof value !== 'object' || value === null) throw new Error('expected object');
+    msg.intKeyed = new Map();
+    for (const [keyStr, val] of Object.entries(value)) {
+      const k = parseNumberFromJSON(keyStr);
+      let v: string;
+      v = String(val);
+      msg.intKeyed.set(k, v);
+    }
+  }
+
+  if ('uint_keyed' in obj) {
+    const value = obj['uint_keyed'];
+    if (typeof value !== 'object' || value === null) throw new Error('expected object');
+    msg.uintKeyed = new Map();
+    for (const [keyStr, val] of Object.entries(value)) {
+      const k = parseBigIntFromJSON(keyStr);
+      let v: string;
+      v = String(val);
+      msg.uintKeyed.set(k, v);
     }
   }
 
@@ -726,23 +840,23 @@ city: string;
 zip: string;
 }
 
-/** Encodes a Address to the writer using V2 wire format. */
+/** Encodes a Address to the writer. */
 export function encodeAddress(writer: Writer, msg: Address): void {
 
   // Field 1: street
-  if (msg.street !== undefined && msg.street !== null) {
+  if (msg.street !== undefined && msg.street !== null && msg.street.length > 0) {
     writer.writeTag(1, WireType.Bytes);
     writer.writeString(msg.street);
   }
 
   // Field 2: city
-  if (msg.city !== undefined && msg.city !== null) {
+  if (msg.city !== undefined && msg.city !== null && msg.city.length > 0) {
     writer.writeTag(2, WireType.Bytes);
     writer.writeString(msg.city);
   }
 
   // Field 3: zip
-  if (msg.zip !== undefined && msg.zip !== null) {
+  if (msg.zip !== undefined && msg.zip !== null && msg.zip.length > 0) {
     writer.writeTag(3, WireType.Bytes);
     writer.writeString(msg.zip);
   }
@@ -750,15 +864,15 @@ export function encodeAddress(writer: Writer, msg: Address): void {
   writer.writeEndMarker();
 }
 
-/** Decodes a Address from the reader using V2 wire format. */
+/** Decodes a Address from the reader. */
 export function decodeAddress(reader: Reader): Address {
   const result: Partial<Address> = {};
 
   while (true) {
-    const { fieldNum, wireType } = reader.readTag();
-    if (fieldNum === 0) break; // End marker
+    const { fieldNumber, wireType } = reader.readTag();
+    if (fieldNumber === 0) break; // End marker
 
-    switch (fieldNum) {
+    switch (fieldNumber) {
       case 1:
         result.street = reader.readString();
         break;
@@ -784,8 +898,8 @@ export function marshalAddress(msg: Address): Uint8Array {
 }
 
 /** Unmarshals a Address from bytes. */
-export function unmarshalAddress(data: Uint8Array): Address {
-  const reader = new Reader(data);
+export function unmarshalAddress(data: Uint8Array, opts?: ReaderOptions): Address {
+  const reader = new Reader(data, opts);
   return decodeAddress(reader);
 }
 
@@ -815,8 +929,10 @@ export function fromJSON_Address(json: string): Address {
     throw new Error('expected JSON object');
   }
 
-  // Check for unknown fields (strict mode)
-  const allowedFields = new Set([
+  // Check for unknown fields (strict mode). Explicit string type
+  // arg keeps tsc --strict happy when the message has zero fields
+  // (otherwise the empty array literal infers as never[]).
+  const allowedFields = new Set<string>([
     'street',
     'city',
     'zip',
@@ -858,29 +974,27 @@ address: Address;
 emails: string[];
 }
 
-/** Encodes a Person to the writer using V2 wire format. */
+/** Encodes a Person to the writer. */
 export function encodePerson(writer: Writer, msg: Person): void {
 
   // Field 1: name
-  if (msg.name !== undefined && msg.name !== null) {
+  if (msg.name !== undefined && msg.name !== null && msg.name.length > 0) {
     writer.writeTag(1, WireType.Bytes);
     writer.writeString(msg.name);
   }
 
   // Field 2: age
-  if (msg.age !== undefined && msg.age !== null) {
+  if (msg.age !== undefined && msg.age !== null && msg.age !== 0) {
     writer.writeTag(2, WireType.SVarint);
     writer.writeSVarint(msg.age);
   }
 
   // Field 3: address
-  if (msg.address !== undefined && msg.address !== null) {
-    writer.writeTag(3, WireType.Bytes);
-    encodeAddress(writer, msg.address);
-  }
+  writer.writeTag(3, WireType.Bytes);
+  { const __sub = new Writer(); encodeAddress(__sub, msg.address); writer.writeLengthPrefixedBytes(__sub.bytes()); };
 
   // Field 4: emails
-  if (msg.emails !== undefined && msg.emails !== null) {
+  if (msg.emails !== undefined && msg.emails !== null && msg.emails.length > 0) {
     writer.writeTag(4, WireType.Bytes);
     writeArray(writer, msg.emails, (w, v) => { w.writeString(v) });
   }
@@ -888,15 +1002,15 @@ export function encodePerson(writer: Writer, msg: Person): void {
   writer.writeEndMarker();
 }
 
-/** Decodes a Person from the reader using V2 wire format. */
+/** Decodes a Person from the reader. */
 export function decodePerson(reader: Reader): Person {
   const result: Partial<Person> = {};
 
   while (true) {
-    const { fieldNum, wireType } = reader.readTag();
-    if (fieldNum === 0) break; // End marker
+    const { fieldNumber, wireType } = reader.readTag();
+    if (fieldNumber === 0) break; // End marker
 
-    switch (fieldNum) {
+    switch (fieldNumber) {
       case 1:
         result.name = reader.readString();
         break;
@@ -904,10 +1018,10 @@ export function decodePerson(reader: Reader): Person {
         result.age = reader.readSVarint();
         break;
       case 3:
-        result.address = decodeAddress(reader);
+        result.address = (() => { reader.enterNested(); try { const __data = reader.readLengthPrefixedBytes(); return decodeAddress(new Reader(__data, { limits: reader.getLimits(), validateUtf8: reader.getValidateUtf8() })); } finally { reader.exitNested(); } })();
         break;
       case 4:
-        result.emails = readArray(reader, (r) => reader.readString());
+        result.emails = readArray(reader, (r) => r.readString());
         break;
       default:
         reader.skipValue(wireType);
@@ -925,8 +1039,8 @@ export function marshalPerson(msg: Person): Uint8Array {
 }
 
 /** Unmarshals a Person from bytes. */
-export function unmarshalPerson(data: Uint8Array): Person {
-  const reader = new Reader(data);
+export function unmarshalPerson(data: Uint8Array, opts?: ReaderOptions): Person {
+  const reader = new Reader(data, opts);
   return decodePerson(reader);
 }
 
@@ -943,7 +1057,7 @@ export function toJSON_Person(msg: Person): string {
 
   result += ',';
   result += '"address":';
-  result += JSON.stringify(msg.address);
+  result += toJSON_Address(msg.address);
 
   result += ',';
   result += '"emails":';
@@ -966,8 +1080,10 @@ export function fromJSON_Person(json: string): Person {
     throw new Error('expected JSON object');
   }
 
-  // Check for unknown fields (strict mode)
-  const allowedFields = new Set([
+  // Check for unknown fields (strict mode). Explicit string type
+  // arg keeps tsc --strict happy when the message has zero fields
+  // (otherwise the empty array literal infers as never[]).
+  const allowedFields = new Set<string>([
     'name',
     'age',
     'address',
@@ -990,7 +1106,7 @@ export function fromJSON_Person(json: string): Person {
 
   if ('age' in obj) {
     const value = obj['age'];
-    msg.age = parseNumberFromJSON(value);
+    msg.age = parseNumberFromJSON(value as string | number);
   }
 
   if ('address' in obj) {
@@ -1020,23 +1136,23 @@ name: string;
 optionalField: string;
 }
 
-/** Encodes a RequiredFields to the writer using V2 wire format. */
+/** Encodes a RequiredFields to the writer. */
 export function encodeRequiredFields(writer: Writer, msg: RequiredFields): void {
 
   // Field 1: id
-  if (msg.id !== undefined && msg.id !== null) {
+  if (msg.id !== undefined && msg.id !== null && msg.id !== 0n) {
     writer.writeTag(1, WireType.SVarint);
     writer.writeSVarint64(msg.id);
   }
 
   // Field 2: name
-  if (msg.name !== undefined && msg.name !== null) {
+  if (msg.name !== undefined && msg.name !== null && msg.name.length > 0) {
     writer.writeTag(2, WireType.Bytes);
     writer.writeString(msg.name);
   }
 
   // Field 3: optional_field
-  if (msg.optionalField !== undefined && msg.optionalField !== null) {
+  if (msg.optionalField !== undefined && msg.optionalField !== null && msg.optionalField.length > 0) {
     writer.writeTag(3, WireType.Bytes);
     writer.writeString(msg.optionalField);
   }
@@ -1044,15 +1160,15 @@ export function encodeRequiredFields(writer: Writer, msg: RequiredFields): void 
   writer.writeEndMarker();
 }
 
-/** Decodes a RequiredFields from the reader using V2 wire format. */
+/** Decodes a RequiredFields from the reader. */
 export function decodeRequiredFields(reader: Reader): RequiredFields {
   const result: Partial<RequiredFields> = {};
 
   while (true) {
-    const { fieldNum, wireType } = reader.readTag();
-    if (fieldNum === 0) break; // End marker
+    const { fieldNumber, wireType } = reader.readTag();
+    if (fieldNumber === 0) break; // End marker
 
-    switch (fieldNum) {
+    switch (fieldNumber) {
       case 1:
         result.id = reader.readSVarint64();
         break;
@@ -1078,8 +1194,8 @@ export function marshalRequiredFields(msg: RequiredFields): Uint8Array {
 }
 
 /** Unmarshals a RequiredFields from bytes. */
-export function unmarshalRequiredFields(data: Uint8Array): RequiredFields {
-  const reader = new Reader(data);
+export function unmarshalRequiredFields(data: Uint8Array, opts?: ReaderOptions): RequiredFields {
+  const reader = new Reader(data, opts);
   return decodeRequiredFields(reader);
 }
 
@@ -1109,8 +1225,10 @@ export function fromJSON_RequiredFields(json: string): RequiredFields {
     throw new Error('expected JSON object');
   }
 
-  // Check for unknown fields (strict mode)
-  const allowedFields = new Set([
+  // Check for unknown fields (strict mode). Explicit string type
+  // arg keeps tsc --strict happy when the message has zero fields
+  // (otherwise the empty array literal infers as never[]).
+  const allowedFields = new Set<string>([
     'id',
     'name',
     'optional_field',
@@ -1127,7 +1245,7 @@ export function fromJSON_RequiredFields(json: string): RequiredFields {
 
   if ('id' in obj) {
     const value = obj['id'];
-    msg.id = parseBigIntFromJSON(value);
+    msg.id = parseBigIntFromJSON(value as string | number);
   }
 
   if ('name' in obj) {
@@ -1148,9 +1266,10 @@ export function fromJSON_RequiredFields(json: string): RequiredFields {
 export interface OptionalPointer {
 value: string | null;
 number: bigint | null;
+blob?: Uint8Array;
 }
 
-/** Encodes a OptionalPointer to the writer using V2 wire format. */
+/** Encodes a OptionalPointer to the writer. */
 export function encodeOptionalPointer(writer: Writer, msg: OptionalPointer): void {
 
   // Field 1: value
@@ -1164,24 +1283,33 @@ export function encodeOptionalPointer(writer: Writer, msg: OptionalPointer): voi
     writer.writeTag(2, WireType.Bytes);
     if (msg.number !== null) { writer.writeSVarint64(msg.number) };
   }
+
+  // Field 3: blob
+  if (msg.blob !== undefined && msg.blob !== null) {
+    writer.writeTag(3, WireType.Bytes);
+    writer.writeLengthPrefixedBytes(msg.blob);
+  }
 // End marker
   writer.writeEndMarker();
 }
 
-/** Decodes a OptionalPointer from the reader using V2 wire format. */
+/** Decodes a OptionalPointer from the reader. */
 export function decodeOptionalPointer(reader: Reader): OptionalPointer {
   const result: Partial<OptionalPointer> = {};
 
   while (true) {
-    const { fieldNum, wireType } = reader.readTag();
-    if (fieldNum === 0) break; // End marker
+    const { fieldNumber, wireType } = reader.readTag();
+    if (fieldNumber === 0) break; // End marker
 
-    switch (fieldNum) {
+    switch (fieldNumber) {
       case 1:
         result.value = reader.readString();
         break;
       case 2:
         result.number = reader.readSVarint64();
+        break;
+      case 3:
+        result.blob = reader.readLengthPrefixedBytes();
         break;
       default:
         reader.skipValue(wireType);
@@ -1199,8 +1327,8 @@ export function marshalOptionalPointer(msg: OptionalPointer): Uint8Array {
 }
 
 /** Unmarshals a OptionalPointer from bytes. */
-export function unmarshalOptionalPointer(data: Uint8Array): OptionalPointer {
-  const reader = new Reader(data);
+export function unmarshalOptionalPointer(data: Uint8Array, opts?: ReaderOptions): OptionalPointer {
+  const reader = new Reader(data, opts);
   return decodeOptionalPointer(reader);
 }
 
@@ -1223,6 +1351,14 @@ export function toJSON_OptionalPointer(msg: OptionalPointer): string {
     result += 'null';
   }
 
+  result += ',';
+  result += '"blob":';
+  if (msg.blob !== undefined && msg.blob !== null) {
+    result += '"' + encodeBase64(msg.blob) + '"';
+  } else {
+    result += 'null';
+  }
+
   result += '}';
   return result;
 }
@@ -1234,10 +1370,13 @@ export function fromJSON_OptionalPointer(json: string): OptionalPointer {
     throw new Error('expected JSON object');
   }
 
-  // Check for unknown fields (strict mode)
-  const allowedFields = new Set([
+  // Check for unknown fields (strict mode). Explicit string type
+  // arg keeps tsc --strict happy when the message has zero fields
+  // (otherwise the empty array literal infers as never[]).
+  const allowedFields = new Set<string>([
     'value',
     'number',
+    'blob',
   ]);
   for (const key of Object.keys(obj)) {
     if (!allowedFields.has(key)) {
@@ -1261,10 +1400,15 @@ export function fromJSON_OptionalPointer(json: string): OptionalPointer {
   if ('number' in obj) {
     const value = obj['number'];
     if (value != null) {
-      msg.number = parseBigIntFromJSON(value);
+      msg.number = parseBigIntFromJSON(value as string | number);
     } else {
       msg.number = null;
     }
+  }
+
+  if ('blob' in obj) {
+    const value = obj['blob'];
+    msg.blob = decodeBase64(String(value));
   }
 
 
@@ -1277,38 +1421,36 @@ status: Status;
 statuses: Status[];
 }
 
-/** Encodes a EnumTest to the writer using V2 wire format. */
+/** Encodes a EnumTest to the writer. */
 export function encodeEnumTest(writer: Writer, msg: EnumTest): void {
 
   // Field 1: status
-  if (msg.status !== undefined && msg.status !== null) {
-    writer.writeTag(1, WireType.SVarint);
-    writer.writeSVarint(msg.status);
-  }
+  writer.writeTag(1, WireType.SVarint);
+  writer.writeSVarint(msg.status);
 
   // Field 2: statuses
-  if (msg.statuses !== undefined && msg.statuses !== null) {
-    writer.writeTag(2, WireType.SVarint);
+  if (msg.statuses !== undefined && msg.statuses !== null && msg.statuses.length > 0) {
+    writer.writeTag(2, WireType.Bytes);
     writeArray(writer, msg.statuses, (w, v) => { w.writeSVarint(v) });
   }
 // End marker
   writer.writeEndMarker();
 }
 
-/** Decodes a EnumTest from the reader using V2 wire format. */
+/** Decodes a EnumTest from the reader. */
 export function decodeEnumTest(reader: Reader): EnumTest {
   const result: Partial<EnumTest> = {};
 
   while (true) {
-    const { fieldNum, wireType } = reader.readTag();
-    if (fieldNum === 0) break; // End marker
+    const { fieldNumber, wireType } = reader.readTag();
+    if (fieldNumber === 0) break; // End marker
 
-    switch (fieldNum) {
+    switch (fieldNumber) {
       case 1:
         result.status = reader.readSVarint();
         break;
       case 2:
-        result.statuses = readArray(reader, (r) => reader.readSVarint());
+        result.statuses = readArray(reader, (r) => r.readSVarint());
         break;
       default:
         reader.skipValue(wireType);
@@ -1326,8 +1468,8 @@ export function marshalEnumTest(msg: EnumTest): Uint8Array {
 }
 
 /** Unmarshals a EnumTest from bytes. */
-export function unmarshalEnumTest(data: Uint8Array): EnumTest {
-  const reader = new Reader(data);
+export function unmarshalEnumTest(data: Uint8Array, opts?: ReaderOptions): EnumTest {
+  const reader = new Reader(data, opts);
   return decodeEnumTest(reader);
 }
 
@@ -1336,7 +1478,13 @@ export function toJSON_EnumTest(msg: EnumTest): string {
   let result = '{';
 
   result += '"status":';
-  result += '"' + msg.status.toString() + '"';
+  result += '"' + (() => { switch (msg.status) {
+    case Status.Unknown: return "UNKNOWN";
+    case Status.Active: return "ACTIVE";
+    case Status.Inactive: return "INACTIVE";
+    case Status.Pending: return "PENDING";
+    default: return 'UNKNOWN';
+  } })() + '"';
 
   result += ',';
   result += '"statuses":';
@@ -1344,7 +1492,13 @@ export function toJSON_EnumTest(msg: EnumTest): string {
   for (let i = 0; i < msg.statuses.length; i++) {
     if (i > 0) result += ',';
     const elem = msg.statuses[i];
-    result += '"' + elem.toString() + '"';
+    result += '"' + (() => { switch (elem) {
+        case Status.Unknown: return "UNKNOWN";
+        case Status.Active: return "ACTIVE";
+        case Status.Inactive: return "INACTIVE";
+        case Status.Pending: return "PENDING";
+        default: return 'UNKNOWN';
+    } })() + '"';
   }
   result += ']';
 
@@ -1359,8 +1513,10 @@ export function fromJSON_EnumTest(json: string): EnumTest {
     throw new Error('expected JSON object');
   }
 
-  // Check for unknown fields (strict mode)
-  const allowedFields = new Set([
+  // Check for unknown fields (strict mode). Explicit string type
+  // arg keeps tsc --strict happy when the message has zero fields
+  // (otherwise the empty array literal infers as never[]).
+  const allowedFields = new Set<string>([
     'status',
     'statuses',
   ]);
@@ -1430,21 +1586,21 @@ export function fromJSON_EnumTest(json: string): EnumTest {
 export interface EmptyMessage {
 }
 
-/** Encodes a EmptyMessage to the writer using V2 wire format. */
+/** Encodes a EmptyMessage to the writer. */
 export function encodeEmptyMessage(writer: Writer, msg: EmptyMessage): void {
 // End marker
   writer.writeEndMarker();
 }
 
-/** Decodes a EmptyMessage from the reader using V2 wire format. */
+/** Decodes a EmptyMessage from the reader. */
 export function decodeEmptyMessage(reader: Reader): EmptyMessage {
   const result: Partial<EmptyMessage> = {};
 
   while (true) {
-    const { fieldNum, wireType } = reader.readTag();
-    if (fieldNum === 0) break; // End marker
+    const { fieldNumber, wireType } = reader.readTag();
+    if (fieldNumber === 0) break; // End marker
 
-    switch (fieldNum) {
+    switch (fieldNumber) {
       default:
         reader.skipValue(wireType);
     }
@@ -1461,8 +1617,8 @@ export function marshalEmptyMessage(msg: EmptyMessage): Uint8Array {
 }
 
 /** Unmarshals a EmptyMessage from bytes. */
-export function unmarshalEmptyMessage(data: Uint8Array): EmptyMessage {
-  const reader = new Reader(data);
+export function unmarshalEmptyMessage(data: Uint8Array, opts?: ReaderOptions): EmptyMessage {
+  const reader = new Reader(data, opts);
   return decodeEmptyMessage(reader);
 }
 
@@ -1481,8 +1637,10 @@ export function fromJSON_EmptyMessage(json: string): EmptyMessage {
     throw new Error('expected JSON object');
   }
 
-  // Check for unknown fields (strict mode)
-  const allowedFields = new Set([
+  // Check for unknown fields (strict mode). Explicit string type
+  // arg keeps tsc --strict happy when the message has zero fields
+  // (otherwise the empty array literal infers as never[]).
+  const allowedFields = new Set<string>([
   ]);
   for (const key of Object.keys(obj)) {
     if (!allowedFields.has(key)) {
@@ -1506,29 +1664,29 @@ zeroBool: boolean;
 emptyArray: string[];
 }
 
-/** Encodes a AllZeroValues to the writer using V2 wire format. */
+/** Encodes a AllZeroValues to the writer. */
 export function encodeAllZeroValues(writer: Writer, msg: AllZeroValues): void {
 
   // Field 1: zero_int
-  if (msg.zeroInt !== undefined && msg.zeroInt !== null) {
+  if (msg.zeroInt !== undefined && msg.zeroInt !== null && msg.zeroInt !== 0n) {
     writer.writeTag(1, WireType.SVarint);
     writer.writeSVarint64(msg.zeroInt);
   }
 
   // Field 2: zero_string
-  if (msg.zeroString !== undefined && msg.zeroString !== null) {
+  if (msg.zeroString !== undefined && msg.zeroString !== null && msg.zeroString.length > 0) {
     writer.writeTag(2, WireType.Bytes);
     writer.writeString(msg.zeroString);
   }
 
   // Field 3: zero_bool
-  if (msg.zeroBool !== undefined && msg.zeroBool !== null) {
+  if (msg.zeroBool !== undefined && msg.zeroBool !== null && msg.zeroBool) {
     writer.writeTag(3, WireType.Varint);
     writer.writeBool(msg.zeroBool);
   }
 
   // Field 4: empty_array
-  if (msg.emptyArray !== undefined && msg.emptyArray !== null) {
+  if (msg.emptyArray !== undefined && msg.emptyArray !== null && msg.emptyArray.length > 0) {
     writer.writeTag(4, WireType.Bytes);
     writeArray(writer, msg.emptyArray, (w, v) => { w.writeString(v) });
   }
@@ -1536,15 +1694,15 @@ export function encodeAllZeroValues(writer: Writer, msg: AllZeroValues): void {
   writer.writeEndMarker();
 }
 
-/** Decodes a AllZeroValues from the reader using V2 wire format. */
+/** Decodes a AllZeroValues from the reader. */
 export function decodeAllZeroValues(reader: Reader): AllZeroValues {
   const result: Partial<AllZeroValues> = {};
 
   while (true) {
-    const { fieldNum, wireType } = reader.readTag();
-    if (fieldNum === 0) break; // End marker
+    const { fieldNumber, wireType } = reader.readTag();
+    if (fieldNumber === 0) break; // End marker
 
-    switch (fieldNum) {
+    switch (fieldNumber) {
       case 1:
         result.zeroInt = reader.readSVarint64();
         break;
@@ -1555,7 +1713,7 @@ export function decodeAllZeroValues(reader: Reader): AllZeroValues {
         result.zeroBool = reader.readBool();
         break;
       case 4:
-        result.emptyArray = readArray(reader, (r) => reader.readString());
+        result.emptyArray = readArray(reader, (r) => r.readString());
         break;
       default:
         reader.skipValue(wireType);
@@ -1573,8 +1731,8 @@ export function marshalAllZeroValues(msg: AllZeroValues): Uint8Array {
 }
 
 /** Unmarshals a AllZeroValues from bytes. */
-export function unmarshalAllZeroValues(data: Uint8Array): AllZeroValues {
-  const reader = new Reader(data);
+export function unmarshalAllZeroValues(data: Uint8Array, opts?: ReaderOptions): AllZeroValues {
+  const reader = new Reader(data, opts);
   return decodeAllZeroValues(reader);
 }
 
@@ -1614,8 +1772,10 @@ export function fromJSON_AllZeroValues(json: string): AllZeroValues {
     throw new Error('expected JSON object');
   }
 
-  // Check for unknown fields (strict mode)
-  const allowedFields = new Set([
+  // Check for unknown fields (strict mode). Explicit string type
+  // arg keeps tsc --strict happy when the message has zero fields
+  // (otherwise the empty array literal infers as never[]).
+  const allowedFields = new Set<string>([
     'zero_int',
     'zero_string',
     'zero_bool',
@@ -1633,7 +1793,7 @@ export function fromJSON_AllZeroValues(json: string): AllZeroValues {
 
   if ('zero_int' in obj) {
     const value = obj['zero_int'];
-    msg.zeroInt = parseBigIntFromJSON(value);
+    msg.zeroInt = parseBigIntFromJSON(value as string | number);
   }
 
   if ('zero_string' in obj) {

@@ -17,6 +17,7 @@ use crate::interop::*;
 const GOLDEN_DIR: &str = "../../../testdata/golden";
 
 // Test data matching Go's TestData
+#[allow(clippy::approx_constant)] // literals match Go's TestData fixtures, not π/e
 fn test_scalar_types() -> ScalarTypes {
     ScalarTypes {
         bool_val: true,
@@ -101,7 +102,7 @@ fn test_edge_cases() -> EdgeCases {
     }
 }
 
-// Encoder functions - V2 format uses end marker instead of field count
+// Encoder functions - format uses an end marker (not a field count)
 fn encode_nested_message(writer: &mut Writer, msg: &NestedMessage) -> Result<()> {
     // Field 1: name
     writer.write_tag(1, WireType::Bytes)?;
@@ -137,7 +138,7 @@ fn decode_nested_message(reader: &mut Reader) -> Result<NestedMessage> {
 }
 
 fn encode_scalar_types(writer: &mut Writer, msg: &ScalarTypes) -> Result<()> {
-    // V2 format: no field count prefix, uses end marker
+    // No field count prefix; messages terminate with an end marker.
 
     // Field 1: bool_val
     writer.write_tag(1, WireType::Varint)?;
@@ -217,7 +218,7 @@ fn decode_scalar_types(reader: &mut Reader) -> Result<ScalarTypes> {
 }
 
 fn encode_all_field_numbers(writer: &mut Writer, msg: &AllFieldNumbers) -> Result<()> {
-    // V2 format: no field count prefix, uses end marker
+    // No field count prefix; messages terminate with an end marker.
     // All int32 fields use SVarint wire type
 
     writer.write_tag(1, WireType::SVarint)?;

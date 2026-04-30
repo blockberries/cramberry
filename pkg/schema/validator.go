@@ -3,6 +3,7 @@ package schema
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/blockberries/cramberry/internal/wire"
 )
@@ -139,7 +140,15 @@ func (v *Validator) Validate() []ValidationError {
 
 // collectTypes collects all type definitions for reference checking.
 func (v *Validator) collectTypes() {
-	// Collect messages
+	// Collect messages. Two messages can't share a name AND can't share an
+	// explicit @TypeID — a duplicate ID across messages would route
+	// polymorphic decoding to whichever was registered last and silently
+	// corrupt data on the other side of the wire.
+	type typeIDOwner struct {
+		name string
+		pos  Position
+	}
+	typeIDOwners := make(map[int]typeIDOwner)
 	for _, msg := range v.schema.Messages {
 		if existing, ok := v.types[msg.Name]; ok {
 			v.addError(msg.Position, "duplicate type name %q (previously defined at %d:%d)",
@@ -150,6 +159,15 @@ func (v *Validator) collectTypes() {
 				Kind:     TypeDefMessage,
 				Position: msg.Position,
 				TypeID:   msg.TypeID,
+			}
+		}
+		if msg.TypeID > 0 {
+			if owner, dup := typeIDOwners[msg.TypeID]; dup {
+				v.addError(msg.Position,
+					"duplicate type ID %d (also used by message %q at %d:%d)",
+					msg.TypeID, owner.name, owner.pos.Line, owner.pos.Column)
+			} else {
+				typeIDOwners[msg.TypeID] = typeIDOwner{name: msg.Name, pos: msg.Position}
 			}
 		}
 	}
@@ -258,6 +276,12 @@ func (v *Validator) validateMessage(msg *Message) {
 		v.addError(msg.Position, "type ID must be non-negative, got %d", msg.TypeID)
 	} else if msg.TypeID > 0 && msg.TypeID < 128 {
 		v.addError(msg.Position, "type ID %d is in the reserved range (1-127); user-defined messages must use type IDs ≥ 128", msg.TypeID)
+	} else if msg.TypeID > wire.MaxFieldNumber {
+		// Type IDs share the wire-format field-number budget — values
+		// past wire.MaxFieldNumber (2^29-1) push the encoded varint
+		// past the documented spec and risk overflow on 32-bit
+		// runtime types.
+		v.addError(msg.Position, "type ID %d exceeds maximum (%d)", msg.TypeID, wire.MaxFieldNumber)
 	}
 }
 
@@ -265,6 +289,17 @@ func (v *Validator) validateMessage(msg *Message) {
 func (v *Validator) validateEnum(enum *Enum) {
 	valueNumbers := make(map[int]string) // number -> value name
 	valueNames := make(map[string]bool)
+
+	// Reject empty enums. Without at least one variant, the codegen-
+	// emitted Go produces an empty `const ()` block (compiles but is
+	// unusable), Rust gets an enum with no variants (also useless),
+	// and the wire format has no valid value. The cross-language
+	// "must have a zero value" check below silently skipped empty
+	// enums because its `len > 0` guard ran first.
+	if len(enum.Values) == 0 {
+		v.addError(enum.Position, "enum %q must have at least one value", enum.Name)
+		return
+	}
 
 	// Check for zero value
 	hasZero := false
@@ -318,6 +353,8 @@ func (v *Validator) validateInterface(iface *Interface) {
 			v.addError(impl.Position, "type ID must be positive, got %d", impl.TypeID)
 		} else if impl.TypeID < 128 {
 			v.addError(impl.Position, "type ID %d is in the reserved range (1-127); user-defined implementations must use type IDs ≥ 128", impl.TypeID)
+		} else if impl.TypeID > wire.MaxFieldNumber {
+			v.addError(impl.Position, "type ID %d exceeds maximum (%d)", impl.TypeID, wire.MaxFieldNumber)
 		}
 
 		// Check for duplicate type IDs
@@ -652,9 +689,10 @@ func joinCycle(path []string) string {
 	if len(path) == 0 {
 		return ""
 	}
-	out := path[0]
+	var out strings.Builder
+	out.WriteString(path[0])
 	for _, p := range path[1:] {
-		out += " → " + p
+		out.WriteString(" → " + p)
 	}
-	return out
+	return out.String()
 }

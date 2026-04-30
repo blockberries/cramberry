@@ -258,11 +258,18 @@ func (l *Lexer) Next() Token {
 }
 
 // Peek returns the next token without consuming it.
+//
+// Saves and restores ALL lexer state that l.Next() touches, including
+// `start` and `startPos` — the latter is what l.Next() stamps into the
+// next token's `Position`. Restoring only pos/line/column corrupts the
+// position of the *following* real Next() call.
 func (l *Lexer) Peek() Token {
 	// Save state
 	pos := l.pos
 	line := l.line
 	column := l.column
+	start := l.start
+	startPos := l.startPos
 
 	tok := l.Next()
 
@@ -270,6 +277,8 @@ func (l *Lexer) Peek() Token {
 	l.pos = pos
 	l.line = line
 	l.column = column
+	l.start = start
+	l.startPos = startPos
 
 	return tok
 }
