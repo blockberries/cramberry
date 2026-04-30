@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (consensus-critical: `*string` / `*[]byte` were double-wrapped by reflection)
+
+The earlier "pass-7" fix to `needsBodyLengthPrefix` over-wrapped
+pointer-to-self-delimiting fields. A `*string` field was emitting:
+
+    tag(WireBytes) | outer-len | inner-len | bytes
+
+while the Go codegen path emitted:
+
+    tag(WireBytes) | inner-len | bytes
+
+These are different byte streams for the same logical input — Go
+reflection and Go codegen disagreed. (Rust and TS codegen
+produced the codegen shape, so reflection was the outlier.)
+
+The bug was masked because no parity test exercised an
+`optional string` field; this pass's expanded fixture (nested
+messages, maps, optional pointer) surfaced it. `WriteString`
+already emits `varint(len) | bytes`, which is exactly what
+`SkipValue(WireBytes)` consumes — wrapping again was redundant.
+
+`needsBodyLengthPrefix` now returns `false` for pointer-to-string,
+matching the codegen path. The forward-compat skip test for
+`*string` was added so the regression is caught.
+
+### Extended (parity fixture surface)
+
+The codegen-parity fixture schema now exercises:
+
+- a 0-valued enum (cross-language default consistency)
+- a nested message (length-prefixed body)
+- a repeated nested message (count + length-prefix-wrapped)
+- a `map<string, int32>` (sorted-key emission)
+- an `optional string` (pointer-to-self-delimiting)
+
+Confirmed all four paths produce byte-identical output:
+
+    Go reflection == Go codegen == Rust codegen == TS codegen
+
+over a 178-byte payload that touches every common drift hotspot.
+
 ### Added (cross-language byte-parity check)
 
 - New `make codegen-parity-check` target. The script generates Go,

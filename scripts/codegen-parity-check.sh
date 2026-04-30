@@ -51,6 +51,7 @@ import (
 )
 
 func fixture() *Sample {
+	nick := "the_admin"
 	return &Sample{
 		Active:  true,
 		Count:   -42,
@@ -59,6 +60,21 @@ func fixture() *Sample {
 		Payload: []byte{0xde, 0xad, 0xbe, 0xef},
 		Ratio:   3.14159,
 		Tags:    []string{"alpha", "beta", "gamma"},
+		Status:  StatusStatusActive,
+		Home: Address{
+			Street: "1 Infinite Loop",
+			City:   "Cupertino",
+		},
+		Addresses: []Address{
+			{Street: "742 Evergreen Terrace", City: "Springfield"},
+			{Street: "221B Baker St", City: "London"},
+		},
+		Scores: map[string]int32{
+			"alpha": 1,
+			"gamma": 3,
+			"beta":  2,
+		},
+		Nickname: &nick,
 	}
 }
 
@@ -130,8 +146,14 @@ mv "$WORK/rust/src"/*.rs "$WORK/rust/src/lib.rs"
 cat > "$WORK/rust/src/main.rs" <<'EOF'
 use cramberry::Writer;
 use parity_rust::*;
+use std::collections::HashMap;
 
 fn main() {
+    let mut scores = HashMap::new();
+    scores.insert("alpha".to_string(), 1);
+    scores.insert("gamma".to_string(), 3);
+    scores.insert("beta".to_string(), 2);
+
     let s = Sample {
         active:  true,
         count:   -42,
@@ -140,6 +162,17 @@ fn main() {
         payload: vec![0xde, 0xad, 0xbe, 0xef],
         ratio:   3.14159,
         tags:    vec!["alpha".to_string(), "beta".to_string(), "gamma".to_string()],
+        status:  Status::StatusActive,
+        home: Address {
+            street: "1 Infinite Loop".to_string(),
+            city:   "Cupertino".to_string(),
+        },
+        addresses: vec![
+            Address { street: "742 Evergreen Terrace".to_string(), city: "Springfield".to_string() },
+            Address { street: "221B Baker St".to_string(),         city: "London".to_string()      },
+        ],
+        scores,
+        nickname: Some("the_admin".to_string()),
     };
     let mut w = Writer::new();
     encode_sample(&mut w, &s).unwrap();
@@ -182,7 +215,7 @@ genstem="$(basename "$genfile" .ts)"
 
 cat > "$WORK/ts/probe.mjs" <<EOF
 import { Writer } from '@cramberry/runtime';
-import { encodeSample } from './$genstem.ts';
+import { encodeSample, Status } from './$genstem.ts';
 
 const s = {
     active: true,
@@ -191,7 +224,22 @@ const s = {
     name: "hello, 世界!",
     payload: new Uint8Array([0xde, 0xad, 0xbe, 0xef]),
     ratio: 3.14159,
-    tags: ["alpha", "beta", "gamma"]
+    tags: ["alpha", "beta", "gamma"],
+    status: Status.StatusActive,
+    home: {
+        street: "1 Infinite Loop",
+        city: "Cupertino",
+    },
+    addresses: [
+        { street: "742 Evergreen Terrace", city: "Springfield" },
+        { street: "221B Baker St",         city: "London"      },
+    ],
+    scores: new Map([
+        ["alpha", 1],
+        ["gamma", 3],
+        ["beta",  2],
+    ]),
+    nickname: "the_admin",
 };
 const w = new Writer();
 encodeSample(w, s);

@@ -493,17 +493,25 @@ func needsBodyLengthPrefix(v reflect.Value) bool {
 		return t.Elem().Kind() != reflect.Uint8
 	case reflect.Complex128:
 		return true
+	case reflect.String:
+		// `string` body via WriteString is already length-prefixed
+		// (varint(len) | bytes). SkipValue(WireBytes) on a *string
+		// field reads the same varint as a length and skips correctly,
+		// so wrapping again would emit a redundant outer length and
+		// would produce different bytes from the codegen path (which
+		// just calls WriteString directly).
+		return false
 	case reflect.Bool,
 		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
 		reflect.Float32, reflect.Float64,
-		reflect.Complex64, reflect.String:
-		// These reach this function only via pointer-to-scalar (the
-		// outer Ptr was stripped above). The encoder picks WireBytes
-		// for any pointer wire-type, so the body needs wrapping.
-		// String / []byte / [N]byte values themselves are never
-		// pointer-wrapped at this layer; their non-pointer paths
-		// don't reach here.
+		reflect.Complex64:
+		// Pointer-to-non-self-delimiting-scalar (e.g. *int32 → svarint,
+		// *float64 → fixed64). The encoder picks WireBytes for any
+		// pointer wire-type, but the body itself is NOT
+		// length-prefixed, so an old decoder calling
+		// SkipValue(WireBytes) would mis-frame. Wrap at the field
+		// boundary so the wire layout is `tag | len | body`.
 		return v.Kind() == reflect.Ptr
 	}
 	return false

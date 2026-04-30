@@ -1,9 +1,26 @@
 // Fixture schema used by scripts/codegen-parity-check.sh to verify
-// cross-language byte-identity of code-generated encoders. Touches a
-// representative slice of types: bool, signed/unsigned varints, an
-// fixed-width float, length-prefixed strings/bytes, and a repeated
-// scalar.
+// cross-language byte-identity of code-generated encoders. Designed to
+// touch every cross-language drift hotspot:
+//
+//   - all scalar wire types (bool, varint, svarint, fixed32, fixed64,
+//     length-prefixed bytes/string)
+//   - a 0-valued enum variant (cross-language default consistency)
+//   - a nested message (length-prefixed body)
+//   - a repeated nested message (count + length-prefix-wrapped)
+//   - a map<string, scalar> (sorted-key emission)
+//   - an optional pointer (Some/None handling differs by language)
 package parity;
+
+enum Status {
+  STATUS_UNKNOWN = 0;
+  STATUS_ACTIVE = 1;
+  STATUS_RETIRED = 2;
+}
+
+message Address {
+  string street = 1;
+  string city = 2;
+}
 
 message Sample {
   bool active = 1;
@@ -13,4 +30,9 @@ message Sample {
   bytes payload = 5;
   float64 ratio = 6;
   repeated string tags = 7;
+  Status status = 8;
+  Address home = 9;
+  repeated Address addresses = 10;
+  map[string]int32 scores = 11;
+  optional string nickname = 12;
 }

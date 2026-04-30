@@ -628,3 +628,45 @@ func TestForwardCompatSkipUnknownComplex128(t *testing.T) {
 		t.Fatalf("Bar = %d, want 99", b.Bar)
 	}
 }
+
+// TestForwardCompatSkipUnknownPointerToString covers the pointer-to-
+// already-self-delimiting case. A `*string` body via WriteString is
+// `varint(len) | bytes` — already the shape SkipValue(WireBytes)
+// expects. The earlier fix that wrapped pointer-to-non-self-delimiting
+// scalars (like *int32) accidentally double-wrapped *string, producing
+// different bytes from the codegen path. This test pins both
+// directions: the cross-skema skip works AND the reflection path
+// produces canonical (non-double-wrapped) bytes.
+func TestForwardCompatSkipUnknownPointerToString(t *testing.T) {
+	type SchemaA struct {
+		Maybe *string `cramberry:"5"`
+		Bar   int32   `cramberry:"6"`
+	}
+	type SchemaB struct {
+		Bar int32 `cramberry:"6"`
+	}
+
+	v := "hello"
+	a := SchemaA{Maybe: &v, Bar: 99}
+	data, err := Marshal(a)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	var b SchemaB
+	if err := Unmarshal(data, &b); err != nil {
+		t.Fatalf("Unmarshal across schemas: %v", err)
+	}
+	if b.Bar != 99 {
+		t.Fatalf("Bar = %d, want 99", b.Bar)
+	}
+
+	// Same-schema round-trip preserves the value.
+	var aRoundTrip SchemaA
+	if err := Unmarshal(data, &aRoundTrip); err != nil {
+		t.Fatalf("self-roundtrip: %v", err)
+	}
+	if aRoundTrip.Maybe == nil || *aRoundTrip.Maybe != "hello" {
+		t.Fatalf("Maybe round-trip mismatch: %v", aRoundTrip.Maybe)
+	}
+}
