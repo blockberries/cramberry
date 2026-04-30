@@ -150,6 +150,65 @@ EOF
 (cd "$WORK/rust" && cargo build --bin probe --quiet 2>/dev/null)
 RUST_BYTES="$("$WORK/rust/target/debug/probe")"
 
+# --- TypeScript side ---
+# The TS generator emits `from '@cramberry/runtime'`. Node's ESM
+# resolver finds it via the package's "exports" field once the
+# package is installed (here via npm pack into a fresh project).
+mkdir -p "$WORK/ts"
+"$BIN" generate -lang typescript -out "$WORK/ts" "$SCHEMA" >/dev/null
+
+# Build the TS runtime so the dist/ files referenced by the package
+# exports actually exist.
+(cd "$REPO_ROOT/typescript" && npm install --silent --no-audit --no-fund >/dev/null 2>&1 && npm run --silent build >/dev/null 2>&1) || {
+    echo "skip (TS): runtime build failed; install npm + run 'cd typescript && npm install' once" >&2
+    exit 0
+}
+
+cat > "$WORK/ts/package.json" <<EOF
+{
+  "name": "parity-ts",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@cramberry/runtime": "file:$REPO_ROOT/typescript"
+  }
+}
+EOF
+(cd "$WORK/ts" && npm install --silent --no-audit --no-fund >/dev/null 2>&1)
+
+# Drop a probe ESM file that imports the generated module + the runtime.
+genfile="$(ls "$WORK/ts"/*.ts | head -1)"
+genstem="$(basename "$genfile" .ts)"
+
+cat > "$WORK/ts/probe.mjs" <<EOF
+import { Writer } from '@cramberry/runtime';
+import { encodeSample } from './$genstem.ts';
+
+const s = {
+    active: true,
+    count: -42,
+    amount: 123456789012n,
+    name: "hello, 世界!",
+    payload: new Uint8Array([0xde, 0xad, 0xbe, 0xef]),
+    ratio: 3.14159,
+    tags: ["alpha", "beta", "gamma"]
+};
+const w = new Writer();
+encodeSample(w, s);
+const bytes = w.bytes();
+console.log(Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(''));
+EOF
+
+# Use tsx (provided by the typescript/ workspace's installed deps) so
+# the .ts import resolves and Node finds @cramberry/runtime via the
+# package's "exports". The local node_modules linkage gives us dist/.
+TS_BYTES="$(cd "$WORK/ts" && npx --no -- tsx probe.mjs 2>/dev/null)"
+
+if [[ -z "$TS_BYTES" ]]; then
+    echo "skip (TS): probe produced no output (likely missing tsx in PATH)" >&2
+    TS_BYTES="(skipped)"
+fi
+
 # --- Compare ---
 fail=0
 if [[ "$GO_REFLECT_BYTES" != "$GO_CODEGEN_BYTES" ]]; then
@@ -164,8 +223,18 @@ if [[ "$GO_CODEGEN_BYTES" != "$RUST_BYTES" ]]; then
     echo "  Rust: $RUST_BYTES"               >&2
     fail=1
 fi
+if [[ "$TS_BYTES" != "(skipped)" ]] && [[ "$GO_CODEGEN_BYTES" != "$TS_BYTES" ]]; then
+    echo "FAIL  Go codegen != TS codegen"   >&2
+    echo "  Go: $GO_CODEGEN_BYTES"           >&2
+    echo "  TS: $TS_BYTES"                   >&2
+    fail=1
+fi
 if [[ $fail -eq 0 ]]; then
-    echo "  OK  Go reflection == Go codegen == Rust codegen"
+    if [[ "$TS_BYTES" == "(skipped)" ]]; then
+        echo "  OK  Go reflection == Go codegen == Rust codegen (TS skipped)"
+    else
+        echo "  OK  Go reflection == Go codegen == Rust codegen == TS codegen"
+    fi
     echo "      bytes: $GO_CODEGEN_BYTES"
 fi
 exit $fail
