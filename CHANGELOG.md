@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (TypeScript codegen — wrong package name)
+
+The TypeScript generator emitted `import { ... } from 'cramberry'`,
+but the npm package is published as `@cramberry/runtime` (per
+`typescript/package.json`'s `name` field). Users running `npm install
+@cramberry/runtime` and then `cramberry generate -lang typescript`
+got `Cannot find module 'cramberry'` at compile time. The generator
+now emits the correct `from '@cramberry/runtime'`. The
+`ts-codegen-check` script's tsconfig path-alias was updated to
+match.
+
+### Verified (cross-language byte parity)
+
+Probed the generated Go and Rust output for an all-types schema
+(bool, int32, int64, string, bytes, float64, repeated string)
+encoding the same logical data. Both runtimes produced the same
+105-byte hex output:
+`1001285338a8e8c8e99707440e68656c6c6f2c20e4b896e7958c215404deadbeef626e861bf0f921094074120305616c70686104626574610567616d6d6100`
+This confirms the wire format is byte-identical across the Go
+codegen and Rust codegen paths for at least this surface — a
+property that previously had no end-to-end test (the existing
+integration tests use hand-rolled encoders, not generated code).
+
 ### Fixed (codegen drift + `-json=false`)
 
 - **`-json=false` actually works now**. The flag was registered and

@@ -26,7 +26,7 @@ cat > "$WORK/tsconfig.json" <<EOF
     "skipLibCheck": true,
     "esModuleInterop": true,
     "paths": {
-      "cramberry": ["$REPO_ROOT/typescript/src/index.ts"]
+      "@cramberry/runtime": ["$REPO_ROOT/typescript/src/index.ts"]
     },
     "baseUrl": "."
   },

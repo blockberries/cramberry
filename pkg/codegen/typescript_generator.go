@@ -826,7 +826,7 @@ import {
   parseNumberFromJSON,
   sortMapKeysLexicographic,
   escapeJSONString,
-} from 'cramberry';
+} from '@cramberry/runtime';
 
 // Helper functions for encoding/decoding
 function writeArray<T>(writer: Writer, arr: T[], writeElem: (w: Writer, v: T) => void): void {
