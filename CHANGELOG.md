@@ -1214,7 +1214,7 @@ catch this class of regression going forward.
   (the safe `String`/`Bytes` accessors already provide the same access
   with generation validation).
 
-## [2.0.0] - 2026-04-29
+## [2.0.0] - 2026-04-30
 
 ### Changed (BREAKING)
 
@@ -1242,6 +1242,105 @@ catch this class of regression going forward.
     tag helpers are removed).
 - `pkg/cramberry/wire_v2.go` is renamed to `pkg/cramberry/wire.go`; tests in
   `wire_v2_test.go` move to `wire_test.go`.
+- **V2 suffix removal sweep**: now that V2 is the only version, every
+  `*V2`-named symbol that survived the consolidation was renamed to drop
+  the suffix. Unused deprecated `FieldTag::encode`/`FieldTag::decode`
+  legacy helpers in the Rust runtime were removed (they only existed
+  for the V1→V2 migration). Internal codegen-emit sites (`encodeFieldV2`,
+  `decodeValueV2`, etc.) and test names (`TestV2*`) were renamed
+  accordingly.
+
+### Fixed
+
+- **JSON encoder for optional bytes fields**: an `optional bytes` field
+  generates a `*[]byte` Go field. The codegen emitted
+  `cramberry.EncodeBase64(m.Payload)` against the pointer, which doesn't
+  type-check. The generator now nil-checks the pointer and
+  dereferences before passing to `EncodeBase64`. A regression
+  `optional bytes blob` was added to `testdata/schemas/json_test.cram`
+  so the path is covered by the regular JSON-codegen tests.
+
+### Performance
+
+Cumulative bench deltas on Apple M4 Pro (`make bench`):
+
+- **Reflection encode** (`Marshal()` path): 20–30% faster across all
+  message shapes. Closes the gap to codegen from ~2.5× to ~2×.
+  - SmallMessage 101 → 86 ns/op (-15%)
+  - Metrics      233 → 178 ns/op (-24%)
+  - Person       925 → 672 ns/op (-27%)
+  - Document    1837 → 1466 ns/op (-20%, -3 allocs)
+  - Event        842 → 583 ns/op (-31%, -3 allocs)
+  - Batch1000  75790 → 60875 ns/op (-20%, -3 allocs)
+- **Codegen encode** (Go): within ±5% noise on top of an already-tight
+  baseline, but a few % faster on Event-shaped payloads.
+
+What changed:
+
+- **Go reflection**: `structInfo.fieldInfo` now caches `wireType`, the
+  pre-encoded compact tag bytes, and `needsLenPrefix` at parse time.
+  `encodeStruct` no longer does a per-field `sync.Map.Load` + kind
+  switch + tag-byte arithmetic. Removed `getWireTypeCached` and the
+  `wireTypeCache` `sync.Map`. `sortMapKeys` switched from `sort.Slice`
+  (which uses `reflect.Swapper`) to `slices.SortFunc` on
+  `[]reflect.Value`.
+- **Go Writer**: `BeginMessage` placeholder shrunk from
+  `MaxVarintLen64` (10) to 2 bytes — covers messages up to 16383
+  bytes, the modal nested-message size, and removes a 9-byte
+  left-shift `memmove` from every nested-message close on the common
+  path. Larger bodies take a slow path that retroactively grows the
+  placeholder. New `WriteRawByte` for the precomputed-tag emit and
+  packed-scalar fast-path methods (`WritePackedBool`,
+  `WritePackedUvarint`, `WritePackedSvarint`, `WritePackedInt32`,
+  `WritePackedUint32`).
+- **Go codegen**: emits precomputed compact tag bytes
+  (`w.WriteRawByte(0xXY)` instead of `w.WriteTag(N, T)`) for fields
+  1-15. Repeated scalar fields use the new `WritePacked*` runtime
+  methods so the per-element grow + checkWrite cost is paid once per
+  slice instead of N times. JSON encoder fuses leading-comma + field
+  name into one `WriteString` (`,"foo":` literal).
+- **TypeScript runtime**: `Writer.beginMessage`/`endMessage` length
+  back-patch — replaces the `new Writer(); … writer.writeLengthPrefixedBytes(sub.bytes())`
+  pattern that allocated a fresh `Uint8Array` + `DataView` per nested
+  level. Codegen, `writeMap`, `writeArray`, `writeTypeRefField`, and
+  `Registry.encodePolymorphic` all use the new path. `writeString`
+  uses a single-pass `TextEncoder.encodeInto` with a length-prefix
+  reservation. `writeVarint64`/`readVarint64` got a Number fast path
+  for values that fit in 32 bits — BigInt arithmetic on V8 is one to
+  two orders of magnitude slower than Number, and the modal value
+  (heights, timestamps, balances, sizes) is well under 2^32.
+  `sortMapKeysLexicographic` now decorates-sorts-undecorates so each
+  key is encoded once, not O(n log n) times. Initial `Writer`
+  capacity bumped from 256 to 1024.
+- **TypeScript codegen**: decoders initialize the result struct with
+  all field defaults at construction so V8 builds a single stable
+  hidden class, not a per-input-ordering transition tree.
+- **Rust runtime**: `Writer.begin_message`/`end_message` length
+  back-patch (mirror of TS). `read_varint`/`read_varint64` got an
+  `#[inline]` 1-byte fast path + `#[cold]` slow path. The `Error`
+  enum's heavy variants are boxed (`TypeNotRegistered(Box<str>)`,
+  `Custom(Box<str>)`, `Io(Box<std::io::Error>)`), shrinking
+  `Result<T, Error>` to register-pass on hot paths.
+  `StreamReader::read_message` uses `Read::take` + `read_to_end`
+  instead of `vec![0u8; length]` + `read_exact` — eliminates the
+  zero-init pass on large message bodies. `#[inline]` annotations on
+  hot Writer/Reader small functions.
+- **Rust codegen**: `from_json_*` allowlist replaced from
+  `HashSet<&str>` (allocated per call) with a `match` on `&str`.
+  Codegen for nested-message / repeated-message / map fields, and
+  `Registry::encode_polymorphic`, all use `begin_message` /
+  `end_message` instead of allocating a sub-`Writer`.
+
+### Added (public APIs)
+
+- **Go**: `Writer.WriteRawByte`, `Writer.WritePackedBool`,
+  `Writer.WritePackedUvarint`, `Writer.WritePackedSvarint`,
+  `Writer.WritePackedInt32`, `Writer.WritePackedUint32`.
+  `cramberry.GetSortedStringKeys` / `PutStringKeys` and the int64 /
+  uint64 variants — pooled keys-slice helpers for callers who
+  amortize over large maps.
+- **TypeScript**: `Writer.beginMessage` / `Writer.endMessage`.
+- **Rust**: `Writer::begin_message` / `Writer::end_message`.
 
 ## [1.5.5] - 2026-01-29
 
