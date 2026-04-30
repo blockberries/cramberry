@@ -91,6 +91,64 @@ func (c *goContext) wireType(f *schema.Field) string {
 	return c.wireTypeForType(f.Type, f.Repeated)
 }
 
+// wireTypeValue returns the numeric wire-type byte for a field, matching
+// the constants in pkg/cramberry/wire.go: WireVarint=0, WireFixed64=1,
+// WireBytes=2, WireFixed32=3, WireSVarint=4. Used to precompute compact
+// tag bytes at codegen time so the emitted code can call WriteRawByte
+// instead of WriteTag for fields 1-15.
+func (c *goContext) wireTypeValue(f *schema.Field) byte {
+	return c.wireTypeValueForType(f.Type, f.Repeated)
+}
+
+func (c *goContext) wireTypeValueForType(t schema.TypeRef, repeated bool) byte {
+	if repeated {
+		return 2 // WireBytes
+	}
+	switch typ := t.(type) {
+	case *schema.ScalarType:
+		switch typ.Name {
+		case "bool":
+			return 0 // WireVarint
+		case "int8", "int16", "int32", "int64", "int":
+			return 4 // WireSVarint
+		case "uint8", "uint16", "uint32", "uint64", "uint", "byte":
+			return 0 // WireVarint
+		case "float32":
+			return 3 // WireFixed32
+		case "float64":
+			return 1 // WireFixed64
+		case "string", "bytes":
+			return 2 // WireBytes
+		}
+	case *schema.NamedType:
+		if c.isNamedEnum(typ) {
+			return 4 // WireSVarint (enums)
+		}
+		return 2 // WireBytes (messages, interfaces)
+	case *schema.MapType:
+		return 2 // WireBytes
+	case *schema.PointerType:
+		return c.wireTypeValueForType(typ.Element, false)
+	}
+	return 2
+}
+
+// emitTag returns the Go statement that writes the field tag for
+// (fieldNum, wireTypeName/wireTypeVal). For fields 1-15 the tag is one
+// known byte; emit a direct WriteRawByte. For fields >=16 fall back to
+// WriteTag, which handles the extended encoding (marker + varint).
+//
+// Wire-equivalence: WriteRawByte(0xXY) emits exactly the same byte that
+// WriteTag(N, T) would for N<=15, so codegen-parity is preserved.
+func (c *goContext) emitTag(fieldNum int, wireTypeName string, wireTypeVal byte) string {
+	if fieldNum >= 1 && fieldNum <= 15 {
+		// Compact tag: (fieldNum << 4) | (wireType << 1)
+		tagByte := (byte(fieldNum) << 4) | (wireTypeVal << 1)
+		return fmt.Sprintf("w.WriteRawByte(0x%02x)", tagByte)
+	}
+	return fmt.Sprintf("w.WriteTag(%d, %s)", fieldNum, wireTypeName)
+}
+
 func (c *goContext) wireTypeForType(t schema.TypeRef, repeated bool) string {
 	// Slices of packable types use Bytes wire type
 	if repeated {
@@ -148,26 +206,32 @@ func (c *goContext) encodeField(f *schema.Field) string {
 }
 
 func (c *goContext) encodePointerField(f *schema.Field, fieldName string, fieldNum int) string {
-	wireType := c.wireType(f)
+	tagEmit := c.emitTag(fieldNum, c.wireType(f), c.wireTypeValue(f))
 	inner := c.encodeValue(f.Type, fieldName, true)
 	body := c.maybeWrapBody(f.Type, false /*repeated*/, inner)
 
 	return fmt.Sprintf(`if %s != nil {
-		w.WriteTag(%d, %s)
 		%s
-	}`, fieldName, fieldNum, wireType, body)
+		%s
+	}`, fieldName, tagEmit, body)
 }
 
 func (c *goContext) encodeRepeatedField(f *schema.Field, fieldName string, fieldNum int) string {
-	wireType := c.wireType(f)
+	tagEmit := c.emitTag(fieldNum, c.wireType(f), c.wireTypeValue(f))
 
 	var body string
 	if c.isPackableType(f.Type) {
-		// Packable types: count followed by elements concatenated.
-		body = fmt.Sprintf(`w.WriteUvarint(uint64(len(%s)))
+		if fast := c.packedFastPath(f.Type, fieldName); fast != "" {
+			body = fmt.Sprintf(`w.WriteUvarint(uint64(len(%s)))
+		%s`, fieldName, fast)
+		} else {
+			// Packable types without a packed runtime helper: count followed by
+			// elements concatenated via the per-element writer.
+			body = fmt.Sprintf(`w.WriteUvarint(uint64(len(%s)))
 		for _, v := range %s {
 			%s
 		}`, fieldName, fieldName, c.encodePackedElement(f.Type))
+		}
 	} else {
 		body = fmt.Sprintf(`w.WriteUvarint(uint64(len(%s)))
 		for _, v := range %s {
@@ -182,13 +246,13 @@ func (c *goContext) encodeRepeatedField(f *schema.Field, fieldName string, field
 	body = wrapInBeginEnd(body)
 
 	return fmt.Sprintf(`if len(%s) > 0 {
-		w.WriteTag(%d, %s)
 		%s
-	}`, fieldName, fieldNum, wireType, body)
+		%s
+	}`, fieldName, tagEmit, body)
 }
 
 func (c *goContext) encodeScalarField(f *schema.Field, fieldName string, fieldNum int) string {
-	wireType := c.wireType(f)
+	tagEmit := c.emitTag(fieldNum, c.wireType(f), c.wireTypeValue(f))
 	zeroCheck := c.zeroCheck(f)
 	inner := c.encodeValue(f.Type, fieldName, false)
 	body := c.maybeWrapBody(f.Type, false /*repeated*/, inner)
@@ -196,14 +260,14 @@ func (c *goContext) encodeScalarField(f *schema.Field, fieldName string, fieldNu
 	// For optional fields, always emit if non-zero
 	if zeroCheck != "" {
 		return fmt.Sprintf(`if %s {
-		w.WriteTag(%d, %s)
 		%s
-	}`, zeroCheck, fieldNum, wireType, body)
+		%s
+	}`, zeroCheck, tagEmit, body)
 	}
 
 	// Always emit for required fields
-	return fmt.Sprintf(`w.WriteTag(%d, %s)
-	%s`, fieldNum, wireType, body)
+	return fmt.Sprintf(`%s
+	%s`, tagEmit, body)
 }
 
 // maybeWrapBody wraps the emitted body in BeginMessage/EndMessage when the
@@ -362,6 +426,39 @@ func (c *goContext) encodePackedElement(t schema.TypeRef) string {
 		// Packed encoding only supports scalar types
 		return fmt.Sprintf("/* unsupported packed element type: %T */", t)
 	}
+}
+
+// packedFastPath returns a single-line emit that calls the runtime's
+// pre-grow-once packed writer for fieldName, or "" if the element type
+// has no fast-path helper. The slice type must match the helper exactly
+// (a tight wrapper Convert() emit handles []int / []uint and the
+// narrower int/uint widths that aren't fixed-size at the byte level).
+//
+// Wire-equivalence: each helper produces byte-for-byte the same output
+// as looping the per-element writer. The only difference is one grow()
+// + one checkWrite for the entire slice instead of N.
+func (c *goContext) packedFastPath(t schema.TypeRef, fieldName string) string {
+	scalar, ok := t.(*schema.ScalarType)
+	if !ok {
+		return ""
+	}
+	switch scalar.Name {
+	case "float32":
+		return fmt.Sprintf("w.WritePackedFloat32(%s)", fieldName)
+	case "float64":
+		return fmt.Sprintf("w.WritePackedFloat64(%s)", fieldName)
+	case "bool":
+		return fmt.Sprintf("w.WritePackedBool(%s)", fieldName)
+	case "int64":
+		return fmt.Sprintf("w.WritePackedSvarint(%s)", fieldName)
+	case "uint64":
+		return fmt.Sprintf("w.WritePackedUvarint(%s)", fieldName)
+	case "int32":
+		return fmt.Sprintf("w.WritePackedInt32(%s)", fieldName)
+	case "uint32":
+		return fmt.Sprintf("w.WritePackedUint32(%s)", fieldName)
+	}
+	return ""
 }
 
 // decodeField generates the decoding code for a field.

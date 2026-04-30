@@ -424,6 +424,17 @@ func (w *Writer) WriteRawBytes(b []byte) {
 	w.buf = append(w.buf, b...)
 }
 
+// WriteRawByte appends a single literal byte to the buffer. Used by
+// codegen to emit precomputed compact tag bytes (fields 1-15) without
+// going through WriteTag's branch + arithmetic on every field.
+func (w *Writer) WriteRawByte(b byte) {
+	if !w.checkWrite() {
+		return
+	}
+	w.grow(1)
+	w.buf = append(w.buf, b)
+}
+
 // WriteNil writes a nil marker (TypeID 0).
 func (w *Writer) WriteNil() {
 	if !w.checkWrite() {
@@ -440,6 +451,14 @@ func (w *Writer) WriteTypeID(id TypeID) {
 	w.WriteUvarint(uint64(id))
 }
 
+// beginMessagePlaceholder is the number of bytes reserved up front by
+// BeginMessage for the length prefix. 2 bytes covers messages up to
+// 16383 bytes (the most common case for nested-message bodies); larger
+// messages take a slow path in EndMessage that grows the placeholder
+// retroactively. The previous reservation was MaxVarintLen64 (10), which
+// forced a 9-byte left-shift memmove on every nested-message close.
+const beginMessagePlaceholder = 2
+
 // BeginMessage starts writing a length-prefixed message.
 // Returns a checkpoint that must be passed to EndMessage.
 func (w *Writer) BeginMessage() int {
@@ -449,11 +468,11 @@ func (w *Writer) BeginMessage() int {
 	if !w.enterNested() {
 		return -1
 	}
-	// Reserve space for length (we'll fill it in later)
-	// We reserve MaxVarintLen64 bytes to handle any message size
+	// Reserve a small placeholder for the length prefix; EndMessage
+	// shifts to the actual varint width once the body is written.
 	checkpoint := len(w.buf)
-	w.grow(MaxVarintLen64)
-	w.buf = append(w.buf, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	w.grow(beginMessagePlaceholder)
+	w.buf = append(w.buf, 0, 0)
 	return checkpoint
 }
 
@@ -468,32 +487,44 @@ func (w *Writer) EndMessage(checkpoint int) {
 	// a negative msgLen, write a giant uvarint length prefix into a
 	// scratch buffer, and copy() into a meaningless region of w.buf.
 	// Catch it here rather than producing silent wire corruption.
-	if checkpoint+MaxVarintLen64 > len(w.buf) {
+	if checkpoint+beginMessagePlaceholder > len(w.buf) {
 		w.setError(NewEncodeError("EndMessage: checkpoint past buffer end (stale or wrong Writer?)", nil))
 		return
 	}
 	w.exitNested()
 
 	// Calculate the message length (excluding the length prefix placeholder)
-	msgStart := checkpoint + MaxVarintLen64
+	msgStart := checkpoint + beginMessagePlaceholder
 	msgLen := len(w.buf) - msgStart
+	lenSize := wire.UvarintSize(uint64(msgLen))
 
-	// Encode the length to a temporary buffer
-	var lenBuf [MaxVarintLen64]byte
-	lenBytes := wire.AppendUvarint(lenBuf[:0], uint64(msgLen))
-	lenSize := len(lenBytes)
-
-	// Calculate how many bytes we need to shift
-	shift := MaxVarintLen64 - lenSize
-
-	if shift > 0 {
-		// Move message content to close the gap
+	switch {
+	case lenSize == beginMessagePlaceholder:
+		// Length fits exactly in the reserved placeholder; no shift.
+		var lenBuf [MaxVarintLen64]byte
+		lenBytes := wire.AppendUvarint(lenBuf[:0], uint64(msgLen))
+		copy(w.buf[checkpoint:], lenBytes)
+	case lenSize < beginMessagePlaceholder:
+		// Common: msgLen < 128 → 1-byte varint. Shift body left by
+		// (placeholder - lenSize) bytes and truncate.
+		shift := beginMessagePlaceholder - lenSize
 		copy(w.buf[checkpoint+lenSize:], w.buf[msgStart:])
 		w.buf = w.buf[:len(w.buf)-shift]
+		var lenBuf [MaxVarintLen64]byte
+		lenBytes := wire.AppendUvarint(lenBuf[:0], uint64(msgLen))
+		copy(w.buf[checkpoint:], lenBytes)
+	default:
+		// Rare: message body needs more than 2 length bytes (msgLen >= 16384).
+		// Grow the placeholder retroactively by (lenSize - placeholder) and
+		// memmove the body right.
+		extra := lenSize - beginMessagePlaceholder
+		w.grow(extra)
+		w.buf = w.buf[:len(w.buf)+extra]
+		copy(w.buf[msgStart+extra:], w.buf[msgStart:len(w.buf)-extra])
+		var lenBuf [MaxVarintLen64]byte
+		lenBytes := wire.AppendUvarint(lenBuf[:0], uint64(msgLen))
+		copy(w.buf[checkpoint:], lenBytes)
 	}
-
-	// Write the length prefix
-	copy(w.buf[checkpoint:], lenBytes)
 }
 
 // WriteArrayHeader writes the length of an array/slice.
@@ -831,5 +862,106 @@ func (w *Writer) WritePackedFixed64(values []uint64) {
 			byte(v>>40),
 			byte(v>>48),
 			byte(v>>56))
+	}
+}
+
+// ----------------------------------------------------------------------------
+// Packed varint writers — pre-grow once, append in a tight loop so the
+// per-element checkWrite + per-element grow cost from looping over
+// w.WriteUvarint / w.WriteSvarint is paid once per slice instead of N
+// times. Used by codegen for repeated scalar fields where the inner
+// type is a varint (int8/16/32/64, uint8/16/32/64, bool, int, uint).
+//
+// The wire encoding is identical to encoding each element via the
+// per-element writer; only the host-side allocation pattern changes.
+// ----------------------------------------------------------------------------
+
+// WritePackedBool writes a slice of bools as one byte each (varint of 0/1).
+func (w *Writer) WritePackedBool(values []bool) {
+	if !w.checkWrite() {
+		return
+	}
+	if len(values) == 0 {
+		return
+	}
+	w.grow(len(values))
+	for _, v := range values {
+		if v {
+			w.buf = append(w.buf, 1)
+		} else {
+			w.buf = append(w.buf, 0)
+		}
+	}
+}
+
+// WritePackedUvarint writes a slice of uint64 values as concatenated varints.
+func (w *Writer) WritePackedUvarint(values []uint64) {
+	if !w.checkWrite() {
+		return
+	}
+	if len(values) == 0 {
+		return
+	}
+	if len(values) > math.MaxInt/MaxVarintLen64 {
+		w.setError(ErrMaxArrayLength)
+		return
+	}
+	w.grow(len(values) * MaxVarintLen64)
+	for _, v := range values {
+		w.buf = wire.AppendUvarint(w.buf, v)
+	}
+}
+
+// WritePackedSvarint writes a slice of int64 values as concatenated zigzag varints.
+func (w *Writer) WritePackedSvarint(values []int64) {
+	if !w.checkWrite() {
+		return
+	}
+	if len(values) == 0 {
+		return
+	}
+	if len(values) > math.MaxInt/MaxVarintLen64 {
+		w.setError(ErrMaxArrayLength)
+		return
+	}
+	w.grow(len(values) * MaxVarintLen64)
+	for _, v := range values {
+		w.buf = wire.AppendSvarint(w.buf, v)
+	}
+}
+
+// WritePackedInt32 writes a slice of int32 values as concatenated zigzag varints.
+func (w *Writer) WritePackedInt32(values []int32) {
+	if !w.checkWrite() {
+		return
+	}
+	if len(values) == 0 {
+		return
+	}
+	if len(values) > math.MaxInt/MaxVarintLen64 {
+		w.setError(ErrMaxArrayLength)
+		return
+	}
+	w.grow(len(values) * MaxVarintLen64)
+	for _, v := range values {
+		w.buf = wire.AppendSvarint(w.buf, int64(v))
+	}
+}
+
+// WritePackedUint32 writes a slice of uint32 values as concatenated varints.
+func (w *Writer) WritePackedUint32(values []uint32) {
+	if !w.checkWrite() {
+		return
+	}
+	if len(values) == 0 {
+		return
+	}
+	if len(values) > math.MaxInt/MaxVarintLen64 {
+		w.setError(ErrMaxArrayLength)
+		return
+	}
+	w.grow(len(values) * MaxVarintLen64)
+	for _, v := range values {
+		w.buf = wire.AppendUvarint(w.buf, uint64(v))
 	}
 }

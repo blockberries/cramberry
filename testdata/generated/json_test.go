@@ -95,55 +95,55 @@ func (m *ScalarTypes) MarshalCramberry() ([]byte, error) {
 // EncodeTo encodes the message directly to the writer.
 func (m *ScalarTypes) EncodeTo(w *cramberry.Writer) {
 	if m.BoolVal {
-		w.WriteTag(1, cramberry.WireVarint)
+		w.WriteRawByte(0x10)
 		w.WriteBool(m.BoolVal)
 	}
 	if m.Int8Val != 0 {
-		w.WriteTag(2, cramberry.WireSVarint)
+		w.WriteRawByte(0x28)
 		w.WriteInt8(m.Int8Val)
 	}
 	if m.Int16Val != 0 {
-		w.WriteTag(3, cramberry.WireSVarint)
+		w.WriteRawByte(0x38)
 		w.WriteInt16(m.Int16Val)
 	}
 	if m.Int32Val != 0 {
-		w.WriteTag(4, cramberry.WireSVarint)
+		w.WriteRawByte(0x48)
 		w.WriteInt32(m.Int32Val)
 	}
 	if m.Int64Val != 0 {
-		w.WriteTag(5, cramberry.WireSVarint)
+		w.WriteRawByte(0x58)
 		w.WriteInt64(m.Int64Val)
 	}
 	if m.Uint8Val != 0 {
-		w.WriteTag(6, cramberry.WireVarint)
+		w.WriteRawByte(0x60)
 		w.WriteUint8(m.Uint8Val)
 	}
 	if m.Uint16Val != 0 {
-		w.WriteTag(7, cramberry.WireVarint)
+		w.WriteRawByte(0x70)
 		w.WriteUint16(m.Uint16Val)
 	}
 	if m.Uint32Val != 0 {
-		w.WriteTag(8, cramberry.WireVarint)
+		w.WriteRawByte(0x80)
 		w.WriteUint32(m.Uint32Val)
 	}
 	if m.Uint64Val != 0 {
-		w.WriteTag(9, cramberry.WireVarint)
+		w.WriteRawByte(0x90)
 		w.WriteUint64(m.Uint64Val)
 	}
 	if m.Float32Val != 0 {
-		w.WriteTag(10, cramberry.WireFixed32)
+		w.WriteRawByte(0xa6)
 		w.WriteFloat32(m.Float32Val)
 	}
 	if m.Float64Val != 0 {
-		w.WriteTag(11, cramberry.WireFixed64)
+		w.WriteRawByte(0xb2)
 		w.WriteFloat64(m.Float64Val)
 	}
 	if m.StringVal != "" {
-		w.WriteTag(12, cramberry.WireBytes)
+		w.WriteRawByte(0xc4)
 		w.WriteString(m.StringVal)
 	}
 	if len(m.BytesVal) > 0 {
-		w.WriteTag(13, cramberry.WireBytes)
+		w.WriteRawByte(0xd4)
 		w.WriteBytes(m.BytesVal)
 	}
 	w.WriteEndMarker()
@@ -523,7 +523,7 @@ func (m *RepeatedTypes) MarshalCramberry() ([]byte, error) {
 // EncodeTo encodes the message directly to the writer.
 func (m *RepeatedTypes) EncodeTo(w *cramberry.Writer) {
 	if len(m.Strings) > 0 {
-		w.WriteTag(1, cramberry.WireBytes)
+		w.WriteRawByte(0x14)
 		{
 			__cp := w.BeginMessage()
 			w.WriteUvarint(uint64(len(m.Strings)))
@@ -534,24 +534,20 @@ func (m *RepeatedTypes) EncodeTo(w *cramberry.Writer) {
 		}
 	}
 	if len(m.Ints) > 0 {
-		w.WriteTag(2, cramberry.WireBytes)
+		w.WriteRawByte(0x24)
 		{
 			__cp := w.BeginMessage()
 			w.WriteUvarint(uint64(len(m.Ints)))
-			for _, v := range m.Ints {
-				w.WriteInt64(v)
-			}
+			w.WritePackedSvarint(m.Ints)
 			w.EndMessage(__cp)
 		}
 	}
 	if len(m.Bools) > 0 {
-		w.WriteTag(3, cramberry.WireBytes)
+		w.WriteRawByte(0x34)
 		{
 			__cp := w.BeginMessage()
 			w.WriteUvarint(uint64(len(m.Bools)))
-			for _, v := range m.Bools {
-				w.WriteBool(v)
-			}
+			w.WritePackedBool(m.Bools)
 			w.EndMessage(__cp)
 		}
 	}
@@ -786,7 +782,7 @@ func (m *MapTypes) MarshalCramberry() ([]byte, error) {
 // EncodeTo encodes the message directly to the writer.
 func (m *MapTypes) EncodeTo(w *cramberry.Writer) {
 	if m.StringMap != nil {
-		w.WriteTag(1, cramberry.WireBytes)
+		w.WriteRawByte(0x14)
 		{
 			__cp := w.BeginMessage()
 			{
@@ -802,7 +798,7 @@ func (m *MapTypes) EncodeTo(w *cramberry.Writer) {
 		}
 	}
 	if m.IntMap != nil {
-		w.WriteTag(2, cramberry.WireBytes)
+		w.WriteRawByte(0x24)
 		{
 			__cp := w.BeginMessage()
 			{
@@ -818,7 +814,7 @@ func (m *MapTypes) EncodeTo(w *cramberry.Writer) {
 		}
 	}
 	if m.IntKeyed != nil {
-		w.WriteTag(3, cramberry.WireBytes)
+		w.WriteRawByte(0x34)
 		{
 			__cp := w.BeginMessage()
 			{
@@ -834,7 +830,7 @@ func (m *MapTypes) EncodeTo(w *cramberry.Writer) {
 		}
 	}
 	if m.UintKeyed != nil {
-		w.WriteTag(4, cramberry.WireBytes)
+		w.WriteRawByte(0x44)
 		{
 			__cp := w.BeginMessage()
 			{
@@ -1199,15 +1195,15 @@ func (m *Address) MarshalCramberry() ([]byte, error) {
 // EncodeTo encodes the message directly to the writer.
 func (m *Address) EncodeTo(w *cramberry.Writer) {
 	if m.Street != "" {
-		w.WriteTag(1, cramberry.WireBytes)
+		w.WriteRawByte(0x14)
 		w.WriteString(m.Street)
 	}
 	if m.City != "" {
-		w.WriteTag(2, cramberry.WireBytes)
+		w.WriteRawByte(0x24)
 		w.WriteString(m.City)
 	}
 	if m.Zip != "" {
-		w.WriteTag(3, cramberry.WireBytes)
+		w.WriteRawByte(0x34)
 		w.WriteString(m.Zip)
 	}
 	w.WriteEndMarker()
@@ -1340,21 +1336,21 @@ func (m *Person) MarshalCramberry() ([]byte, error) {
 // EncodeTo encodes the message directly to the writer.
 func (m *Person) EncodeTo(w *cramberry.Writer) {
 	if m.Name != "" {
-		w.WriteTag(1, cramberry.WireBytes)
+		w.WriteRawByte(0x14)
 		w.WriteString(m.Name)
 	}
 	if m.Age != 0 {
-		w.WriteTag(2, cramberry.WireSVarint)
+		w.WriteRawByte(0x28)
 		w.WriteInt32(m.Age)
 	}
-	w.WriteTag(3, cramberry.WireBytes)
+	w.WriteRawByte(0x34)
 	{
 		__cp := w.BeginMessage()
 		m.Address.EncodeTo(w)
 		w.EndMessage(__cp)
 	}
 	if len(m.Emails) > 0 {
-		w.WriteTag(4, cramberry.WireBytes)
+		w.WriteRawByte(0x44)
 		{
 			__cp := w.BeginMessage()
 			w.WriteUvarint(uint64(len(m.Emails)))
@@ -1558,15 +1554,15 @@ func (m *RequiredFields) MarshalCramberry() ([]byte, error) {
 // EncodeTo encodes the message directly to the writer.
 func (m *RequiredFields) EncodeTo(w *cramberry.Writer) {
 	if m.Id != nil {
-		w.WriteTag(1, cramberry.WireSVarint)
+		w.WriteRawByte(0x18)
 		w.WriteInt64(*m.Id)
 	}
 	if m.Name != nil {
-		w.WriteTag(2, cramberry.WireBytes)
+		w.WriteRawByte(0x24)
 		w.WriteString(*m.Name)
 	}
 	if m.OptionalField != "" {
-		w.WriteTag(3, cramberry.WireBytes)
+		w.WriteRawByte(0x34)
 		w.WriteString(m.OptionalField)
 	}
 	w.WriteEndMarker()
@@ -1738,15 +1734,15 @@ func (m *OptionalPointer) MarshalCramberry() ([]byte, error) {
 // EncodeTo encodes the message directly to the writer.
 func (m *OptionalPointer) EncodeTo(w *cramberry.Writer) {
 	if m.Value != nil {
-		w.WriteTag(1, cramberry.WireBytes)
+		w.WriteRawByte(0x14)
 		w.WriteString(*m.Value)
 	}
 	if m.Number != nil {
-		w.WriteTag(2, cramberry.WireBytes)
+		w.WriteRawByte(0x28)
 		w.WriteInt64(*m.Number)
 	}
 	if m.Blob != nil {
-		w.WriteTag(3, cramberry.WireBytes)
+		w.WriteRawByte(0x34)
 		w.WriteBytes(*m.Blob)
 	}
 	w.WriteEndMarker()
@@ -1928,10 +1924,10 @@ func (m *EnumTest) MarshalCramberry() ([]byte, error) {
 
 // EncodeTo encodes the message directly to the writer.
 func (m *EnumTest) EncodeTo(w *cramberry.Writer) {
-	w.WriteTag(1, cramberry.WireSVarint)
+	w.WriteRawByte(0x18)
 	m.Status.EncodeTo(w)
 	if len(m.Statuses) > 0 {
-		w.WriteTag(2, cramberry.WireBytes)
+		w.WriteRawByte(0x24)
 		{
 			__cp := w.BeginMessage()
 			w.WriteUvarint(uint64(len(m.Statuses)))
@@ -2192,19 +2188,19 @@ func (m *AllZeroValues) MarshalCramberry() ([]byte, error) {
 // EncodeTo encodes the message directly to the writer.
 func (m *AllZeroValues) EncodeTo(w *cramberry.Writer) {
 	if m.ZeroInt != 0 {
-		w.WriteTag(1, cramberry.WireSVarint)
+		w.WriteRawByte(0x18)
 		w.WriteInt64(m.ZeroInt)
 	}
 	if m.ZeroString != "" {
-		w.WriteTag(2, cramberry.WireBytes)
+		w.WriteRawByte(0x24)
 		w.WriteString(m.ZeroString)
 	}
 	if m.ZeroBool {
-		w.WriteTag(3, cramberry.WireVarint)
+		w.WriteRawByte(0x30)
 		w.WriteBool(m.ZeroBool)
 	}
 	if len(m.EmptyArray) > 0 {
-		w.WriteTag(4, cramberry.WireBytes)
+		w.WriteRawByte(0x44)
 		{
 			__cp := w.BeginMessage()
 			w.WriteUvarint(uint64(len(m.EmptyArray)))

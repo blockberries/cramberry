@@ -832,11 +832,13 @@ func TestGoGeneratorCrossPackageEnumWireType(t *testing.T) {
 	output := buf.String()
 
 	// The status field tag must use WireSVarint, not WireBytes.
-	if !strings.Contains(output, "WriteTag(2, cramberry.WireSVarint)") {
-		t.Errorf("expected status field encoded with WireSVarint, got:\n%s", output)
+	// Compact tag for field 2 + SVarint: (2<<4) | (4<<1) = 0x28.
+	// Compact tag for field 2 + Bytes:    (2<<4) | (2<<1) = 0x24 (must NOT appear).
+	if !strings.Contains(output, "WriteRawByte(0x28)") {
+		t.Errorf("expected status field encoded with WireSVarint (compact tag 0x28), got:\n%s", output)
 	}
-	if strings.Contains(output, "WriteTag(2, cramberry.WireBytes)") {
-		t.Errorf("status field unexpectedly encoded with WireBytes:\n%s", output)
+	if strings.Contains(output, "WriteRawByte(0x24)") {
+		t.Errorf("status field unexpectedly encoded with WireBytes (compact tag 0x24):\n%s", output)
 	}
 }
 

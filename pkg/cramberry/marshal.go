@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/blockberries/cramberry/internal/wire"
 )
 
 // Marshal encodes a Go value into cramberry binary format.
@@ -401,7 +404,8 @@ func encodeStruct(w *Writer, v reflect.Value) error {
 	}
 
 	omitEmpty := w.Options().OmitEmpty
-	for _, field := range info.fields {
+	for i := range info.fields {
+		field := &info.fields[i]
 		fv := v.Field(field.index)
 
 		// A field is skipped if it is the zero value of an "omittable" kind
@@ -409,30 +413,21 @@ func encodeStruct(w *Writer, v reflect.Value) error {
 		// carries an explicit `,omitempty` tag. Composite kinds (struct,
 		// map, named-type, interface) are always emitted to match the
 		// codegen path — see isOmittableZero.
-		//
-		// CLAUDE.md previously tracked the per-field tag being silently
-		// ignored as T1-10; this branch fixes that.
 		if (omitEmpty || field.omitEmpty) && isOmittableZero(fv) {
 			continue
 		}
 
-		// Write compact field tag
-		w.WriteTag(field.num, getWireTypeCached(fv.Type()))
+		// Emit the precomputed tag bytes directly. Avoids the per-field
+		// sync.Map.Load (was: getWireTypeCached) and the WriteTag arithmetic.
+		w.WriteRawBytes(field.tagBytes)
 		if w.Err() != nil {
 			return w.Err()
 		}
 
-		// Struct, pointer-to-struct, and interface field bodies are
-		// end-marker-terminated rather than length-prefixed by the value
-		// itself. The matching SkipValue(WireBytes) path expects a length
-		// prefix, so without one a future schema that doesn't recognize the
-		// field cannot skip it (it'd misread the first body byte as a length
-		// and corrupt the decoder). Wrap the body with BeginMessage /
-		// EndMessage so the outer length prefix is present. Non-struct
-		// values that map to WireBytes (string, bytes, slice, map, packed
-		// arrays) already write their own length prefix and don't need
-		// this wrapping.
-		if needsBodyLengthPrefix(fv) {
+		// Wrap composite bodies in BeginMessage/EndMessage so the on-wire
+		// layout is `tag(WireBytes) length:varint body 0x00`, which
+		// SkipValue(WireBytes) can skip even on schema mismatch.
+		if field.needsLenPrefix {
 			cp := w.BeginMessage()
 			if cp < 0 {
 				return w.Err()
@@ -479,22 +474,19 @@ func encodeStruct(w *Writer, v reflect.Value) error {
 // and corrupt every following field. (Verified via a forward-compat
 // test that previously failed for `*int32` set to 64.)
 func needsBodyLengthPrefix(v reflect.Value) bool {
-	t := v.Type()
+	return needsBodyLengthPrefixForType(v.Type())
+}
+
+// needsBodyLengthPrefixForType is the type-only version used by the
+// per-field cache populated in parseStructInfo.
+func needsBodyLengthPrefixForType(t reflect.Type) bool {
 	for t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
-	// Pointer-to-scalar fields use the underlying scalar's wire type
-	// (see computeWireType's reflect.Ptr branch), so SkipValue knows
-	// how to skip them without an outer length prefix. Only kinds
-	// whose tag IS `WireBytes` AND whose body is not already
-	// length-prefixed need wrapping here.
 	switch t.Kind() {
 	case reflect.Struct, reflect.Map, reflect.Interface:
 		return true
 	case reflect.Slice, reflect.Array:
-		// []byte and [N]byte get encoded via WriteBytes which is already
-		// length-prefixed. Anything else is count-then-elements and needs
-		// the surrounding length prefix.
 		return t.Elem().Kind() != reflect.Uint8
 	case reflect.Complex128:
 		return true
@@ -502,14 +494,22 @@ func needsBodyLengthPrefix(v reflect.Value) bool {
 	return false
 }
 
-// getWireTypeCached returns the wire type for a reflect.Type, using cache.
-func getWireTypeCached(t reflect.Type) byte {
-	if wt, ok := wireTypeCache.Load(t); ok {
-		return wt.(byte)
+// encodeFieldTag returns a freshly-allocated byte slice containing the
+// wire-format encoding of (fieldNum, wireType): a single byte for
+// fieldNum 1-15, an extended marker + varint for fieldNum >=16. Returns
+// nil for fieldNum <= 0 (caller handles that as an error path).
+func encodeFieldTag(fieldNum int, wireType byte) []byte {
+	if fieldNum <= 0 {
+		return nil
 	}
-	computed := computeWireType(t)
-	wireTypeCache.Store(t, computed)
-	return computed
+	if fieldNum <= maxCompactFieldNum {
+		return []byte{byte(fieldNum<<tagFieldNumShift) | (wireType << tagWireTypeShift)}
+	}
+	marker := (wireType << tagWireTypeShift) | tagExtendedBit
+	buf := make([]byte, 0, 1+MaxVarintLen64)
+	buf = append(buf, marker)
+	buf = wire.AppendUvarint(buf, uint64(fieldNum))
+	return buf
 }
 
 // computeWireType computes the wire type for a reflect.Type.
@@ -554,12 +554,20 @@ func computeWireType(t reflect.Type) byte {
 }
 
 // fieldInfo holds metadata about a struct field.
+//
+// wireType, tagBytes, and needsLenPrefix are precomputed at parse time
+// so the per-field encode loop in encodeStruct skips the per-field
+// sync.Map.Load + kind switch + tag arithmetic that the original
+// implementation re-did on every Marshal.
 type fieldInfo struct {
-	name      string
-	num       int
-	index     int
-	omitEmpty bool
-	required  bool
+	name           string
+	num            int
+	index          int
+	omitEmpty      bool
+	required       bool
+	wireType       byte   // cached result of computeWireType(field.Type)
+	tagBytes       []byte // pre-encoded compact (1B) or extended (2-6B) tag
+	needsLenPrefix bool   // cached result of needsBodyLengthPrefixForType
 }
 
 // structInfo holds cached metadata about a struct type.
@@ -570,9 +578,6 @@ type structInfo struct {
 
 // structInfoCache caches struct metadata for performance.
 var structInfoCache sync.Map
-
-// wireTypeCache caches wire types by reflect.Type for performance.
-var wireTypeCache sync.Map
 
 // packableCache caches whether element types support packed encoding.
 var packableCache sync.Map
@@ -646,6 +651,11 @@ func parseStructInfo(t reflect.Type) (*structInfo, error) {
 				fi.num, t.Name(), existingField, f.Name)
 		}
 		seenFieldNums[fi.num] = f.Name
+
+		// Precompute hot-path values for the per-field encode loop.
+		fi.wireType = computeWireType(f.Type)
+		fi.tagBytes = encodeFieldTag(fi.num, fi.wireType)
+		fi.needsLenPrefix = needsBodyLengthPrefixForType(f.Type)
 
 		info.fields = append(info.fields, fi)
 		fieldNum++
@@ -793,38 +803,68 @@ func isZeroValueWithDepth(v reflect.Value, depth int) bool {
 	}
 }
 
-// sortMapKeys sorts map keys for deterministic encoding.
+// sortMapKeys sorts map keys for deterministic encoding. Uses
+// slices.SortFunc on the typed []reflect.Value slice instead of
+// sort.Slice, which avoids the reflect.Swapper-based generic swap that
+// was the dominant cost in earlier profiles. The comparator still has
+// to extract the typed value via reflect.Value.String/Int/Uint/Float —
+// but those are constant-time accessors on a discriminated union.
 func sortMapKeys(keys []reflect.Value) []reflect.Value {
 	if len(keys) <= 1 {
 		return keys
 	}
 
-	// Determine the key type and sort accordingly
 	switch keys[0].Kind() {
 	case reflect.String:
-		sort.Slice(keys, func(i, j int) bool {
-			return keys[i].String() < keys[j].String()
+		slices.SortFunc(keys, func(a, b reflect.Value) int {
+			return strings.Compare(a.String(), b.String())
 		})
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		sort.Slice(keys, func(i, j int) bool {
-			return keys[i].Int() < keys[j].Int()
+		slices.SortFunc(keys, func(a, b reflect.Value) int {
+			ai, bi := a.Int(), b.Int()
+			switch {
+			case ai < bi:
+				return -1
+			case ai > bi:
+				return 1
+			}
+			return 0
 		})
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		sort.Slice(keys, func(i, j int) bool {
-			return keys[i].Uint() < keys[j].Uint()
+		slices.SortFunc(keys, func(a, b reflect.Value) int {
+			au, bu := a.Uint(), b.Uint()
+			switch {
+			case au < bu:
+				return -1
+			case au > bu:
+				return 1
+			}
+			return 0
 		})
 	case reflect.Float32, reflect.Float64:
-		sort.Slice(keys, func(i, j int) bool {
-			return CompareFloatKeys(keys[i].Float(), keys[j].Float())
+		slices.SortFunc(keys, func(a, b reflect.Value) int {
+			if CompareFloatKeys(a.Float(), b.Float()) {
+				return -1
+			}
+			if CompareFloatKeys(b.Float(), a.Float()) {
+				return 1
+			}
+			return 0
 		})
 	case reflect.Bool:
-		sort.Slice(keys, func(i, j int) bool {
-			return !keys[i].Bool() && keys[j].Bool()
+		slices.SortFunc(keys, func(a, b reflect.Value) int {
+			ab, bb := a.Bool(), b.Bool()
+			if !ab && bb {
+				return -1
+			}
+			if ab && !bb {
+				return 1
+			}
+			return 0
 		})
 	default:
-		// For other types, use string representation
-		sort.Slice(keys, func(i, j int) bool {
-			return keys[i].String() < keys[j].String()
+		slices.SortFunc(keys, func(a, b reflect.Value) int {
+			return strings.Compare(a.String(), b.String())
 		})
 	}
 	return keys
