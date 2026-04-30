@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Extended (parity fixture surface — omit-empty + multi-byte lengths)
+
+The codegen-parity fixture now also exercises:
+
+- Five intentionally zero/empty fields (`empty_str`, `empty_list`,
+  `empty_bytes`, `zero_count`, `zero_ratio`). All four runtimes
+  agree these should be omitted on the wire. Previously the
+  omit-empty paths were code-reviewed but never byte-compared
+  across runtimes.
+- A long string (≈ 215 bytes — UTF-8 + 200 ASCII repeats), forcing
+  the length prefix into a multi-byte varint encoding. Confirms
+  multi-byte varint length encoding is byte-identical across all
+  four runtimes (`d7 01` for length 215).
+
+No drift surfaced — clean confirmation that the omit-empty and
+multi-byte-length paths are already aligned across runtimes.
+
 ### Fixed (consensus-critical: int8/uint8 wire format mismatch)
 
 `Writer.WriteInt8`/`WriteUint8` (and the matching readers) used **raw

@@ -46,9 +46,12 @@ package $genpkg
 import (
 	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"github.com/blockberries/cramberry/pkg/cramberry"
 )
+
+func repeat(s string, n int) string { return strings.Repeat(s, n) }
 
 func fixture() *Sample {
 	nick := "the_admin"
@@ -58,7 +61,7 @@ func fixture() *Sample {
 		Active:  true,
 		Count:   -42,
 		Amount:  123456789012,
-		Name:    "hello, 世界!",
+		Name:    "hello, 世界! " + repeat("AB", 100),
 		Payload: []byte{0xde, 0xad, 0xbe, 0xef},
 		Ratio:   3.14159,
 		Tags:    []string{"alpha", "beta", "gamma"},
@@ -179,7 +182,7 @@ fn main() {
         active:  true,
         count:   -42,
         amount:  123456789012,
-        name:    "hello, 世界!".to_string(),
+        name:    format!("hello, 世界! {}", "AB".repeat(100)),
         payload: vec![0xde, 0xad, 0xbe, 0xef],
         ratio:   3.14159,
         tags:    vec!["alpha".to_string(), "beta".to_string(), "gamma".to_string()],
@@ -207,6 +210,12 @@ fn main() {
             street: "1 Hacker Way".to_string(),
             city:   "Menlo Park".to_string(),
         }),
+        // Intentionally zero — exercise omit-empty paths.
+        empty_str:   String::new(),
+        empty_list:  Vec::new(),
+        empty_bytes: Vec::new(),
+        zero_count:  0,
+        zero_ratio:  0.0,
     };
     let mut w = Writer::new();
     encode_sample(&mut w, &s).unwrap();
@@ -255,7 +264,7 @@ const s = {
     active: true,
     count: -42,
     amount: 123456789012n,
-    name: "hello, 世界!",
+    name: "hello, 世界! " + "AB".repeat(100),
     payload: new Uint8Array([0xde, 0xad, 0xbe, 0xef]),
     ratio: 3.14159,
     tags: ["alpha", "beta", "gamma"],

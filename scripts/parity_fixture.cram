@@ -45,4 +45,11 @@ message Sample {
   uint16 small_unsigned = 20;
   map[int32]string id_to_name = 21;
   optional Address office = 22;
+  // Fields intentionally left zero/empty in the fixture builder to
+  // exercise omit-empty paths. All four runtimes should skip them.
+  string empty_str = 23;
+  repeated int32 empty_list = 24;
+  bytes empty_bytes = 25;
+  int64 zero_count = 26;
+  float64 zero_ratio = 27;
 }
