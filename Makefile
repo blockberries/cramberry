@@ -3,7 +3,7 @@
 .PHONY: examples example-basic example-streaming example-polymorphic
 .PHONY: schema-generate schema-extract
 .PHONY: ts-build ts-test ts-fmt ts-lint rust-build rust-test rust-fmt rust-lint
-.PHONY: rust-codegen-check ts-codegen-check go-codegen-check codegen-check
+.PHONY: rust-codegen-check ts-codegen-check go-codegen-check codegen-check codegen-parity-check
 .PHONY: runtimes runtimes-test ts-integration-test rust-integration-test integration-test
 .PHONY: lint-all fmt-all
 
@@ -209,7 +209,11 @@ go-codegen-check: build ## Generate + compile-check Go output for every schema
 
 codegen-check: go-codegen-check ts-codegen-check rust-codegen-check ## Compile-check generated output for all three languages
 
-integration-test: ts-integration-test rust-integration-test codegen-check ## Run cross-language integration tests
+codegen-parity-check: build ## End-to-end byte-parity: Go codegen == Rust codegen for the same schema
+	@echo "Verifying Go codegen and Rust codegen produce identical bytes..."
+	@./scripts/codegen-parity-check.sh
+
+integration-test: ts-integration-test rust-integration-test codegen-check codegen-parity-check ## Run cross-language integration tests
 
 runtimes: ts-build rust-build ## Build all cross-language runtimes
 

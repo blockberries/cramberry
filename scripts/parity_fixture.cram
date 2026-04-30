@@ -1,0 +1,16 @@
+// Fixture schema used by scripts/codegen-parity-check.sh to verify
+// cross-language byte-identity of code-generated encoders. Touches a
+// representative slice of types: bool, signed/unsigned varints, an
+// fixed-width float, length-prefixed strings/bytes, and a repeated
+// scalar.
+package parity;
+
+message Sample {
+  bool active = 1;
+  int32 count = 2;
+  int64 amount = 3;
+  string name = 4;
+  bytes payload = 5;
+  float64 ratio = 6;
+  repeated string tags = 7;
+}

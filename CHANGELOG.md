@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (cross-language byte-parity check)
+
+- New `make codegen-parity-check` target. The script (1) generates Go
+  and Rust code from a fixture schema covering the common scalar +
+  string + bytes + repeated types, (2) compiles both, (3) encodes
+  the same logical data through each runtime, and (4) asserts the
+  byte streams are identical AND that Go reflection produces the
+  same bytes as Go codegen.
+- Wired into `make integration-test`. CI now catches drift between
+  the three encoders the moment any of them produces different
+  bytes for the same input. This was previously **untested** —
+  the existing integration tests use hand-rolled encoders against
+  Go-produced golden bytes, not generator output.
+
 ### Fixed (TypeScript codegen — wrong package name)
 
 The TypeScript generator emitted `import { ... } from 'cramberry'`,
