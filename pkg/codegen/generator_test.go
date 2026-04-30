@@ -327,8 +327,17 @@ func TestGoGeneratorOptions(t *testing.T) {
 			t.Fatalf("generate error: %v", err)
 		}
 
-		if strings.Contains(buf.String(), `json:"id"`) {
-			t.Error("expected no json tags")
+		// JSON STRUCT TAGS are intentionally always emitted, even
+		// with -json=false: they let users feed the same struct into
+		// Go's stdlib encoding/json without re-tagging fields. What
+		// -json=false actually controls is whether the
+		// cramberry-specific ToJSON/FromJSON helper methods are
+		// generated.
+		if strings.Contains(buf.String(), "func (m *User) ToJSON") {
+			t.Error("expected no ToJSON helper with GenerateJSON=false")
+		}
+		if strings.Contains(buf.String(), "func (m *User) FromJSON") {
+			t.Error("expected no FromJSON helper with GenerateJSON=false")
 		}
 	})
 }

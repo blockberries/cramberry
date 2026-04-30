@@ -1,5 +1,5 @@
 .PHONY: all build test test-short bench lint fmt fmt-check vet generate clean install coverage help
-.PHONY: tidy deps verify check ci pre-commit generate-test
+.PHONY: tidy deps verify check ci pre-commit generate-test generate-fixtures
 .PHONY: examples example-basic example-streaming example-polymorphic
 .PHONY: schema-generate schema-extract
 .PHONY: ts-build ts-test ts-fmt ts-lint rust-build rust-test rust-fmt rust-lint
@@ -90,19 +90,26 @@ lint: ## Run golangci-lint (errors if not installed)
 generate: ## Run go generate
 	$(GO) generate $(PKG)
 
-generate-test: build ## Regenerate test/integration code from .cram schemas and verify it compiles + tests still pass
-	@echo "Regenerating testdata/generated from testdata/schemas/json_test.cram..."
+generate-fixtures: build ## Regenerate every checked-in code-generated fixture
+	@echo "Regenerating test/integration/gen/interop.go..."
+	@$(BINARY_DIR)/$(BINARY) generate -lang go -json=false -out test/integration/gen testdata/schemas/interop.cram
+	@gofmt -w test/integration/gen/interop.go
+	@echo "Regenerating testdata/generated/json_test.go..."
 	@$(BINARY_DIR)/$(BINARY) generate -lang go -out testdata/generated testdata/schemas/json_test.cram
+	@gofmt -w testdata/generated/json_test.go
+	@echo "Done. Run 'git diff' to inspect changes."
+
+generate-test: generate-fixtures ## Regenerate fixtures + verify they compile + tests still pass
 	@echo "Verifying generated code compiles..."
 	@$(GO) build ./testdata/generated/...
+	@$(GO) build ./test/integration/gen/...
 	@echo "Verifying tests still pass..."
 	@$(GO) test ./pkg/cramberry/... ./pkg/codegen/... ./test/integration/...
-	@echo "Verifying no drift (run 'git status' to inspect changes)..."
-	@if ! git diff --quiet testdata/generated/; then \
-		echo "WARNING: testdata/generated/ has uncommitted changes after regeneration."; \
-		echo "Review and commit: git diff testdata/generated/"; \
+	@if git diff --quiet testdata/generated/ test/integration/gen/; then \
+		echo "OK: regenerated output matches committed fixtures."; \
 	else \
-		echo "OK: regenerated output matches committed fixture."; \
+		echo "WARNING: fixtures changed; review and commit:"; \
+		git diff --stat testdata/generated/ test/integration/gen/; \
 	fi
 
 ## Utility targets

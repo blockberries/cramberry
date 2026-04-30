@@ -6,9 +6,8 @@ package jsontest
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
-
 	"github.com/blockberries/cramberry/pkg/cramberry"
+	"strings"
 )
 
 type Status int32
@@ -524,23 +523,35 @@ func (m *RepeatedTypes) MarshalCramberry() ([]byte, error) {
 func (m *RepeatedTypes) EncodeTo(w *cramberry.Writer) {
 	if len(m.Strings) > 0 {
 		w.WriteTag(1, cramberry.WireBytes)
-		w.WriteUvarint(uint64(len(m.Strings)))
-		for _, v := range m.Strings {
-			w.WriteString(v)
+		{
+			__cp := w.BeginMessage()
+			w.WriteUvarint(uint64(len(m.Strings)))
+			for _, v := range m.Strings {
+				w.WriteString(v)
+			}
+			w.EndMessage(__cp)
 		}
 	}
 	if len(m.Ints) > 0 {
 		w.WriteTag(2, cramberry.WireBytes)
-		w.WriteUvarint(uint64(len(m.Ints)))
-		for _, v := range m.Ints {
-			w.WriteInt64(v)
+		{
+			__cp := w.BeginMessage()
+			w.WriteUvarint(uint64(len(m.Ints)))
+			for _, v := range m.Ints {
+				w.WriteInt64(v)
+			}
+			w.EndMessage(__cp)
 		}
 	}
 	if len(m.Bools) > 0 {
 		w.WriteTag(3, cramberry.WireBytes)
-		w.WriteUvarint(uint64(len(m.Bools)))
-		for _, v := range m.Bools {
-			w.WriteBool(v)
+		{
+			__cp := w.BeginMessage()
+			w.WriteUvarint(uint64(len(m.Bools)))
+			for _, v := range m.Bools {
+				w.WriteBool(v)
+			}
+			w.EndMessage(__cp)
 		}
 	}
 	w.WriteEndMarker()
@@ -563,31 +574,52 @@ func (m *RepeatedTypes) DecodeFrom(r *cramberry.Reader) {
 		}
 		switch fieldNum {
 		case 1:
-			n := r.ReadArrayHeader()
-			if r.Err() != nil {
-				return
-			}
-			m.Strings = make([]string, n)
-			for i := 0; i < n; i++ {
-				m.Strings[i] = r.ReadString()
+			{
+				__endPos := r.BeginMessage()
+				if __endPos < 0 {
+					return
+				}
+				n := r.ReadArrayHeader()
+				if r.Err() != nil {
+					return
+				}
+				m.Strings = make([]string, n)
+				for i := 0; i < n; i++ {
+					m.Strings[i] = r.ReadString()
+				}
+				r.EndMessage(__endPos)
 			}
 		case 2:
-			n := r.ReadArrayHeader()
-			if r.Err() != nil {
-				return
-			}
-			m.Ints = make([]int64, n)
-			for i := 0; i < n; i++ {
-				m.Ints[i] = r.ReadInt64()
+			{
+				__endPos := r.BeginMessage()
+				if __endPos < 0 {
+					return
+				}
+				n := r.ReadArrayHeader()
+				if r.Err() != nil {
+					return
+				}
+				m.Ints = make([]int64, n)
+				for i := 0; i < n; i++ {
+					m.Ints[i] = r.ReadInt64()
+				}
+				r.EndMessage(__endPos)
 			}
 		case 3:
-			n := r.ReadArrayHeader()
-			if r.Err() != nil {
-				return
-			}
-			m.Bools = make([]bool, n)
-			for i := 0; i < n; i++ {
-				m.Bools[i] = r.ReadBool()
+			{
+				__endPos := r.BeginMessage()
+				if __endPos < 0 {
+					return
+				}
+				n := r.ReadArrayHeader()
+				if r.Err() != nil {
+					return
+				}
+				m.Bools = make([]bool, n)
+				for i := 0; i < n; i++ {
+					m.Bools[i] = r.ReadBool()
+				}
+				r.EndMessage(__endPos)
 			}
 		default:
 			// Skip unknown field for forward compatibility
@@ -755,49 +787,65 @@ func (m *MapTypes) EncodeTo(w *cramberry.Writer) {
 	if m.StringMap != nil {
 		w.WriteTag(1, cramberry.WireBytes)
 		{
-			__keys := cramberry.SortedMapKeys(m.StringMap)
-			w.WriteUvarint(uint64(len(__keys)))
-			for _, k := range __keys {
-				v := m.StringMap[k]
-				w.WriteString(k)
-				w.WriteString(v)
+			__cp := w.BeginMessage()
+			{
+				__keys := cramberry.SortedMapKeys(m.StringMap)
+				w.WriteUvarint(uint64(len(__keys)))
+				for _, k := range __keys {
+					v := m.StringMap[k]
+					w.WriteString(k)
+					w.WriteString(v)
+				}
 			}
+			w.EndMessage(__cp)
 		}
 	}
 	if m.IntMap != nil {
 		w.WriteTag(2, cramberry.WireBytes)
 		{
-			__keys := cramberry.SortedMapKeys(m.IntMap)
-			w.WriteUvarint(uint64(len(__keys)))
-			for _, k := range __keys {
-				v := m.IntMap[k]
-				w.WriteString(k)
-				w.WriteInt64(v)
+			__cp := w.BeginMessage()
+			{
+				__keys := cramberry.SortedMapKeys(m.IntMap)
+				w.WriteUvarint(uint64(len(__keys)))
+				for _, k := range __keys {
+					v := m.IntMap[k]
+					w.WriteString(k)
+					w.WriteInt64(v)
+				}
 			}
+			w.EndMessage(__cp)
 		}
 	}
 	if m.IntKeyed != nil {
 		w.WriteTag(3, cramberry.WireBytes)
 		{
-			__keys := cramberry.SortedMapKeys(m.IntKeyed)
-			w.WriteUvarint(uint64(len(__keys)))
-			for _, k := range __keys {
-				v := m.IntKeyed[k]
-				w.WriteInt32(k)
-				w.WriteString(v)
+			__cp := w.BeginMessage()
+			{
+				__keys := cramberry.SortedMapKeys(m.IntKeyed)
+				w.WriteUvarint(uint64(len(__keys)))
+				for _, k := range __keys {
+					v := m.IntKeyed[k]
+					w.WriteInt32(k)
+					w.WriteString(v)
+				}
 			}
+			w.EndMessage(__cp)
 		}
 	}
 	if m.UintKeyed != nil {
 		w.WriteTag(4, cramberry.WireBytes)
 		{
-			__keys := cramberry.SortedMapKeys(m.UintKeyed)
-			w.WriteUvarint(uint64(len(__keys)))
-			for _, k := range __keys {
-				v := m.UintKeyed[k]
-				w.WriteUint64(k)
-				w.WriteString(v)
+			__cp := w.BeginMessage()
+			{
+				__keys := cramberry.SortedMapKeys(m.UintKeyed)
+				w.WriteUvarint(uint64(len(__keys)))
+				for _, k := range __keys {
+					v := m.UintKeyed[k]
+					w.WriteUint64(k)
+					w.WriteString(v)
+				}
 			}
+			w.EndMessage(__cp)
 		}
 	}
 	w.WriteEndMarker()
@@ -820,56 +868,84 @@ func (m *MapTypes) DecodeFrom(r *cramberry.Reader) {
 		}
 		switch fieldNum {
 		case 1:
-			n := r.ReadMapHeader()
-			if r.Err() != nil {
-				return
-			}
-			m.StringMap = make(map[string]string, n)
-			for i := 0; i < n; i++ {
-				var k string
-				k = r.ReadString()
-				var v string
-				v = r.ReadString()
-				m.StringMap[k] = v
+			{
+				__endPos := r.BeginMessage()
+				if __endPos < 0 {
+					return
+				}
+				n := r.ReadMapHeader()
+				if r.Err() != nil {
+					return
+				}
+				m.StringMap = make(map[string]string, n)
+				for i := 0; i < n; i++ {
+					var k string
+					k = r.ReadString()
+					var v string
+					v = r.ReadString()
+					m.StringMap[k] = v
+				}
+				r.EndMessage(__endPos)
 			}
 		case 2:
-			n := r.ReadMapHeader()
-			if r.Err() != nil {
-				return
-			}
-			m.IntMap = make(map[string]int64, n)
-			for i := 0; i < n; i++ {
-				var k string
-				k = r.ReadString()
-				var v int64
-				v = r.ReadInt64()
-				m.IntMap[k] = v
+			{
+				__endPos := r.BeginMessage()
+				if __endPos < 0 {
+					return
+				}
+				n := r.ReadMapHeader()
+				if r.Err() != nil {
+					return
+				}
+				m.IntMap = make(map[string]int64, n)
+				for i := 0; i < n; i++ {
+					var k string
+					k = r.ReadString()
+					var v int64
+					v = r.ReadInt64()
+					m.IntMap[k] = v
+				}
+				r.EndMessage(__endPos)
 			}
 		case 3:
-			n := r.ReadMapHeader()
-			if r.Err() != nil {
-				return
-			}
-			m.IntKeyed = make(map[int32]string, n)
-			for i := 0; i < n; i++ {
-				var k int32
-				k = r.ReadInt32()
-				var v string
-				v = r.ReadString()
-				m.IntKeyed[k] = v
+			{
+				__endPos := r.BeginMessage()
+				if __endPos < 0 {
+					return
+				}
+				n := r.ReadMapHeader()
+				if r.Err() != nil {
+					return
+				}
+				m.IntKeyed = make(map[int32]string, n)
+				for i := 0; i < n; i++ {
+					var k int32
+					k = r.ReadInt32()
+					var v string
+					v = r.ReadString()
+					m.IntKeyed[k] = v
+				}
+				r.EndMessage(__endPos)
 			}
 		case 4:
-			n := r.ReadMapHeader()
-			if r.Err() != nil {
-				return
-			}
-			m.UintKeyed = make(map[uint64]string, n)
-			for i := 0; i < n; i++ {
-				var k uint64
-				k = r.ReadUint64()
-				var v string
-				v = r.ReadString()
-				m.UintKeyed[k] = v
+			{
+				__endPos := r.BeginMessage()
+				if __endPos < 0 {
+					return
+				}
+				n := r.ReadMapHeader()
+				if r.Err() != nil {
+					return
+				}
+				m.UintKeyed = make(map[uint64]string, n)
+				for i := 0; i < n; i++ {
+					var k uint64
+					k = r.ReadUint64()
+					var v string
+					v = r.ReadString()
+					m.UintKeyed[k] = v
+				}
+				r.EndMessage(__endPos)
 			}
 		default:
 			// Skip unknown field for forward compatibility
@@ -1271,12 +1347,20 @@ func (m *Person) EncodeTo(w *cramberry.Writer) {
 		w.WriteInt32(m.Age)
 	}
 	w.WriteTag(3, cramberry.WireBytes)
-	m.Address.EncodeTo(w)
+	{
+		__cp := w.BeginMessage()
+		m.Address.EncodeTo(w)
+		w.EndMessage(__cp)
+	}
 	if len(m.Emails) > 0 {
 		w.WriteTag(4, cramberry.WireBytes)
-		w.WriteUvarint(uint64(len(m.Emails)))
-		for _, v := range m.Emails {
-			w.WriteString(v)
+		{
+			__cp := w.BeginMessage()
+			w.WriteUvarint(uint64(len(m.Emails)))
+			for _, v := range m.Emails {
+				w.WriteString(v)
+			}
+			w.EndMessage(__cp)
 		}
 	}
 	w.WriteEndMarker()
@@ -1303,15 +1387,29 @@ func (m *Person) DecodeFrom(r *cramberry.Reader) {
 		case 2:
 			m.Age = r.ReadInt32()
 		case 3:
-			m.Address.DecodeFrom(r)
-		case 4:
-			n := r.ReadArrayHeader()
-			if r.Err() != nil {
-				return
+			{
+				__endPos := r.BeginMessage()
+				if __endPos < 0 {
+					return
+				}
+				m.Address.DecodeFrom(r)
+				r.EndMessage(__endPos)
 			}
-			m.Emails = make([]string, n)
-			for i := 0; i < n; i++ {
-				m.Emails[i] = r.ReadString()
+		case 4:
+			{
+				__endPos := r.BeginMessage()
+				if __endPos < 0 {
+					return
+				}
+				n := r.ReadArrayHeader()
+				if r.Err() != nil {
+					return
+				}
+				m.Emails = make([]string, n)
+				for i := 0; i < n; i++ {
+					m.Emails[i] = r.ReadString()
+				}
+				r.EndMessage(__endPos)
 			}
 		default:
 			// Skip unknown field for forward compatibility
@@ -1695,7 +1793,7 @@ func (m *OptionalPointer) ToJSON() (string, error) {
 	buf.WriteString("{")
 	buf.WriteString(`"value":`)
 	if m.Value != nil {
-		buf.WriteString(cramberry.EscapeJSONString(*m.Value))
+		buf.WriteString(cramberry.EscapeJSONString((*m.Value)))
 	} else {
 		buf.WriteString("null")
 	}
@@ -1704,7 +1802,7 @@ func (m *OptionalPointer) ToJSON() (string, error) {
 	buf.WriteString(`"number":`)
 	if m.Number != nil {
 		buf.WriteString(`"`)
-		buf.WriteString(cramberry.FormatInt64ToString(int64(*m.Number)))
+		buf.WriteString(cramberry.FormatInt64ToString(int64((*m.Number))))
 		buf.WriteString(`"`)
 	} else {
 		buf.WriteString("null")
@@ -1797,9 +1895,13 @@ func (m *EnumTest) EncodeTo(w *cramberry.Writer) {
 	m.Status.EncodeTo(w)
 	if len(m.Statuses) > 0 {
 		w.WriteTag(2, cramberry.WireBytes)
-		w.WriteUvarint(uint64(len(m.Statuses)))
-		for _, v := range m.Statuses {
-			v.EncodeTo(w)
+		{
+			__cp := w.BeginMessage()
+			w.WriteUvarint(uint64(len(m.Statuses)))
+			for _, v := range m.Statuses {
+				v.EncodeTo(w)
+			}
+			w.EndMessage(__cp)
 		}
 	}
 	w.WriteEndMarker()
@@ -1824,13 +1926,20 @@ func (m *EnumTest) DecodeFrom(r *cramberry.Reader) {
 		case 1:
 			m.Status.DecodeFrom(r)
 		case 2:
-			n := r.ReadArrayHeader()
-			if r.Err() != nil {
-				return
-			}
-			m.Statuses = make([]Status, n)
-			for i := 0; i < n; i++ {
-				m.Statuses[i].DecodeFrom(r)
+			{
+				__endPos := r.BeginMessage()
+				if __endPos < 0 {
+					return
+				}
+				n := r.ReadArrayHeader()
+				if r.Err() != nil {
+					return
+				}
+				m.Statuses = make([]Status, n)
+				for i := 0; i < n; i++ {
+					m.Statuses[i].DecodeFrom(r)
+				}
+				r.EndMessage(__endPos)
 			}
 		default:
 			// Skip unknown field for forward compatibility
@@ -2059,9 +2168,13 @@ func (m *AllZeroValues) EncodeTo(w *cramberry.Writer) {
 	}
 	if len(m.EmptyArray) > 0 {
 		w.WriteTag(4, cramberry.WireBytes)
-		w.WriteUvarint(uint64(len(m.EmptyArray)))
-		for _, v := range m.EmptyArray {
-			w.WriteString(v)
+		{
+			__cp := w.BeginMessage()
+			w.WriteUvarint(uint64(len(m.EmptyArray)))
+			for _, v := range m.EmptyArray {
+				w.WriteString(v)
+			}
+			w.EndMessage(__cp)
 		}
 	}
 	w.WriteEndMarker()
@@ -2090,13 +2203,20 @@ func (m *AllZeroValues) DecodeFrom(r *cramberry.Reader) {
 		case 3:
 			m.ZeroBool = r.ReadBool()
 		case 4:
-			n := r.ReadArrayHeader()
-			if r.Err() != nil {
-				return
-			}
-			m.EmptyArray = make([]string, n)
-			for i := 0; i < n; i++ {
-				m.EmptyArray[i] = r.ReadString()
+			{
+				__endPos := r.BeginMessage()
+				if __endPos < 0 {
+					return
+				}
+				n := r.ReadArrayHeader()
+				if r.Err() != nil {
+					return
+				}
+				m.EmptyArray = make([]string, n)
+				for i := 0; i < n; i++ {
+					m.EmptyArray[i] = r.ReadString()
+				}
+				r.EndMessage(__endPos)
 			}
 		default:
 			// Skip unknown field for forward compatibility

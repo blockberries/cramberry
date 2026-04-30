@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (codegen drift + `-json=false`)
+
+- **`-json=false` actually works now**. The flag was registered and
+  threaded through to `Options.GenerateJSON`, but the Go template
+  emitted `ToJSON` / `FromJSON` unconditionally — the generated
+  helpers were always present, with `encoding/json` / `fmt` /
+  `strings` imports they no longer needed. Now the JSON helpers
+  AND their imports are gated behind `{{if generateJSON}}`.
+- **JSON struct tags decoupled from `-json=false`**. Struct tags
+  (`json:"foo"`) are useful even when the cramberry-specific
+  `ToJSON` helpers are off — they let users feed the same struct
+  into Go's stdlib `encoding/json`. The flag now only controls
+  the helper methods, not the struct tags.
+- **Committed fixtures were stale**. `test/integration/gen/interop.go`
+  and `testdata/generated/json_test.go` had been hand-trimmed and
+  drifted from current generator output (most importantly,
+  `testdata/generated/json_test.go` was missing the
+  length-prefix-wrap that was added to repeated fields in an
+  earlier pass — the wire bytes it produced no longer matched what
+  reflection produced). Both regenerated.
+
+### Added (tooling)
+
+- New `make generate-fixtures` target regenerates every checked-in
+  code-generated file from its source schema. `make generate-test`
+  now invokes it as a prerequisite, so a forgotten regeneration
+  surfaces immediately as drift.
+
 ### Fixed (TypeScript codegen — `tsc --strict` errors)
 
 The TypeScript generator emitted code that didn't pass `tsc --strict`

@@ -807,15 +807,17 @@ func (c *goContext) fieldTag(f *schema.Field) string {
 	}
 	parts = append(parts, fmt.Sprintf(`cramberry:"%s"`, cramTag))
 
-	// JSON tag if enabled
-	if c.Options.GenerateJSON {
-		jsonName := ToSnakeCase(f.Name)
-		jsonTag := jsonName
-		if f.Optional {
-			jsonTag += ",omitempty"
-		}
-		parts = append(parts, fmt.Sprintf(`json:"%s"`, jsonTag))
+	// JSON struct tags are always emitted: they're useful for users
+	// who want to feed the same struct into Go's stdlib encoding/json
+	// (e.g. for an HTTP handler) even when the cramberry-specific
+	// ToJSON/FromJSON helpers are turned off via -json=false. The
+	// helpers themselves are gated by `generateJSON` in the template.
+	jsonName := ToSnakeCase(f.Name)
+	jsonTag := jsonName
+	if f.Optional {
+		jsonTag += ",omitempty"
 	}
+	parts = append(parts, fmt.Sprintf(`json:"%s"`, jsonTag))
 
 	return strings.Join(parts, " ")
 }
@@ -1421,10 +1423,12 @@ package {{goPackage}}
 {{$extImports := externalImports}}{{if or needsCramberryImport $extImports}}
 import (
 {{- if needsCramberryImport}}
+{{- if generateJSON}}
 	"encoding/json"
 	"fmt"
 	"strings"
 
+{{- end}}
 	"github.com/blockberries/cramberry/pkg/cramberry"
 {{- end}}
 {{- range $extImports}}
@@ -1553,6 +1557,7 @@ func (m *{{goMessageType $msg}}) Validate() error {
 	return nil
 }
 {{end}}
+{{if generateJSON}}
 // ToJSON encodes the message to deterministic JSON format.
 // All integers are encoded as strings to prevent precision loss in JavaScript.
 // Output is compact (no whitespace) with lexicographically sorted map keys.
@@ -1608,6 +1613,7 @@ func (m *{{goMessageType $msg}}) FromJSON(s string) error {
 
 	return nil
 }
+{{end}}
 {{end}}
 {{range $iface := .Schema.Interfaces}}
 {{if generateComments}}{{range $iface.Comments}}{{if .IsDoc}}{{comment .Text}}
