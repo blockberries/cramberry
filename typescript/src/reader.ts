@@ -233,33 +233,48 @@ export class Reader {
   /**
    * Reads an unsigned 64-bit varint (LEB128).
    * Uses a maximum of 10 bytes, consistent with protobuf and Go implementation.
+   *
+   * Fast path: while the accumulated bits fit in a Number's safe-integer
+   * range (< 2^32 = 5 varint bytes), run the loop on a plain Number.
+   * Promote to BigInt only when more bits arrive. BigInt arithmetic on
+   * V8 is one to two orders of magnitude slower than Number; the modal
+   * value (heights, sizes, timestamps in seconds) fits in 32 bits.
    */
   readVarint64(): bigint {
-    let result = 0n;
-    let shift = 0n;
+    let resultNum = 0;
+    let shiftNum = 0;
 
-    for (let i = 0; i < Reader.MAX_VARINT_BYTES; i++) {
+    // Fast path: accumulate into Number until we've consumed >=32 bits.
+    for (let i = 0; i < 5; i++) {
       this.checkAvailable(1);
       const b = this.buffer[this.pos++];
-      const bBigInt = BigInt(b);
+      resultNum += (b & 0x7f) * 2 ** shiftNum;
+      if ((b & 0x80) === 0) {
+        if (i > 0 && b === 0) {
+          throw new DecodeError("non-canonical varint");
+        }
+        return BigInt(resultNum);
+      }
+      shiftNum += 7;
+    }
 
-      // At the 10th byte (index 9), we've consumed 63 bits.
-      // The 10th byte can only contribute 1 more bit (bit 63 of uint64).
+    // Slow path: bits 32+ landing — convert accumulator and continue in BigInt.
+    let result = BigInt(resultNum);
+    let shift = BigInt(shiftNum);
+    for (let i = 5; i < Reader.MAX_VARINT_BYTES; i++) {
+      this.checkAvailable(1);
+      const b = this.buffer[this.pos++];
       if (i === 9) {
-        // If continuation bit is set, we'd need 11+ bytes
         if (b >= 0x80) {
           throw new DecodeError("Varint64 overflow: exceeded 10 bytes");
         }
-        // If data portion is > 1, value would overflow uint64
         if (b > 1) {
           throw new DecodeError("Varint64 overflow: 10th byte must be 0 or 1");
         }
       }
-
-      result |= (bBigInt & 0x7fn) << shift;
+      result |= BigInt(b & 0x7f) << shift;
       if ((b & 0x80) === 0) {
-        // Same non-canonical-varint rejection as readVarint().
-        if (i > 0 && b === 0) {
+        if (b === 0) {
           throw new DecodeError("non-canonical varint");
         }
         return result;

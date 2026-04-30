@@ -878,21 +878,17 @@ func TestJSONCommaUsesPositionNotTag(t *testing.T) {
 	// The previous emission would be `buf.WriteString("{")` then `buf.WriteString(",")`.
 	start := max(first-300, 0)
 	preamble := out[start:first]
-	if strings.Contains(preamble, `buf.WriteString(",")`) &&
-		!strings.Contains(preamble, `"beta":`) {
+	// First field's name must not be emitted with a leading comma. The
+	// fused emit format is `,"foo":` so any field whose own emit string
+	// starts with `,` is signalling "non-first".
+	if strings.Contains(preamble, `buf.WriteString(`+"`"+`,"alpha":`+"`)") {
 		t.Errorf("first field emits a leading comma; preamble:\n%s", preamble)
 	}
 
-	// Second field (beta) MUST emit a leading comma.
-	second := strings.Index(out, `"beta":`)
-	if second < 0 {
-		t.Fatalf("beta field name not found")
-	}
-	betweenStart := first + len(`"alpha":`)
-	betweenStart += strings.Index(out[betweenStart:], "buf.WriteString")
-	between := out[betweenStart:second]
-	if !strings.Contains(between, `buf.WriteString(",")`) {
-		t.Errorf("second field missing leading comma; between:\n%s", between)
+	// Second field (beta) MUST emit a leading comma — fused into the
+	// field-name literal so the entire `,"beta":` is one WriteString.
+	if !strings.Contains(out, `buf.WriteString(`+"`"+`,"beta":`+"`)") {
+		t.Errorf("second field missing leading comma in fused emit:\n%s", out)
 	}
 }
 

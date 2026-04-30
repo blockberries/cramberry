@@ -1166,13 +1166,15 @@ func (c *goContext) jsonEncodeField(idx int, f *schema.Field, _ string) string {
 	// Build the field encoding
 	var code strings.Builder
 
-	// Add comma if not first field
+	// Fuse the (optional) leading comma and the field name into one
+	// WriteString call. Both are compile-time constants, so emitting one
+	// `,"name":` literal halves the WriteString count per field versus
+	// emitting `","` and `"name":` separately.
 	if idx > 0 {
-		code.WriteString("\tbuf.WriteString(\",\")\n")
+		fmt.Fprintf(&code, "\tbuf.WriteString(`,\"%s\":`)\n", jsonName)
+	} else {
+		fmt.Fprintf(&code, "\tbuf.WriteString(`\"%s\":`)\n", jsonName)
 	}
-
-	// Write field name
-	fmt.Fprintf(&code, "\tbuf.WriteString(`\"%s\":`)\n", jsonName)
 
 	// Check if this field is a pointer in the generated code
 	// Required scalar fields become pointers to distinguish nil from zero

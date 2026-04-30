@@ -119,9 +119,27 @@ export class Writer {
 
   /**
    * Writes an unsigned 64-bit varint (LEB128).
+   *
+   * Fast path: when the value fits in a 32-bit unsigned integer, run the
+   * varint loop on a plain Number. BigInt arithmetic in V8 is one to
+   * two orders of magnitude slower than Number arithmetic; the modal
+   * blockchain-consensus value (heights, timestamps, balances, sizes)
+   * is well under 2^32, so this path covers nearly every call.
+   *
+   * Slow path: values >= 2^32 fall back to true BigInt arithmetic. The
+   * encoding is byte-identical to the slow path.
    */
   writeVarint64(value: bigint): void {
     this.ensureCapacity(10); // Max 10 bytes for 64-bit
+    if (value <= 0xffffffffn && value >= 0n) {
+      let v = Number(value);
+      while (v > 0x7f) {
+        this.buffer[this.pos++] = (v & 0x7f) | 0x80;
+        v >>>= 7;
+      }
+      this.buffer[this.pos++] = v;
+      return;
+    }
     while (value > 0x7fn) {
       this.buffer[this.pos++] = Number(value & 0x7fn) | 0x80;
       value >>= 7n;

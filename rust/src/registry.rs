@@ -156,7 +156,7 @@ impl Registry {
         inner.by_name
             .get(name)
             .copied()
-            .ok_or_else(|| Error::TypeNotRegistered(name.to_string()))
+            .ok_or_else(|| Error::TypeNotRegistered(name.to_string().into_boxed_str()))
     }
 
     /// Gets the type name for a registered type ID.
@@ -200,7 +200,7 @@ impl Registry {
         let type_id = inner.by_name
             .get(name)
             .copied()
-            .ok_or_else(|| Error::TypeNotRegistered(name.to_string()))?;
+            .ok_or_else(|| Error::TypeNotRegistered(name.to_string().into_boxed_str()))?;
         let reg = inner.by_id.get(&type_id).unwrap();
 
         // Write field tag with Bytes wire type

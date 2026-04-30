@@ -72,7 +72,23 @@ impl<'a> Reader<'a> {
     /// terminating byte is zero — that varint could have been one byte
     /// shorter). Two byte sequences must never decode to the same
     /// value, otherwise hashes-over-bytes diverge across runtimes.
+    #[inline]
     pub fn read_varint(&mut self) -> Result<u32> {
+        // Fast path: single-byte varint (value < 128). The modal field
+        // tag, bool, small-int and length-prefix-of-short-string all hit
+        // here; inlining keeps the call free in tight decode loops.
+        if self.pos < self.buffer.len() {
+            let b = self.buffer[self.pos];
+            if b < 0x80 {
+                self.pos += 1;
+                return Ok(b as u32);
+            }
+        }
+        self.read_varint_slow()
+    }
+
+    #[cold]
+    fn read_varint_slow(&mut self) -> Result<u32> {
         let mut result: u32 = 0;
         let mut shift = 0;
 
@@ -103,7 +119,21 @@ impl<'a> Reader<'a> {
     /// Reads an unsigned 64-bit varint (LEB128).
     /// Uses a maximum of 10 bytes, consistent with protobuf and Go implementation.
     /// Rejects non-canonical encodings — see `read_varint`.
+    #[inline]
     pub fn read_varint64(&mut self) -> Result<u64> {
+        // Fast path: single-byte varint. See read_varint for rationale.
+        if self.pos < self.buffer.len() {
+            let b = self.buffer[self.pos];
+            if b < 0x80 {
+                self.pos += 1;
+                return Ok(b as u64);
+            }
+        }
+        self.read_varint64_slow()
+    }
+
+    #[cold]
+    fn read_varint64_slow(&mut self) -> Result<u64> {
         let mut result: u64 = 0;
         let mut shift = 0;
 

@@ -6,6 +6,13 @@ use thiserror::Error;
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Error type for Cramberry operations.
+///
+/// String-bearing variants box their payload so the enum's largest
+/// variant stays small. This shrinks `Result<T, Error>` to roughly the
+/// size of `T` plus a discriminant + a pointer, which lets the compiler
+/// pass it in registers across the hot encode/decode path. With unboxed
+/// `String` variants, the Result was ~32 bytes — large enough to force
+/// a stack spill on most calls.
 #[derive(Error, Debug)]
 pub enum Error {
     /// Buffer overflow during encoding.
@@ -34,7 +41,7 @@ pub enum Error {
 
     /// Type not registered.
     #[error("type not registered: {0}")]
-    TypeNotRegistered(String),
+    TypeNotRegistered(Box<str>),
 
     /// Invalid UTF-8 string.
     #[error("invalid UTF-8 string")]
@@ -46,11 +53,17 @@ pub enum Error {
 
     /// IO error.
     #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
+    Io(Box<std::io::Error>),
 
     /// Custom error message.
     #[error("{0}")]
-    Custom(String),
+    Custom(Box<str>),
+}
+
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Self {
+        Self::Io(Box::new(err))
+    }
 }
 
 impl Error {
@@ -66,6 +79,6 @@ impl Error {
 
     /// Creates a custom error.
     pub fn custom(msg: impl Into<String>) -> Self {
-        Self::Custom(msg.into())
+        Self::Custom(msg.into().into_boxed_str())
     }
 }

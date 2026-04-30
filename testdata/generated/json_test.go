@@ -215,76 +215,64 @@ func (m *ScalarTypes) ToJSON() (string, error) {
 		buf.WriteString("false")
 	}
 
-	buf.WriteString(",")
-	buf.WriteString(`"int8_val":`)
+	buf.WriteString(`,"int8_val":`)
 	buf.WriteString(`"`)
 	buf.WriteString(cramberry.FormatInt64ToString(int64(m.Int8Val)))
 	buf.WriteString(`"`)
 
-	buf.WriteString(",")
-	buf.WriteString(`"int16_val":`)
+	buf.WriteString(`,"int16_val":`)
 	buf.WriteString(`"`)
 	buf.WriteString(cramberry.FormatInt64ToString(int64(m.Int16Val)))
 	buf.WriteString(`"`)
 
-	buf.WriteString(",")
-	buf.WriteString(`"int32_val":`)
+	buf.WriteString(`,"int32_val":`)
 	buf.WriteString(`"`)
 	buf.WriteString(cramberry.FormatInt64ToString(int64(m.Int32Val)))
 	buf.WriteString(`"`)
 
-	buf.WriteString(",")
-	buf.WriteString(`"int64_val":`)
+	buf.WriteString(`,"int64_val":`)
 	buf.WriteString(`"`)
 	buf.WriteString(cramberry.FormatInt64ToString(int64(m.Int64Val)))
 	buf.WriteString(`"`)
 
-	buf.WriteString(",")
-	buf.WriteString(`"uint8_val":`)
+	buf.WriteString(`,"uint8_val":`)
 	buf.WriteString(`"`)
 	buf.WriteString(cramberry.FormatUint64ToString(uint64(m.Uint8Val)))
 	buf.WriteString(`"`)
 
-	buf.WriteString(",")
-	buf.WriteString(`"uint16_val":`)
+	buf.WriteString(`,"uint16_val":`)
 	buf.WriteString(`"`)
 	buf.WriteString(cramberry.FormatUint64ToString(uint64(m.Uint16Val)))
 	buf.WriteString(`"`)
 
-	buf.WriteString(",")
-	buf.WriteString(`"uint32_val":`)
+	buf.WriteString(`,"uint32_val":`)
 	buf.WriteString(`"`)
 	buf.WriteString(cramberry.FormatUint64ToString(uint64(m.Uint32Val)))
 	buf.WriteString(`"`)
 
-	buf.WriteString(",")
-	buf.WriteString(`"uint64_val":`)
+	buf.WriteString(`,"uint64_val":`)
 	buf.WriteString(`"`)
 	buf.WriteString(cramberry.FormatUint64ToString(uint64(m.Uint64Val)))
 	buf.WriteString(`"`)
 
-	buf.WriteString(",")
-	buf.WriteString(`"float32_val":`)
+	buf.WriteString(`,"float32_val":`)
 	if s, err := cramberry.FormatFloat32(m.Float32Val); err != nil {
 		return "", fmt.Errorf("field m.Float32Val: %w", err)
 	} else {
 		buf.WriteString(s)
 	}
 
-	buf.WriteString(",")
-	buf.WriteString(`"float64_val":`)
+	buf.WriteString(`,"float64_val":`)
 	if s, err := cramberry.FormatFloat64(m.Float64Val); err != nil {
 		return "", fmt.Errorf("field m.Float64Val: %w", err)
 	} else {
 		buf.WriteString(s)
 	}
 
-	buf.WriteString(",")
-	buf.WriteString(`"string_val":`)
+	buf.WriteString(`,"string_val":`)
 	buf.WriteString(cramberry.EscapeJSONString(m.StringVal))
 
-	buf.WriteString(",")
-	buf.WriteString(`"bytes_val":`)
+	buf.WriteString(`,"bytes_val":`)
 	buf.WriteString(`"`)
 	buf.WriteString(cramberry.EncodeBase64(m.BytesVal))
 	buf.WriteString(`"`)
@@ -645,8 +633,7 @@ func (m *RepeatedTypes) ToJSON() (string, error) {
 	}
 	buf.WriteString("]")
 
-	buf.WriteString(",")
-	buf.WriteString(`"ints":`)
+	buf.WriteString(`,"ints":`)
 	buf.WriteString("[")
 	for i, v := range m.Ints {
 		if i > 0 {
@@ -658,8 +645,7 @@ func (m *RepeatedTypes) ToJSON() (string, error) {
 	}
 	buf.WriteString("]")
 
-	buf.WriteString(",")
-	buf.WriteString(`"bools":`)
+	buf.WriteString(`,"bools":`)
 	buf.WriteString("[")
 	for i, v := range m.Bools {
 		if i > 0 {
@@ -982,8 +968,7 @@ func (m *MapTypes) ToJSON() (string, error) {
 		buf.WriteString("}")
 	}
 
-	buf.WriteString(",")
-	buf.WriteString(`"int_map":`)
+	buf.WriteString(`,"int_map":`)
 	{
 		buf.WriteString("{")
 		keys := make([]string, 0, len(m.IntMap))
@@ -1006,8 +991,7 @@ func (m *MapTypes) ToJSON() (string, error) {
 		buf.WriteString("}")
 	}
 
-	buf.WriteString(",")
-	buf.WriteString(`"int_keyed":`)
+	buf.WriteString(`,"int_keyed":`)
 	{
 		buf.WriteString("{")
 		keys := make([]string, 0, len(m.IntKeyed))
@@ -1032,8 +1016,7 @@ func (m *MapTypes) ToJSON() (string, error) {
 		buf.WriteString("}")
 	}
 
-	buf.WriteString(",")
-	buf.WriteString(`"uint_keyed":`)
+	buf.WriteString(`,"uint_keyed":`)
 	{
 		buf.WriteString("{")
 		keys := make([]string, 0, len(m.UintKeyed))
@@ -1251,12 +1234,10 @@ func (m *Address) ToJSON() (string, error) {
 	buf.WriteString(`"street":`)
 	buf.WriteString(cramberry.EscapeJSONString(m.Street))
 
-	buf.WriteString(",")
-	buf.WriteString(`"city":`)
+	buf.WriteString(`,"city":`)
 	buf.WriteString(cramberry.EscapeJSONString(m.City))
 
-	buf.WriteString(",")
-	buf.WriteString(`"zip":`)
+	buf.WriteString(`,"zip":`)
 	buf.WriteString(cramberry.EscapeJSONString(m.Zip))
 
 	buf.WriteString("}")
@@ -1428,22 +1409,19 @@ func (m *Person) ToJSON() (string, error) {
 	buf.WriteString(`"name":`)
 	buf.WriteString(cramberry.EscapeJSONString(m.Name))
 
-	buf.WriteString(",")
-	buf.WriteString(`"age":`)
+	buf.WriteString(`,"age":`)
 	buf.WriteString(`"`)
 	buf.WriteString(cramberry.FormatInt64ToString(int64(m.Age)))
 	buf.WriteString(`"`)
 
-	buf.WriteString(",")
-	buf.WriteString(`"address":`)
+	buf.WriteString(`,"address":`)
 	if msgJSON, err := m.Address.ToJSON(); err != nil {
 		return "", err
 	} else {
 		buf.WriteString(msgJSON)
 	}
 
-	buf.WriteString(",")
-	buf.WriteString(`"emails":`)
+	buf.WriteString(`,"emails":`)
 	buf.WriteString("[")
 	for i, v := range m.Emails {
 		if i > 0 {
@@ -1633,12 +1611,10 @@ func (m *RequiredFields) ToJSON() (string, error) {
 	buf.WriteString(cramberry.FormatInt64ToString(int64(*m.Id)))
 	buf.WriteString(`"`)
 
-	buf.WriteString(",")
-	buf.WriteString(`"name":`)
+	buf.WriteString(`,"name":`)
 	buf.WriteString(cramberry.EscapeJSONString(*m.Name))
 
-	buf.WriteString(",")
-	buf.WriteString(`"optional_field":`)
+	buf.WriteString(`,"optional_field":`)
 	buf.WriteString(cramberry.EscapeJSONString(m.OptionalField))
 
 	buf.WriteString("}")
@@ -1804,8 +1780,7 @@ func (m *OptionalPointer) ToJSON() (string, error) {
 		buf.WriteString("null")
 	}
 
-	buf.WriteString(",")
-	buf.WriteString(`"number":`)
+	buf.WriteString(`,"number":`)
 	if m.Number != nil {
 		buf.WriteString(`"`)
 		buf.WriteString(cramberry.FormatInt64ToString(int64((*m.Number))))
@@ -1814,8 +1789,7 @@ func (m *OptionalPointer) ToJSON() (string, error) {
 		buf.WriteString("null")
 	}
 
-	buf.WriteString(",")
-	buf.WriteString(`"blob":`)
+	buf.WriteString(`,"blob":`)
 	if m.Blob != nil {
 		buf.WriteString(`"`)
 		buf.WriteString(cramberry.EncodeBase64(*m.Blob))
@@ -1996,8 +1970,7 @@ func (m *EnumTest) ToJSON() (string, error) {
 	buf.WriteString(m.Status.String())
 	buf.WriteString(`"`)
 
-	buf.WriteString(",")
-	buf.WriteString(`"statuses":`)
+	buf.WriteString(`,"statuses":`)
 	buf.WriteString("[")
 	for i, v := range m.Statuses {
 		if i > 0 {
@@ -2273,20 +2246,17 @@ func (m *AllZeroValues) ToJSON() (string, error) {
 	buf.WriteString(cramberry.FormatInt64ToString(int64(m.ZeroInt)))
 	buf.WriteString(`"`)
 
-	buf.WriteString(",")
-	buf.WriteString(`"zero_string":`)
+	buf.WriteString(`,"zero_string":`)
 	buf.WriteString(cramberry.EscapeJSONString(m.ZeroString))
 
-	buf.WriteString(",")
-	buf.WriteString(`"zero_bool":`)
+	buf.WriteString(`,"zero_bool":`)
 	if m.ZeroBool {
 		buf.WriteString("true")
 	} else {
 		buf.WriteString("false")
 	}
 
-	buf.WriteString(",")
-	buf.WriteString(`"empty_array":`)
+	buf.WriteString(`,"empty_array":`)
 	buf.WriteString("[")
 	for i, v := range m.EmptyArray {
 		if i > 0 {
