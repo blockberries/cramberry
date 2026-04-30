@@ -105,25 +105,36 @@ func TestWriteBool(t *testing.T) {
 }
 
 func TestWriteUint8(t *testing.T) {
+	// uint8 is varint-encoded (matching its wire-type tag Varint).
 	tests := []uint8{0, 1, 127, 128, 255}
 	for _, v := range tests {
 		w := NewWriter()
 		w.WriteUint8(v)
-		data := w.Bytes()
-		if len(data) != 1 || data[0] != v {
-			t.Errorf("WriteUint8(%d) = %v, want [%d]", v, data, v)
+		r := NewReader(w.Bytes())
+		got := r.ReadUint8()
+		if r.Err() != nil {
+			t.Errorf("ReadUint8 after WriteUint8(%d): %v", v, r.Err())
+		}
+		if got != v {
+			t.Errorf("WriteUint8/ReadUint8 round-trip: got %d, want %d", got, v)
 		}
 	}
 }
 
 func TestWriteInt8(t *testing.T) {
+	// int8 is svarint-encoded (matching its wire-type tag SVarint),
+	// not raw-byte. Verify round-trip.
 	tests := []int8{-128, -1, 0, 1, 127}
 	for _, v := range tests {
 		w := NewWriter()
 		w.WriteInt8(v)
-		data := w.Bytes()
-		if len(data) != 1 || int8(data[0]) != v {
-			t.Errorf("WriteInt8(%d) = %v, want [%d]", v, data, byte(v))
+		r := NewReader(w.Bytes())
+		got := r.ReadInt8()
+		if r.Err() != nil {
+			t.Errorf("ReadInt8 after WriteInt8(%d): %v", v, r.Err())
+		}
+		if got != v {
+			t.Errorf("WriteInt8/ReadInt8 round-trip: got %d, want %d", got, v)
 		}
 	}
 }

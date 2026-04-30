@@ -35,4 +35,14 @@ message Sample {
   repeated Address addresses = 10;
   map[string]int32 scores = 11;
   optional string nickname = 12;
+  optional int32 priority = 13;
+  float32 score = 14;
+  uint32 generation = 15;
+  uint64 epoch = 16;
+  int8 tiny = 17;
+  uint8 byte_val = 18;
+  int16 small = 19;
+  uint16 small_unsigned = 20;
+  map[int32]string id_to_name = 21;
+  optional Address office = 22;
 }

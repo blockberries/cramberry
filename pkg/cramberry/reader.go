@@ -315,24 +315,16 @@ func (r *Reader) ReadBool() bool {
 	return b != 0
 }
 
-// ReadUint8 reads an unsigned 8-bit integer.
+// ReadUint8 reads an unsigned 8-bit integer (varint-encoded; matches
+// WriteUint8 and the wire-type tag's claim of Varint).
 func (r *Reader) ReadUint8() uint8 {
-	if !r.ensure(1) {
-		return 0
-	}
-	v := r.data[r.pos]
-	r.pos++
-	return v
+	return uint8(r.ReadUvarint())
 }
 
-// ReadInt8 reads a signed 8-bit integer.
+// ReadInt8 reads a signed 8-bit integer (svarint-encoded; matches
+// WriteInt8 and the wire-type tag's claim of SVarint).
 func (r *Reader) ReadInt8() int8 {
-	if !r.ensure(1) {
-		return 0
-	}
-	v := int8(r.data[r.pos])
-	r.pos++
-	return v
+	return int8(r.ReadSvarint())
 }
 
 // ReadUint16 reads an unsigned 16-bit integer (varint encoded).

@@ -222,12 +222,15 @@ func (w *Writer) WriteBool(v bool) {
 }
 
 // WriteUint8 writes an unsigned 8-bit integer.
+// WriteUint8 writes an unsigned 8-bit integer as a varint, matching
+// WriteUint16/32/64 and the wire-type the tag claims (Varint). The
+// previous implementation wrote a raw byte, which is incompatible
+// with the Rust/TS runtimes (they decode via varint) and with
+// SkipValue(Varint) — for any value whose top bit is set, the
+// receiver would read it as a continuation byte and consume the
+// next field.
 func (w *Writer) WriteUint8(v uint8) {
-	if !w.checkWrite() {
-		return
-	}
-	w.grow(1)
-	w.buf = append(w.buf, v)
+	w.WriteUvarint(uint64(v))
 }
 
 // WriteUint16 writes an unsigned 16-bit integer as a varint.
@@ -251,12 +254,12 @@ func (w *Writer) WriteUint(v uint) {
 }
 
 // WriteInt8 writes a signed 8-bit integer.
+// WriteInt8 writes a signed 8-bit integer as an svarint (zigzag-
+// encoded varint), matching WriteInt16/32/64 and the wire-type the
+// tag claims (SVarint). See WriteUint8 for why the raw-byte
+// implementation was wrong.
 func (w *Writer) WriteInt8(v int8) {
-	if !w.checkWrite() {
-		return
-	}
-	w.grow(1)
-	w.buf = append(w.buf, byte(v))
+	w.WriteSvarint(int64(v))
 }
 
 // WriteInt16 writes a signed 16-bit integer as a signed varint.

@@ -80,9 +80,12 @@ func TestReadBool(t *testing.T) {
 }
 
 func TestReadUint8(t *testing.T) {
+	// uint8 round-trips via varint (matching its wire-type tag).
 	tests := []uint8{0, 1, 127, 128, 255}
 	for _, v := range tests {
-		r := NewReader([]byte{v})
+		w := NewWriter()
+		w.WriteUint8(v)
+		r := NewReader(w.Bytes())
 		got := r.ReadUint8()
 		if r.Err() != nil {
 			t.Errorf("ReadUint8 error: %v", r.Err())
@@ -94,9 +97,12 @@ func TestReadUint8(t *testing.T) {
 }
 
 func TestReadInt8(t *testing.T) {
+	// int8 round-trips via svarint (matching its wire-type tag).
 	tests := []int8{-128, -1, 0, 1, 127}
 	for _, v := range tests {
-		r := NewReader([]byte{byte(v)})
+		w := NewWriter()
+		w.WriteInt8(v)
+		r := NewReader(w.Bytes())
 		got := r.ReadInt8()
 		if r.Err() != nil {
 			t.Errorf("ReadInt8 error: %v", r.Err())

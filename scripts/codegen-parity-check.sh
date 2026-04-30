@@ -52,6 +52,8 @@ import (
 
 func fixture() *Sample {
 	nick := "the_admin"
+	prio := int32(7)
+	office := &Address{Street: "1 Hacker Way", City: "Menlo Park"}
 	return &Sample{
 		Active:  true,
 		Count:   -42,
@@ -74,7 +76,21 @@ func fixture() *Sample {
 			"gamma": 3,
 			"beta":  2,
 		},
-		Nickname: &nick,
+		Nickname:       &nick,
+		Priority:       &prio,
+		Score:          2.71828,
+		Generation:     4294967290,
+		Epoch:          18446744073709551610,
+		Tiny:           -7,
+		ByteVal:        255,
+		Small:          -1234,
+		SmallUnsigned:  65535,
+		IdToName: map[int32]string{
+			10:  "ten",
+			-1:  "neg_one",
+			100: "hundred",
+		},
+		Office: office,
 	}
 }
 
@@ -154,6 +170,11 @@ fn main() {
     scores.insert("gamma".to_string(), 3);
     scores.insert("beta".to_string(), 2);
 
+    let mut id_to_name = HashMap::new();
+    id_to_name.insert(10, "ten".to_string());
+    id_to_name.insert(-1, "neg_one".to_string());
+    id_to_name.insert(100, "hundred".to_string());
+
     let s = Sample {
         active:  true,
         count:   -42,
@@ -172,7 +193,20 @@ fn main() {
             Address { street: "221B Baker St".to_string(),         city: "London".to_string()      },
         ],
         scores,
-        nickname: Some("the_admin".to_string()),
+        nickname:       Some("the_admin".to_string()),
+        priority:       Some(7),
+        score:          2.71828,
+        generation:     4294967290,
+        epoch:          18446744073709551610,
+        tiny:           -7,
+        byte_val:       255,
+        small:          -1234,
+        small_unsigned: 65535,
+        id_to_name,
+        office: Some(Address {
+            street: "1 Hacker Way".to_string(),
+            city:   "Menlo Park".to_string(),
+        }),
     };
     let mut w = Writer::new();
     encode_sample(&mut w, &s).unwrap();
@@ -180,7 +214,7 @@ fn main() {
 }
 EOF
 
-(cd "$WORK/rust" && cargo build --bin probe --quiet 2>/dev/null)
+(cd "$WORK/rust" && cargo build --bin probe --quiet)
 RUST_BYTES="$("$WORK/rust/target/debug/probe")"
 
 # --- TypeScript side ---
@@ -240,6 +274,20 @@ const s = {
         ["beta",  2],
     ]),
     nickname: "the_admin",
+    priority: 7,
+    score: 2.71828,
+    generation: 4294967290,
+    epoch: 18446744073709551610n,
+    tiny: -7,
+    byteVal: 255,
+    small: -1234,
+    smallUnsigned: 65535,
+    idToName: new Map([
+        [10,  "ten"],
+        [-1,  "neg_one"],
+        [100, "hundred"],
+    ]),
+    office: { street: "1 Hacker Way", city: "Menlo Park" },
 };
 const w = new Writer();
 encodeSample(w, s);

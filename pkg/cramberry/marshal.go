@@ -483,6 +483,11 @@ func needsBodyLengthPrefix(v reflect.Value) bool {
 	for t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
+	// Pointer-to-scalar fields use the underlying scalar's wire type
+	// (see computeWireType's reflect.Ptr branch), so SkipValue knows
+	// how to skip them without an outer length prefix. Only kinds
+	// whose tag IS `WireBytes` AND whose body is not already
+	// length-prefixed need wrapping here.
 	switch t.Kind() {
 	case reflect.Struct, reflect.Map, reflect.Interface:
 		return true
@@ -493,26 +498,6 @@ func needsBodyLengthPrefix(v reflect.Value) bool {
 		return t.Elem().Kind() != reflect.Uint8
 	case reflect.Complex128:
 		return true
-	case reflect.String:
-		// `string` body via WriteString is already length-prefixed
-		// (varint(len) | bytes). SkipValue(WireBytes) on a *string
-		// field reads the same varint as a length and skips correctly,
-		// so wrapping again would emit a redundant outer length and
-		// would produce different bytes from the codegen path (which
-		// just calls WriteString directly).
-		return false
-	case reflect.Bool,
-		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
-		reflect.Float32, reflect.Float64,
-		reflect.Complex64:
-		// Pointer-to-non-self-delimiting-scalar (e.g. *int32 → svarint,
-		// *float64 → fixed64). The encoder picks WireBytes for any
-		// pointer wire-type, but the body itself is NOT
-		// length-prefixed, so an old decoder calling
-		// SkipValue(WireBytes) would mis-frame. Wrap at the field
-		// boundary so the wire layout is `tag | len | body`.
-		return v.Kind() == reflect.Ptr
 	}
 	return false
 }
@@ -551,7 +536,17 @@ func computeWireType(t reflect.Type) byte {
 		return WireFixed64 // 2x float32 = 8 bytes
 	case reflect.Complex128, reflect.String, reflect.Slice, reflect.Array, reflect.Map, reflect.Struct:
 		return WireBytes
-	case reflect.Ptr, reflect.Interface:
+	case reflect.Ptr:
+		// A pointer field uses the wire type of its pointee, NOT
+		// WireBytes. Treating *int32 as WireBytes would make
+		// reflection emit `tag(WireBytes) | length | svarint` while
+		// codegen emits `tag(SVarint) | svarint` — the same logical
+		// value as different bytes. Recurse so e.g. *int32 → SVarint,
+		// *string → WireBytes, *Address → WireBytes.
+		return computeWireType(t.Elem())
+	case reflect.Interface:
+		// Polymorphic interface — typeID + payload, length-prefixed
+		// at the field boundary by needsBodyLengthPrefix.
 		return WireBytes
 	default:
 		return WireBytes

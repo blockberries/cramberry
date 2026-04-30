@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (consensus-critical: int8/uint8 wire format mismatch)
+
+`Writer.WriteInt8`/`WriteUint8` (and the matching readers) used **raw
+byte** encoding, while `computeWireType` claimed `SVarint`/`Varint`
+for those types in the tag. The Rust runtime correctly encoded them
+as svarint/varint per the wire-type tag.
+
+Concrete consequence: `int8(-7)` produced `0xf9` on the Go side
+and `0x0d` on the Rust/TS side — different bytes for the same
+logical value, and Rust decoding Go's bytes would treat `0xf9` as
+a varint continuation byte and consume the next field.
+
+Fixed: `WriteInt8`/`WriteUint8`/`ReadInt8`/`ReadUint8` now route
+through the varint paths, matching `WriteInt16`/`WriteInt32` and
+the Rust/TS runtimes. Surfaced by adding `int8`/`uint8`/`int16`/
+`uint16` fields to the parity fixture.
+
+### Fixed (consensus-critical: `*int32` etc. wire-type wrong)
+
+`computeWireType` returned `WireBytes` for ALL pointer types,
+including pointer-to-scalar like `*int32` / `*float32`. Codegen
+correctly used the underlying scalar's wire type (`SVarint` for
+`*int32`, `Fixed32` for `*float32`). Reflection's `WireBytes`
+choice required an outer length prefix (the pass-7 fix), which
+Codegen didn't emit. So:
+
+- Reflection: `tag(WireBytes) | length | svarint`
+- Codegen:    `tag(SVarint) | svarint`
+
+Different bytes, different framing.
+
+Fixed: `computeWireType` now recurses into the pointee type for
+`reflect.Ptr`, so `*int32` → `SVarint` (matching codegen). The
+pass-7 length-prefix wrapping is no longer needed and was removed
+from `needsBodyLengthPrefix` for pointer-to-scalar.
+
+### Extended (parity fixture surface, again)
+
+The codegen-parity fixture now also exercises `float32`,
+`uint32`/`uint64`, `int8`/`uint8`/`int16`/`uint16`, an `int32`-keyed
+map, an `optional int32` (pointer-to-non-self-delimiting-scalar),
+and an `optional Address` (pointer-to-message). All four runtimes
+produce byte-identical output:
+
+    Go reflection == Go codegen == Rust codegen == TS codegen
+
+over a 222-byte payload covering every common type.
+
 ### Fixed (consensus-critical: `*string` / `*[]byte` were double-wrapped by reflection)
 
 The earlier "pass-7" fix to `needsBodyLengthPrefix` over-wrapped
