@@ -111,9 +111,28 @@ values for cross-language conformance live in `pkg/cramberry/json_test.go`
 
 `Reader.BeginMessage`, `WriteString`/`ReadString`, `WriteBytes`/`ReadBytes`,
 `WriteArrayHeader`/`ReadArrayHeader`, `WriteMapHeader`/`ReadMapHeader`, and
-`enterNested` all enforce limits. **Note**: `encodePackedSlice` writes
-varint length without going through `WriteArrayHeader`; the encode path can
-exceed `MaxArrayLength` (decode side enforces).
+`enterNested` all enforce limits. The decoder additionally rejects any
+length-prefix that exceeds the remaining wire bytes — defense against
+amplification (a 4-byte varint claiming 1M map entries can otherwise force
+megabytes of pre-allocation).
+
+## Forward compatibility
+
+Every field's body is structured so that a decoder which doesn't know the
+field can call `SkipValue(wireType)` and consume exactly the right bytes:
+
+- `WireVarint` / `WireSVarint` — read a varint and stop.
+- `WireFixed32` / `WireFixed64` — read N bytes.
+- `WireBytes` — read a varint length, skip that many bytes.
+
+Composite kinds (struct, map, repeated of struct, repeated of scalar slice)
+emit `WireBytes` and length-prefix their bodies at the field boundary.
+Pointer-to-scalar fields (e.g. `*int32`) use the underlying scalar's wire
+type directly — no extra wrap, since SkipValue knows the body shape.
+
+Non-canonical varints are rejected on decode: a multi-byte varint whose
+terminating byte is zero is necessarily over-long, and accepting it would
+make hashes-over-bytes diverge across runtimes for the same logical value.
 
 ## Polymorphic types
 
@@ -144,14 +163,34 @@ encrypted and unencrypted streams.
 Three generators live in `pkg/codegen/`:
 
 - `go_generator.go` — generates `EncodeTo(*Writer)` / `DecodeFrom(*Reader)`,
-  `Validate()`, `ToJSON()`/`FromJSON()`, polymorphic helpers.
-- `typescript_generator.go` — generates classes with `encode`/`decode`/
-  `toJSON`/`fromJSON`. One known incomplete spot at line 484 around
-  polymorphic JSON dispatch.
-- `rust_generator.go` — generates structs with derived `Cramberry`-style
-  trait impls.
+  `Marshal`/`Unmarshal` wrappers, `Validate()`, optional `ToJSON()`/
+  `FromJSON()` (gated by `-json`), polymorphic helpers.
+- `typescript_generator.go` — generates plain TS interfaces plus
+  `encode<Name>` / `decode<Name>` functions; `toJSON_<Name>` / `fromJSON_<Name>`
+  when `-json` is enabled. Imports the runtime via `from '@cramberry/runtime'`.
+- `rust_generator.go` — generates `pub struct` / `pub enum` definitions
+  with `encode_<name>` / `decode_<name>` / `marshal_<name>` /
+  `unmarshal_<name>` free functions; `to_json_<name>` / `from_json_<name>`
+  when `-json` is enabled. Uses `cramberry::Result<T>` for binary helpers
+  and `std::result::Result<...>` for JSON helpers (which return
+  `(String, String)`).
 
-Conformance is verified by golden files in `testdata/golden/`.
+Shared helpers (e.g. `ResolveNamedEnum`, `ToPascalCase`, `ToSnakeCase`)
+live in `pkg/codegen/generator.go` so each generator's per-type dispatch
+stays in sync.
+
+Conformance is verified at multiple layers:
+
+- `testdata/golden/*.bin` — Go-produced golden bytes. Both the reflection
+  marshaller and the codegen-emitted `EncodeTo` must reproduce them.
+- `make codegen-check` — generates Go, TS, and Rust output for every
+  schema in `examples/` and `testdata/` and compiles each in its target
+  language. Catches generator regressions that wouldn't show up in
+  Go-side unit tests.
+- `make codegen-parity-check` — generates Go, Rust, and TypeScript code
+  from `scripts/parity_fixture.cram`, encodes the same logical fixture
+  through every runtime, and asserts that **Go reflection == Go codegen
+  == Rust codegen == TS codegen** for the resulting bytes.
 
 ## Schema language
 
@@ -176,21 +215,60 @@ interface Principal {
 }
 ```
 
-Hand-written, recursive-descent parser. Validator catches duplicate field
-numbers, undefined types, broken enum values, illegal map key types.
+Hand-written, recursive-descent parser. Lexer accepts hex literals
+(`0xFF`) and rejects malformed exponents (`1e`, `1e-`).
+
+Validator catches:
+- Duplicate field numbers, undefined types, broken enum values.
+- Illegal map key types (bytes / floats / complex / **bool** are rejected).
+- Stacked field modifiers (`required repeated`, `optional repeated`).
+- Reserved type-ID range usage: user-declared `@N` IDs must be ≥ 128
+  (1-63 builtin reserved, 64-127 stdlib reserved).
+- Enums missing a 0-valued variant (cross-language default consistency).
+- Imports that escape the importing file's directory and any search-path
+  entry (containment check; `import "../../etc/passwd"` is rejected).
+
 `compat.go` checks schema evolution (added/removed fields, type changes).
+`schema.WriteToFile` is atomic via `internal/atomicfile` (temp + rename
++ dir fsync) — a crash mid-encode never leaves a half-written `.cram`.
 
 ## Cross-language conformance
 
-`test/integration/` contains:
+Conformance is enforced by three independent layers:
 
-- `gen/interop.go` — hand-written test programs that exercise scalar,
-  repeated, nested, complex, edge, and all-field-numbers shapes.
-- `testdata/golden/*.bin` and `*.hex` — expected wire-format output.
-- `interop_test.go` — Go side: produces and verifies golden files.
-- `ts/`, `rust/` — separate test runners (`make ts-test`, `make rust-test`).
+**1. Golden-file conformance (`test/integration/`)**
 
-Conformance fails if any port produces non-identical bytes.
+- `gen/interop.go` — code-generated Go types from `testdata/schemas/interop.cram`,
+  exercising scalar, repeated, nested, complex, edge, and all-field-numbers
+  shapes. Regenerated by `make generate-fixtures`.
+- `testdata/golden/*.bin` and `*.hex` — Go-produced expected wire bytes.
+- `interop_test.go` — verifies both the reflection path and the
+  codegen-emitted `EncodeTo` produce the golden bytes.
+- `ts/`, `rust/` — port-specific runners (`make ts-integration-test`,
+  `make rust-integration-test`) that decode the golden bytes via each
+  language's runtime.
+
+**2. Compile-check (`make codegen-check`)**
+
+For every `.cram` schema in `examples/` and `testdata/`, generate Go, TS,
+and Rust output and compile each against its runtime. Catches generator
+output that wouldn't compile.
+
+**3. Byte-parity (`make codegen-parity-check`)**
+
+End-to-end probe: generate Go, Rust, and TypeScript code from
+`scripts/parity_fixture.cram` (a schema covering all common drift
+hotspots — scalars, repeated, nested, maps, optional, enum, recursive),
+encode the same logical fixture through each, and assert every byte is
+identical:
+
+```
+Go reflection == Go codegen == Rust codegen == TS codegen
+```
+
+Any byte-stream divergence — even one byte — fails the build.
+
+`make integration-test` runs all three layers.
 
 ## Performance characteristics
 

@@ -10,13 +10,17 @@ codec across the [Stealth blockchain stack](../README.md).
 ## Features
 
 - **Deterministic** — sorted map keys, fixed field ordering, NaN
-  canonicalization, `-0.0` → `+0.0` normalization.
+  canonicalization, `-0.0` → `+0.0` normalization, canonical varints
+  (non-canonical encodings rejected on decode).
 - **Compact** — comparable size to Protobuf, 2–3× smaller than JSON.
 - **Schema-first** — `.cram` files generate type-safe Go / TS / Rust code.
 - **Reflection fallback** — `Marshal`/`Unmarshal` on arbitrary structs via
   `cramberry:` struct tags.
 - **Zero-copy reads** in Go via generation-tracked `unsafe.String`.
-- **Cross-language conformance** — golden file harness for Go ↔ TS ↔ Rust.
+- **Cross-language byte parity** — `make codegen-parity-check` proves
+  Go reflection, Go codegen, Rust codegen, and TS codegen all produce
+  byte-identical output for the same logical input across every common
+  type (scalars, repeated, nested, maps, optional, enums, recursive).
 
 ## Install
 
@@ -67,6 +71,13 @@ cramberry generate -lang ts   -out ./ts     ./schema/*.cram
 cramberry generate -lang rust -out ./rust   ./schema/*.cram
 ```
 
+Short aliases (`-lang ts` / `-lang rs` / `-lang golang` / `-lang js`)
+are accepted alongside the canonical names.
+
+The generated TypeScript imports `from '@cramberry/runtime'` —
+`npm install @cramberry/runtime` (or `npm install file:.../typescript`
+for local development) provides the runtime.
+
 ## Wire format
 
 A message is `[length:varint][field…][0x00 end marker]`.
@@ -90,15 +101,18 @@ Wire types:
 
 ```
 cramberry/
-├── cmd/cramberry/         CLI: generate, validate, format
+├── cmd/cramberry/         CLI: generate, validate, format, schema, version
 ├── pkg/cramberry/         Runtime: Writer/Reader, Marshal/Unmarshal, registry, JSON, stream
 ├── pkg/schema/            .cram lexer, parser, validator, AST, formatter
 ├── pkg/codegen/           Generators for Go, TS, Rust
 ├── pkg/extract/           Reverse: Go AST → .cram
 ├── internal/wire/         LEB128, ZigZag, fixed-width
+├── internal/atomicfile/   Crash-safe file writes (temp + rename + dir fsync)
 ├── typescript/src/        TS port (uses identical wire format)
 ├── rust/src/              Rust port (uses identical wire format)
-└── test/integration/      Cross-language conformance harness + golden files
+├── scripts/               codegen-check + codegen-parity-check shell harnesses
+└── test/integration/      Cross-language conformance: TS + Rust runners,
+                           golden files, generated-code byte-parity probe
 ```
 
 ## Development
