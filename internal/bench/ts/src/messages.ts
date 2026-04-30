@@ -20,12 +20,12 @@ import type { ReaderOptions } from '@cramberry/runtime';
 
 // Helper functions for encoding/decoding
 function writeArray<T>(writer: Writer, arr: T[], writeElem: (w: Writer, v: T) => void): void {
-  const subWriter = new Writer();
-  subWriter.writeVarint(arr.length);
+  const cp = writer.beginMessage();
+  writer.writeVarint(arr.length);
   for (const elem of arr) {
-    writeElem(subWriter, elem);
+    writeElem(writer, elem);
   }
-  writer.writeLengthPrefixedBytes(subWriter.bytes());
+  writer.endMessage(cp);
 }
 
 function readArray<T>(reader: Reader, readElem: (r: Reader) => T): T[] {
@@ -72,18 +72,18 @@ function compareMapKeys(a: unknown, b: unknown): number {
 }
 
 function writeMap<K, V>(writer: Writer, map: Map<K, V> | Record<string, V>, writeKey: (w: Writer, k: K) => void, writeVal: (w: Writer, v: V) => void): void {
-  const subWriter = new Writer();
+  const cp = writer.beginMessage();
   const entries = map instanceof Map ? Array.from(map.entries()) : Object.entries(map);
   // Sort by key for deterministic output. Map iteration order is
   // implementation-defined and varies per insertion order; the wire format
   // requires a canonical order matching the Go reflection marshaller.
   entries.sort((a, b) => compareMapKeys(a[0], b[0]));
-  subWriter.writeVarint(entries.length);
+  writer.writeVarint(entries.length);
   for (const [k, v] of entries) {
-    writeKey(subWriter, k as K);
-    writeVal(subWriter, v as V);
+    writeKey(writer, k as K);
+    writeVal(writer, v as V);
   }
-  writer.writeLengthPrefixedBytes(subWriter.bytes());
+  writer.endMessage(cp);
 }
 
 function readMap<K, V>(reader: Reader, readKey: (r: Reader) => K, readVal: (r: Reader) => V): Map<K, V> {
@@ -165,7 +165,15 @@ export function encodePoint(writer: Writer, msg: Point): void {
 
 /** Decodes a Point from the reader. */
 export function decodePoint(reader: Reader): Point {
-  const result: Partial<Point> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: Point = {
+    x: 0,
+    y: 0,
+    z: 0,
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -186,7 +194,7 @@ export function decodePoint(reader: Reader): Point {
     }
   }
 
-  return result as Point;
+  return result;
 }
 
 /** Marshals a Point to bytes. */
@@ -242,7 +250,12 @@ export function fromJSON_Point(json: string): Point {
     }
   }
 
-  const msg: Partial<Point> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: Point = {
+    x: 0,
+    y: 0,
+    z: 0,
+  };
 
   // Decode fields
 
@@ -262,7 +275,7 @@ export function fromJSON_Point(json: string): Point {
   }
 
 
-  return msg as Point;
+  return msg;
 }
 
 
@@ -292,7 +305,14 @@ export function encodeTimestamp(writer: Writer, msg: Timestamp): void {
 
 /** Decodes a Timestamp from the reader. */
 export function decodeTimestamp(reader: Reader): Timestamp {
-  const result: Partial<Timestamp> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: Timestamp = {
+    seconds: 0n,
+    nanos: 0,
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -310,7 +330,7 @@ export function decodeTimestamp(reader: Reader): Timestamp {
     }
   }
 
-  return result as Timestamp;
+  return result;
 }
 
 /** Marshals a Timestamp to bytes. */
@@ -361,7 +381,11 @@ export function fromJSON_Timestamp(json: string): Timestamp {
     }
   }
 
-  const msg: Partial<Timestamp> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: Timestamp = {
+    seconds: 0n,
+    nanos: 0,
+  };
 
   // Decode fields
 
@@ -376,7 +400,7 @@ export function fromJSON_Timestamp(json: string): Timestamp {
   }
 
 
-  return msg as Timestamp;
+  return msg;
 }
 
 
@@ -406,7 +430,14 @@ export function encodeDuration(writer: Writer, msg: Duration): void {
 
 /** Decodes a Duration from the reader. */
 export function decodeDuration(reader: Reader): Duration {
-  const result: Partial<Duration> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: Duration = {
+    seconds: 0n,
+    nanos: 0,
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -424,7 +455,7 @@ export function decodeDuration(reader: Reader): Duration {
     }
   }
 
-  return result as Duration;
+  return result;
 }
 
 /** Marshals a Duration to bytes. */
@@ -475,7 +506,11 @@ export function fromJSON_Duration(json: string): Duration {
     }
   }
 
-  const msg: Partial<Duration> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: Duration = {
+    seconds: 0n,
+    nanos: 0,
+  };
 
   // Decode fields
 
@@ -490,7 +525,7 @@ export function fromJSON_Duration(json: string): Duration {
   }
 
 
-  return msg as Duration;
+  return msg;
 }
 
 
@@ -576,7 +611,22 @@ export function encodeMetrics(writer: Writer, msg: Metrics): void {
 
 /** Decodes a Metrics from the reader. */
 export function decodeMetrics(reader: Reader): Metrics {
-  const result: Partial<Metrics> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: Metrics = {
+    count: 0n,
+    sum: 0,
+    min: 0,
+    max: 0,
+    avg: 0,
+    p50: 0,
+    p95: 0,
+    p99: 0,
+    totalBytes: 0n,
+    errorCount: 0n,
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -618,7 +668,7 @@ export function decodeMetrics(reader: Reader): Metrics {
     }
   }
 
-  return result as Metrics;
+  return result;
 }
 
 /** Marshals a Metrics to bytes. */
@@ -709,7 +759,19 @@ export function fromJSON_Metrics(json: string): Metrics {
     }
   }
 
-  const msg: Partial<Metrics> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: Metrics = {
+    count: 0n,
+    sum: 0,
+    min: 0,
+    max: 0,
+    avg: 0,
+    p50: 0,
+    p95: 0,
+    p99: 0,
+    totalBytes: 0n,
+    errorCount: 0n,
+  };
 
   // Decode fields
 
@@ -764,7 +826,7 @@ export function fromJSON_Metrics(json: string): Metrics {
   }
 
 
-  return msg as Metrics;
+  return msg;
 }
 
 
@@ -801,7 +863,15 @@ export function encodeSmallMessage(writer: Writer, msg: SmallMessage): void {
 
 /** Decodes a SmallMessage from the reader. */
 export function decodeSmallMessage(reader: Reader): SmallMessage {
-  const result: Partial<SmallMessage> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: SmallMessage = {
+    id: 0n,
+    name: '',
+    active: false,
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -822,7 +892,7 @@ export function decodeSmallMessage(reader: Reader): SmallMessage {
     }
   }
 
-  return result as SmallMessage;
+  return result;
 }
 
 /** Marshals a SmallMessage to bytes. */
@@ -878,7 +948,12 @@ export function fromJSON_SmallMessage(json: string): SmallMessage {
     }
   }
 
-  const msg: Partial<SmallMessage> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: SmallMessage = {
+    id: 0n,
+    name: '',
+    active: false,
+  };
 
   // Decode fields
 
@@ -898,7 +973,7 @@ export function fromJSON_SmallMessage(json: string): SmallMessage {
   }
 
 
-  return msg as SmallMessage;
+  return msg;
 }
 
 
@@ -955,7 +1030,7 @@ export function encodeAddress(writer: Writer, msg: Address): void {
   // Field 7: coordinates
   if (msg.coordinates !== undefined && msg.coordinates !== null) {
     writer.writeTag(7, WireType.Bytes);
-    { const __sub = new Writer(); encodePoint(__sub, msg.coordinates); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+    { const __cp = writer.beginMessage(); encodePoint(writer, msg.coordinates); writer.endMessage(__cp); };
   }
 // End marker
   writer.writeEndMarker();
@@ -963,7 +1038,19 @@ export function encodeAddress(writer: Writer, msg: Address): void {
 
 /** Decodes a Address from the reader. */
 export function decodeAddress(reader: Reader): Address {
-  const result: Partial<Address> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: Address = {
+    street1: '',
+    street2: '',
+    city: '',
+    state: '',
+    postalCode: '',
+    country: '',
+    coordinates: ({} as Point),
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -996,7 +1083,7 @@ export function decodeAddress(reader: Reader): Address {
     }
   }
 
-  return result as Address;
+  return result;
 }
 
 /** Marshals a Address to bytes. */
@@ -1080,7 +1167,16 @@ export function fromJSON_Address(json: string): Address {
     }
   }
 
-  const msg: Partial<Address> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: Address = {
+    street1: '',
+    street2: '',
+    city: '',
+    state: '',
+    postalCode: '',
+    country: '',
+    coordinates: ({} as Point),
+  };
 
   // Decode fields
 
@@ -1120,7 +1216,7 @@ export function fromJSON_Address(json: string): Address {
   }
 
 
-  return msg as Address;
+  return msg;
 }
 
 
@@ -1164,13 +1260,13 @@ export function encodeContactInfo(writer: Writer, msg: ContactInfo): void {
   // Field 5: mailing_address
   if (msg.mailingAddress !== undefined && msg.mailingAddress !== null) {
     writer.writeTag(5, WireType.Bytes);
-    { const __sub = new Writer(); encodeAddress(__sub, msg.mailingAddress); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+    { const __cp = writer.beginMessage(); encodeAddress(writer, msg.mailingAddress); writer.endMessage(__cp); };
   }
 
   // Field 6: billing_address
   if (msg.billingAddress !== undefined && msg.billingAddress !== null) {
     writer.writeTag(6, WireType.Bytes);
-    { const __sub = new Writer(); encodeAddress(__sub, msg.billingAddress); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+    { const __cp = writer.beginMessage(); encodeAddress(writer, msg.billingAddress); writer.endMessage(__cp); };
   }
 // End marker
   writer.writeEndMarker();
@@ -1178,7 +1274,18 @@ export function encodeContactInfo(writer: Writer, msg: ContactInfo): void {
 
 /** Decodes a ContactInfo from the reader. */
 export function decodeContactInfo(reader: Reader): ContactInfo {
-  const result: Partial<ContactInfo> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: ContactInfo = {
+    email: '',
+    phone: '',
+    mobile: '',
+    fax: '',
+    mailingAddress: ({} as Address),
+    billingAddress: ({} as Address),
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -1208,7 +1315,7 @@ export function decodeContactInfo(reader: Reader): ContactInfo {
     }
   }
 
-  return result as ContactInfo;
+  return result;
 }
 
 /** Marshals a ContactInfo to bytes. */
@@ -1299,7 +1406,15 @@ export function fromJSON_ContactInfo(json: string): ContactInfo {
     }
   }
 
-  const msg: Partial<ContactInfo> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: ContactInfo = {
+    email: '',
+    phone: '',
+    mobile: '',
+    fax: '',
+    mailingAddress: ({} as Address),
+    billingAddress: ({} as Address),
+  };
 
   // Decode fields
 
@@ -1334,7 +1449,7 @@ export function fromJSON_ContactInfo(json: string): ContactInfo {
   }
 
 
-  return msg as ContactInfo;
+  return msg;
 }
 
 
@@ -1381,12 +1496,12 @@ export function encodePerson(writer: Writer, msg: Person): void {
   // Field 5: date_of_birth
   if (msg.dateOfBirth !== undefined && msg.dateOfBirth !== null) {
     writer.writeTag(5, WireType.Bytes);
-    { const __sub = new Writer(); encodeTimestamp(__sub, msg.dateOfBirth); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+    { const __cp = writer.beginMessage(); encodeTimestamp(writer, msg.dateOfBirth); writer.endMessage(__cp); };
   }
 
   // Field 6: contact
   writer.writeTag(6, WireType.Bytes);
-  { const __sub = new Writer(); encodeContactInfo(__sub, msg.contact); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodeContactInfo(writer, msg.contact); writer.endMessage(__cp); };
 
   // Field 7: status
   writer.writeTag(7, WireType.SVarint);
@@ -1394,12 +1509,12 @@ export function encodePerson(writer: Writer, msg: Person): void {
 
   // Field 8: created_at
   writer.writeTag(8, WireType.Bytes);
-  { const __sub = new Writer(); encodeTimestamp(__sub, msg.createdAt); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodeTimestamp(writer, msg.createdAt); writer.endMessage(__cp); };
 
   // Field 9: updated_at
   if (msg.updatedAt !== undefined && msg.updatedAt !== null) {
     writer.writeTag(9, WireType.Bytes);
-    { const __sub = new Writer(); encodeTimestamp(__sub, msg.updatedAt); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+    { const __cp = writer.beginMessage(); encodeTimestamp(writer, msg.updatedAt); writer.endMessage(__cp); };
   }
 // End marker
   writer.writeEndMarker();
@@ -1407,7 +1522,21 @@ export function encodePerson(writer: Writer, msg: Person): void {
 
 /** Decodes a Person from the reader. */
 export function decodePerson(reader: Reader): Person {
-  const result: Partial<Person> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: Person = {
+    id: 0n,
+    firstName: '',
+    lastName: '',
+    middleName: '',
+    dateOfBirth: ({} as Timestamp),
+    contact: ({} as ContactInfo),
+    status: 0 as Status,
+    createdAt: ({} as Timestamp),
+    updatedAt: ({} as Timestamp),
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -1446,7 +1575,7 @@ export function decodePerson(reader: Reader): Person {
     }
   }
 
-  return result as Person;
+  return result;
 }
 
 /** Marshals a Person to bytes. */
@@ -1551,7 +1680,18 @@ export function fromJSON_Person(json: string): Person {
     }
   }
 
-  const msg: Partial<Person> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: Person = {
+    id: 0n,
+    firstName: '',
+    lastName: '',
+    middleName: '',
+    dateOfBirth: ({} as Timestamp),
+    contact: ({} as ContactInfo),
+    status: 0 as Status,
+    createdAt: ({} as Timestamp),
+    updatedAt: ({} as Timestamp),
+  };
 
   // Decode fields
 
@@ -1620,7 +1760,7 @@ export function fromJSON_Person(json: string): Person {
   }
 
 
-  return msg as Person;
+  return msg;
 }
 
 
@@ -1666,11 +1806,11 @@ export function encodeOrganization(writer: Writer, msg: Organization): void {
 
   // Field 5: headquarters
   writer.writeTag(5, WireType.Bytes);
-  { const __sub = new Writer(); encodeAddress(__sub, msg.headquarters); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodeAddress(writer, msg.headquarters); writer.endMessage(__cp); };
 
   // Field 6: contact
   writer.writeTag(6, WireType.Bytes);
-  { const __sub = new Writer(); encodeContactInfo(__sub, msg.contact); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodeContactInfo(writer, msg.contact); writer.endMessage(__cp); };
 
   // Field 7: status
   writer.writeTag(7, WireType.SVarint);
@@ -1678,18 +1818,32 @@ export function encodeOrganization(writer: Writer, msg: Organization): void {
 
   // Field 8: founded_at
   writer.writeTag(8, WireType.Bytes);
-  { const __sub = new Writer(); encodeTimestamp(__sub, msg.foundedAt); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodeTimestamp(writer, msg.foundedAt); writer.endMessage(__cp); };
 
   // Field 9: created_at
   writer.writeTag(9, WireType.Bytes);
-  { const __sub = new Writer(); encodeTimestamp(__sub, msg.createdAt); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodeTimestamp(writer, msg.createdAt); writer.endMessage(__cp); };
 // End marker
   writer.writeEndMarker();
 }
 
 /** Decodes a Organization from the reader. */
 export function decodeOrganization(reader: Reader): Organization {
-  const result: Partial<Organization> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: Organization = {
+    id: 0n,
+    name: '',
+    legalName: '',
+    taxId: '',
+    headquarters: ({} as Address),
+    contact: ({} as ContactInfo),
+    status: 0 as Status,
+    foundedAt: ({} as Timestamp),
+    createdAt: ({} as Timestamp),
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -1728,7 +1882,7 @@ export function decodeOrganization(reader: Reader): Organization {
     }
   }
 
-  return result as Organization;
+  return result;
 }
 
 /** Marshals a Organization to bytes. */
@@ -1825,7 +1979,18 @@ export function fromJSON_Organization(json: string): Organization {
     }
   }
 
-  const msg: Partial<Organization> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: Organization = {
+    id: 0n,
+    name: '',
+    legalName: '',
+    taxId: '',
+    headquarters: ({} as Address),
+    contact: ({} as ContactInfo),
+    status: 0 as Status,
+    foundedAt: ({} as Timestamp),
+    createdAt: ({} as Timestamp),
+  };
 
   // Decode fields
 
@@ -1894,7 +2059,7 @@ export function fromJSON_Organization(json: string): Organization {
   }
 
 
-  return msg as Organization;
+  return msg;
 }
 
 
@@ -1931,7 +2096,15 @@ export function encodeTag(writer: Writer, msg: Tag): void {
 
 /** Decodes a Tag from the reader. */
 export function decodeTag(reader: Reader): Tag {
-  const result: Partial<Tag> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: Tag = {
+    key: '',
+    value: '',
+    color: '',
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -1952,7 +2125,7 @@ export function decodeTag(reader: Reader): Tag {
     }
   }
 
-  return result as Tag;
+  return result;
 }
 
 /** Marshals a Tag to bytes. */
@@ -2012,7 +2185,12 @@ export function fromJSON_Tag(json: string): Tag {
     }
   }
 
-  const msg: Partial<Tag> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: Tag = {
+    key: '',
+    value: '',
+    color: '',
+  };
 
   // Decode fields
 
@@ -2032,7 +2210,7 @@ export function fromJSON_Tag(json: string): Tag {
   }
 
 
-  return msg as Tag;
+  return msg;
 }
 
 
@@ -2088,14 +2266,26 @@ export function encodeAttachment(writer: Writer, msg: Attachment): void {
 
   // Field 7: uploaded_at
   writer.writeTag(7, WireType.Bytes);
-  { const __sub = new Writer(); encodeTimestamp(__sub, msg.uploadedAt); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodeTimestamp(writer, msg.uploadedAt); writer.endMessage(__cp); };
 // End marker
   writer.writeEndMarker();
 }
 
 /** Decodes a Attachment from the reader. */
 export function decodeAttachment(reader: Reader): Attachment {
-  const result: Partial<Attachment> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: Attachment = {
+    id: '',
+    filename: '',
+    mimeType: '',
+    sizeBytes: 0n,
+    checksum: new Uint8Array(0),
+    url: '',
+    uploadedAt: ({} as Timestamp),
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -2128,7 +2318,7 @@ export function decodeAttachment(reader: Reader): Attachment {
     }
   }
 
-  return result as Attachment;
+  return result;
 }
 
 /** Marshals a Attachment to bytes. */
@@ -2208,7 +2398,16 @@ export function fromJSON_Attachment(json: string): Attachment {
     }
   }
 
-  const msg: Partial<Attachment> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: Attachment = {
+    id: '',
+    filename: '',
+    mimeType: '',
+    sizeBytes: 0n,
+    checksum: new Uint8Array(0),
+    url: '',
+    uploadedAt: ({} as Timestamp),
+  };
 
   // Decode fields
 
@@ -2248,7 +2447,7 @@ export function fromJSON_Attachment(json: string): Attachment {
   }
 
 
-  return msg as Attachment;
+  return msg;
 }
 
 
@@ -2285,12 +2484,12 @@ export function encodeComment(writer: Writer, msg: Comment): void {
 
   // Field 4: created_at
   writer.writeTag(4, WireType.Bytes);
-  { const __sub = new Writer(); encodeTimestamp(__sub, msg.createdAt); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodeTimestamp(writer, msg.createdAt); writer.endMessage(__cp); };
 
   // Field 5: edited_at
   if (msg.editedAt !== undefined && msg.editedAt !== null) {
     writer.writeTag(5, WireType.Bytes);
-    { const __sub = new Writer(); encodeTimestamp(__sub, msg.editedAt); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+    { const __cp = writer.beginMessage(); encodeTimestamp(writer, msg.editedAt); writer.endMessage(__cp); };
   }
 
   // Field 6: reactions
@@ -2304,7 +2503,18 @@ export function encodeComment(writer: Writer, msg: Comment): void {
 
 /** Decodes a Comment from the reader. */
 export function decodeComment(reader: Reader): Comment {
-  const result: Partial<Comment> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: Comment = {
+    id: 0n,
+    authorId: 0n,
+    content: '',
+    createdAt: ({} as Timestamp),
+    editedAt: ({} as Timestamp),
+    reactions: [],
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -2334,7 +2544,7 @@ export function decodeComment(reader: Reader): Comment {
     }
   }
 
-  return result as Comment;
+  return result;
 }
 
 /** Marshals a Comment to bytes. */
@@ -2415,7 +2625,15 @@ export function fromJSON_Comment(json: string): Comment {
     }
   }
 
-  const msg: Partial<Comment> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: Comment = {
+    id: 0n,
+    authorId: 0n,
+    content: '',
+    createdAt: ({} as Timestamp),
+    editedAt: ({} as Timestamp),
+    reactions: [],
+  };
 
   // Decode fields
 
@@ -2456,7 +2674,7 @@ export function fromJSON_Comment(json: string): Comment {
   }
 
 
-  return msg as Comment;
+  return msg;
 }
 
 
@@ -2543,18 +2761,18 @@ export function encodeDocument(writer: Writer, msg: Document): void {
 
   // Field 12: created_at
   writer.writeTag(12, WireType.Bytes);
-  { const __sub = new Writer(); encodeTimestamp(__sub, msg.createdAt); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodeTimestamp(writer, msg.createdAt); writer.endMessage(__cp); };
 
   // Field 13: updated_at
   if (msg.updatedAt !== undefined && msg.updatedAt !== null) {
     writer.writeTag(13, WireType.Bytes);
-    { const __sub = new Writer(); encodeTimestamp(__sub, msg.updatedAt); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+    { const __cp = writer.beginMessage(); encodeTimestamp(writer, msg.updatedAt); writer.endMessage(__cp); };
   }
 
   // Field 14: published_at
   if (msg.publishedAt !== undefined && msg.publishedAt !== null) {
     writer.writeTag(14, WireType.Bytes);
-    { const __sub = new Writer(); encodeTimestamp(__sub, msg.publishedAt); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+    { const __cp = writer.beginMessage(); encodeTimestamp(writer, msg.publishedAt); writer.endMessage(__cp); };
   }
 // End marker
   writer.writeEndMarker();
@@ -2562,7 +2780,26 @@ export function encodeDocument(writer: Writer, msg: Document): void {
 
 /** Decodes a Document from the reader. */
 export function decodeDocument(reader: Reader): Document {
-  const result: Partial<Document> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: Document = {
+    id: 0n,
+    title: '',
+    content: '',
+    authorId: 0n,
+    status: 0 as Status,
+    priority: 0 as Priority,
+    tags: [],
+    attachments: [],
+    comments: [],
+    metadata: new Map(),
+    collaborators: [],
+    createdAt: ({} as Timestamp),
+    updatedAt: ({} as Timestamp),
+    publishedAt: ({} as Timestamp),
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -2616,7 +2853,7 @@ export function decodeDocument(reader: Reader): Document {
     }
   }
 
-  return result as Document;
+  return result;
 }
 
 /** Marshals a Document to bytes. */
@@ -2784,7 +3021,23 @@ export function fromJSON_Document(json: string): Document {
     }
   }
 
-  const msg: Partial<Document> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: Document = {
+    id: 0n,
+    title: '',
+    content: '',
+    authorId: 0n,
+    status: 0 as Status,
+    priority: 0 as Priority,
+    tags: [],
+    attachments: [],
+    comments: [],
+    metadata: new Map(),
+    collaborators: [],
+    createdAt: ({} as Timestamp),
+    updatedAt: ({} as Timestamp),
+    publishedAt: ({} as Timestamp),
+  };
 
   // Decode fields
 
@@ -2925,7 +3178,7 @@ export function fromJSON_Document(json: string): Document {
   }
 
 
-  return msg as Document;
+  return msg;
 }
 
 
@@ -2969,7 +3222,16 @@ export function encodeEventSource(writer: Writer, msg: EventSource): void {
 
 /** Decodes a EventSource from the reader. */
 export function decodeEventSource(reader: Reader): EventSource {
-  const result: Partial<EventSource> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: EventSource = {
+    service: '',
+    instance: '',
+    version: '',
+    region: '',
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -2993,7 +3255,7 @@ export function decodeEventSource(reader: Reader): EventSource {
     }
   }
 
-  return result as EventSource;
+  return result;
 }
 
 /** Marshals a EventSource to bytes. */
@@ -3058,7 +3320,13 @@ export function fromJSON_EventSource(json: string): EventSource {
     }
   }
 
-  const msg: Partial<EventSource> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: EventSource = {
+    service: '',
+    instance: '',
+    version: '',
+    region: '',
+  };
 
   // Decode fields
 
@@ -3083,7 +3351,7 @@ export function fromJSON_EventSource(json: string): EventSource {
   }
 
 
-  return msg as EventSource;
+  return msg;
 }
 
 
@@ -3128,11 +3396,11 @@ export function encodeEvent(writer: Writer, msg: Event): void {
 
   // Field 5: source
   writer.writeTag(5, WireType.Bytes);
-  { const __sub = new Writer(); encodeEventSource(__sub, msg.source); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodeEventSource(writer, msg.source); writer.endMessage(__cp); };
 
   // Field 6: timestamp
   writer.writeTag(6, WireType.Bytes);
-  { const __sub = new Writer(); encodeTimestamp(__sub, msg.timestamp); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodeTimestamp(writer, msg.timestamp); writer.endMessage(__cp); };
 
   // Field 7: attributes
   writer.writeTag(7, WireType.Bytes);
@@ -3161,7 +3429,22 @@ export function encodeEvent(writer: Writer, msg: Event): void {
 
 /** Decodes a Event from the reader. */
 export function decodeEvent(reader: Reader): Event {
-  const result: Partial<Event> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: Event = {
+    id: '',
+    type: 0 as EventType,
+    entityType: '',
+    entityId: '',
+    source: ({} as EventSource),
+    timestamp: ({} as Timestamp),
+    attributes: new Map(),
+    payload: new Uint8Array(0),
+    correlationId: '',
+    causationId: '',
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -3203,7 +3486,7 @@ export function decodeEvent(reader: Reader): Event {
     }
   }
 
-  return result as Event;
+  return result;
 }
 
 /** Marshals a Event to bytes. */
@@ -3325,7 +3608,19 @@ export function fromJSON_Event(json: string): Event {
     }
   }
 
-  const msg: Partial<Event> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: Event = {
+    id: '',
+    type: 0 as EventType,
+    entityType: '',
+    entityId: '',
+    source: ({} as EventSource),
+    timestamp: ({} as Timestamp),
+    attributes: new Map(),
+    payload: new Uint8Array(0),
+    correlationId: '',
+    causationId: '',
+  };
 
   // Decode fields
 
@@ -3406,7 +3701,7 @@ export function fromJSON_Event(json: string): Event {
   }
 
 
-  return msg as Event;
+  return msg;
 }
 
 
@@ -3428,7 +3723,7 @@ export function encodeLogEntry(writer: Writer, msg: LogEntry): void {
 
   // Field 1: timestamp
   writer.writeTag(1, WireType.Bytes);
-  { const __sub = new Writer(); encodeTimestamp(__sub, msg.timestamp); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodeTimestamp(writer, msg.timestamp); writer.endMessage(__cp); };
 
   // Field 2: level
   if (msg.level !== undefined && msg.level !== null && msg.level.length > 0) {
@@ -3450,7 +3745,7 @@ export function encodeLogEntry(writer: Writer, msg: LogEntry): void {
 
   // Field 5: source
   writer.writeTag(5, WireType.Bytes);
-  { const __sub = new Writer(); encodeEventSource(__sub, msg.source); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodeEventSource(writer, msg.source); writer.endMessage(__cp); };
 
   // Field 6: fields
   writer.writeTag(6, WireType.Bytes);
@@ -3479,7 +3774,21 @@ export function encodeLogEntry(writer: Writer, msg: LogEntry): void {
 
 /** Decodes a LogEntry from the reader. */
 export function decodeLogEntry(reader: Reader): LogEntry {
-  const result: Partial<LogEntry> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: LogEntry = {
+    timestamp: ({} as Timestamp),
+    level: '',
+    logger: '',
+    msg: '',
+    source: ({} as EventSource),
+    fields: new Map(),
+    stackTrace: '',
+    traceId: '',
+    spanId: '',
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -3518,7 +3827,7 @@ export function decodeLogEntry(reader: Reader): LogEntry {
     }
   }
 
-  return result as LogEntry;
+  return result;
 }
 
 /** Marshals a LogEntry to bytes. */
@@ -3628,7 +3937,18 @@ export function fromJSON_LogEntry(json: string): LogEntry {
     }
   }
 
-  const msg: Partial<LogEntry> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: LogEntry = {
+    timestamp: ({} as Timestamp),
+    level: '',
+    logger: '',
+    msg: '',
+    source: ({} as EventSource),
+    fields: new Map(),
+    stackTrace: '',
+    traceId: '',
+    spanId: '',
+  };
 
   // Decode fields
 
@@ -3685,7 +4005,7 @@ export function fromJSON_LogEntry(json: string): LogEntry {
   }
 
 
-  return msg as LogEntry;
+  return msg;
 }
 
 
@@ -3753,7 +4073,7 @@ export function encodeUserProfile(writer: Writer, msg: UserProfile): void {
 
   // Field 7: personal_info
   writer.writeTag(7, WireType.Bytes);
-  { const __sub = new Writer(); encodePerson(__sub, msg.personalInfo); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodePerson(writer, msg.personalInfo); writer.endMessage(__cp); };
 
   // Field 8: account_status
   writer.writeTag(8, WireType.SVarint);
@@ -3799,20 +4119,20 @@ export function encodeUserProfile(writer: Writer, msg: UserProfile): void {
 
   // Field 16: usage_metrics
   writer.writeTag(16, WireType.Bytes);
-  { const __sub = new Writer(); encodeMetrics(__sub, msg.usageMetrics); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodeMetrics(writer, msg.usageMetrics); writer.endMessage(__cp); };
 
   // Field 17: created_at
   writer.writeTag(17, WireType.Bytes);
-  { const __sub = new Writer(); encodeTimestamp(__sub, msg.createdAt); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodeTimestamp(writer, msg.createdAt); writer.endMessage(__cp); };
 
   // Field 18: last_login_at
   writer.writeTag(18, WireType.Bytes);
-  { const __sub = new Writer(); encodeTimestamp(__sub, msg.lastLoginAt); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodeTimestamp(writer, msg.lastLoginAt); writer.endMessage(__cp); };
 
   // Field 19: deleted_at
   if (msg.deletedAt !== undefined && msg.deletedAt !== null) {
     writer.writeTag(19, WireType.Bytes);
-    { const __sub = new Writer(); encodeTimestamp(__sub, msg.deletedAt); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+    { const __cp = writer.beginMessage(); encodeTimestamp(writer, msg.deletedAt); writer.endMessage(__cp); };
   }
 // End marker
   writer.writeEndMarker();
@@ -3820,7 +4140,31 @@ export function encodeUserProfile(writer: Writer, msg: UserProfile): void {
 
 /** Decodes a UserProfile from the reader. */
 export function decodeUserProfile(reader: Reader): UserProfile {
-  const result: Partial<UserProfile> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: UserProfile = {
+    id: 0n,
+    username: '',
+    email: '',
+    displayName: '',
+    bio: '',
+    avatarUrl: '',
+    personalInfo: ({} as Person),
+    accountStatus: 0 as Status,
+    roles: [],
+    permissions: [],
+    preferences: new Map(),
+    settings: new Map(),
+    organizations: [],
+    documents: [],
+    recentActivity: [],
+    usageMetrics: ({} as Metrics),
+    createdAt: ({} as Timestamp),
+    lastLoginAt: ({} as Timestamp),
+    deletedAt: ({} as Timestamp),
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -3889,7 +4233,7 @@ export function decodeUserProfile(reader: Reader): UserProfile {
     }
   }
 
-  return result as UserProfile;
+  return result;
 }
 
 /** Marshals a UserProfile to bytes. */
@@ -4098,7 +4442,28 @@ export function fromJSON_UserProfile(json: string): UserProfile {
     }
   }
 
-  const msg: Partial<UserProfile> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: UserProfile = {
+    id: 0n,
+    username: '',
+    email: '',
+    displayName: '',
+    bio: '',
+    avatarUrl: '',
+    personalInfo: ({} as Person),
+    accountStatus: 0 as Status,
+    roles: [],
+    permissions: [],
+    preferences: new Map(),
+    settings: new Map(),
+    organizations: [],
+    documents: [],
+    recentActivity: [],
+    usageMetrics: ({} as Metrics),
+    createdAt: ({} as Timestamp),
+    lastLoginAt: ({} as Timestamp),
+    deletedAt: ({} as Timestamp),
+  };
 
   // Decode fields
 
@@ -4261,7 +4626,7 @@ export function fromJSON_UserProfile(json: string): UserProfile {
   }
 
 
-  return msg as UserProfile;
+  return msg;
 }
 
 
@@ -4296,12 +4661,12 @@ export function encodeBatchRequest(writer: Writer, msg: BatchRequest): void {
 
   // Field 4: submitted_at
   writer.writeTag(4, WireType.Bytes);
-  { const __sub = new Writer(); encodeTimestamp(__sub, msg.submittedAt); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodeTimestamp(writer, msg.submittedAt); writer.endMessage(__cp); };
 
   // Field 5: timeout
   if (msg.timeout !== undefined && msg.timeout !== null) {
     writer.writeTag(5, WireType.Bytes);
-    { const __sub = new Writer(); encodeDuration(__sub, msg.timeout); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+    { const __cp = writer.beginMessage(); encodeDuration(writer, msg.timeout); writer.endMessage(__cp); };
   }
 
   // Field 6: priority
@@ -4313,7 +4678,18 @@ export function encodeBatchRequest(writer: Writer, msg: BatchRequest): void {
 
 /** Decodes a BatchRequest from the reader. */
 export function decodeBatchRequest(reader: Reader): BatchRequest {
-  const result: Partial<BatchRequest> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: BatchRequest = {
+    requestId: '',
+    items: [],
+    headers: new Map(),
+    submittedAt: ({} as Timestamp),
+    timeout: ({} as Duration),
+    priority: 0 as Priority,
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -4343,7 +4719,7 @@ export function decodeBatchRequest(reader: Reader): BatchRequest {
     }
   }
 
-  return result as BatchRequest;
+  return result;
 }
 
 /** Marshals a BatchRequest to bytes. */
@@ -4442,7 +4818,15 @@ export function fromJSON_BatchRequest(json: string): BatchRequest {
     }
   }
 
-  const msg: Partial<BatchRequest> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: BatchRequest = {
+    requestId: '',
+    items: [],
+    headers: new Map(),
+    submittedAt: ({} as Timestamp),
+    timeout: ({} as Duration),
+    priority: 0 as Priority,
+  };
 
   // Decode fields
 
@@ -4506,7 +4890,7 @@ export function fromJSON_BatchRequest(json: string): BatchRequest {
   }
 
 
-  return msg as BatchRequest;
+  return msg;
 }
 
 
@@ -4543,22 +4927,33 @@ export function encodeBatchResponse(writer: Writer, msg: BatchResponse): void {
 
   // Field 4: processing_metrics
   writer.writeTag(4, WireType.Bytes);
-  { const __sub = new Writer(); encodeMetrics(__sub, msg.processingMetrics); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodeMetrics(writer, msg.processingMetrics); writer.endMessage(__cp); };
 
   // Field 5: processing_time
   writer.writeTag(5, WireType.Bytes);
-  { const __sub = new Writer(); encodeDuration(__sub, msg.processingTime); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodeDuration(writer, msg.processingTime); writer.endMessage(__cp); };
 
   // Field 6: completed_at
   writer.writeTag(6, WireType.Bytes);
-  { const __sub = new Writer(); encodeTimestamp(__sub, msg.completedAt); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodeTimestamp(writer, msg.completedAt); writer.endMessage(__cp); };
 // End marker
   writer.writeEndMarker();
 }
 
 /** Decodes a BatchResponse from the reader. */
 export function decodeBatchResponse(reader: Reader): BatchResponse {
-  const result: Partial<BatchResponse> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: BatchResponse = {
+    requestId: '',
+    results: [],
+    errors: [],
+    processingMetrics: ({} as Metrics),
+    processingTime: ({} as Duration),
+    completedAt: ({} as Timestamp),
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -4588,7 +4983,7 @@ export function decodeBatchResponse(reader: Reader): BatchResponse {
     }
   }
 
-  return result as BatchResponse;
+  return result;
 }
 
 /** Marshals a BatchResponse to bytes. */
@@ -4671,7 +5066,15 @@ export function fromJSON_BatchResponse(json: string): BatchResponse {
     }
   }
 
-  const msg: Partial<BatchResponse> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: BatchResponse = {
+    requestId: '',
+    results: [],
+    errors: [],
+    processingMetrics: ({} as Metrics),
+    processingTime: ({} as Duration),
+    completedAt: ({} as Timestamp),
+  };
 
   // Decode fields
 
@@ -4718,7 +5121,7 @@ export function fromJSON_BatchResponse(json: string): BatchResponse {
   }
 
 
-  return msg as BatchResponse;
+  return msg;
 }
 
 

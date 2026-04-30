@@ -126,10 +126,13 @@ export class Registry {
 
     writer.writeVarint(reg.typeId);
 
-    const tempWriter = new Writer();
-    reg.encoder(tempWriter, value);
-
-    writer.writeLengthPrefixedBytes(tempWriter.bytes());
+    // Length-prefix the encoded value using beginMessage/endMessage so
+    // the encoder writes straight into `writer` instead of a fresh
+    // sub-Writer (one Uint8Array + DataView allocation eliminated per
+    // polymorphic field).
+    const cp = writer.beginMessage();
+    reg.encoder(writer, value);
+    writer.endMessage(cp);
   }
 
   /**

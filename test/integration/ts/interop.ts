@@ -20,12 +20,12 @@ import type { ReaderOptions } from '@cramberry/runtime';
 
 // Helper functions for encoding/decoding
 function writeArray<T>(writer: Writer, arr: T[], writeElem: (w: Writer, v: T) => void): void {
-  const subWriter = new Writer();
-  subWriter.writeVarint(arr.length);
+  const cp = writer.beginMessage();
+  writer.writeVarint(arr.length);
   for (const elem of arr) {
-    writeElem(subWriter, elem);
+    writeElem(writer, elem);
   }
-  writer.writeLengthPrefixedBytes(subWriter.bytes());
+  writer.endMessage(cp);
 }
 
 function readArray<T>(reader: Reader, readElem: (r: Reader) => T): T[] {
@@ -72,18 +72,18 @@ function compareMapKeys(a: unknown, b: unknown): number {
 }
 
 function writeMap<K, V>(writer: Writer, map: Map<K, V> | Record<string, V>, writeKey: (w: Writer, k: K) => void, writeVal: (w: Writer, v: V) => void): void {
-  const subWriter = new Writer();
+  const cp = writer.beginMessage();
   const entries = map instanceof Map ? Array.from(map.entries()) : Object.entries(map);
   // Sort by key for deterministic output. Map iteration order is
   // implementation-defined and varies per insertion order; the wire format
   // requires a canonical order matching the Go reflection marshaller.
   entries.sort((a, b) => compareMapKeys(a[0], b[0]));
-  subWriter.writeVarint(entries.length);
+  writer.writeVarint(entries.length);
   for (const [k, v] of entries) {
-    writeKey(subWriter, k as K);
-    writeVal(subWriter, v as V);
+    writeKey(writer, k as K);
+    writeVal(writer, v as V);
   }
-  writer.writeLengthPrefixedBytes(subWriter.bytes());
+  writer.endMessage(cp);
 }
 
 function readMap<K, V>(reader: Reader, readKey: (r: Reader) => K, readVal: (r: Reader) => V): Map<K, V> {
@@ -187,7 +187,21 @@ export function encodeScalarTypes(writer: Writer, msg: ScalarTypes): void {
 
 /** Decodes a ScalarTypes from the reader. */
 export function decodeScalarTypes(reader: Reader): ScalarTypes {
-  const result: Partial<ScalarTypes> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: ScalarTypes = {
+    boolVal: false,
+    int32Val: 0,
+    int64Val: 0n,
+    uint32Val: 0,
+    uint64Val: 0n,
+    float32Val: 0,
+    float64Val: 0,
+    stringVal: '',
+    bytesVal: new Uint8Array(0),
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -226,7 +240,7 @@ export function decodeScalarTypes(reader: Reader): ScalarTypes {
     }
   }
 
-  return result as ScalarTypes;
+  return result;
 }
 
 /** Marshals a ScalarTypes to bytes. */
@@ -312,7 +326,18 @@ export function fromJSON_ScalarTypes(json: string): ScalarTypes {
     }
   }
 
-  const msg: Partial<ScalarTypes> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: ScalarTypes = {
+    boolVal: false,
+    int32Val: 0,
+    int64Val: 0n,
+    uint32Val: 0,
+    uint64Val: 0n,
+    float32Val: 0,
+    float64Val: 0,
+    stringVal: '',
+    bytesVal: new Uint8Array(0),
+  };
 
   // Decode fields
 
@@ -362,7 +387,7 @@ export function fromJSON_ScalarTypes(json: string): ScalarTypes {
   }
 
 
-  return msg as ScalarTypes;
+  return msg;
 }
 
 
@@ -399,7 +424,15 @@ export function encodeRepeatedTypes(writer: Writer, msg: RepeatedTypes): void {
 
 /** Decodes a RepeatedTypes from the reader. */
 export function decodeRepeatedTypes(reader: Reader): RepeatedTypes {
-  const result: Partial<RepeatedTypes> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: RepeatedTypes = {
+    int32List: [],
+    stringList: [],
+    bytesList: [],
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -420,7 +453,7 @@ export function decodeRepeatedTypes(reader: Reader): RepeatedTypes {
     }
   }
 
-  return result as RepeatedTypes;
+  return result;
 }
 
 /** Marshals a RepeatedTypes to bytes. */
@@ -494,7 +527,12 @@ export function fromJSON_RepeatedTypes(json: string): RepeatedTypes {
     }
   }
 
-  const msg: Partial<RepeatedTypes> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: RepeatedTypes = {
+    int32List: [],
+    stringList: [],
+    bytesList: [],
+  };
 
   // Decode fields
 
@@ -532,7 +570,7 @@ export function fromJSON_RepeatedTypes(json: string): RepeatedTypes {
   }
 
 
-  return msg as RepeatedTypes;
+  return msg;
 }
 
 
@@ -562,7 +600,14 @@ export function encodeNestedMessage(writer: Writer, msg: NestedMessage): void {
 
 /** Decodes a NestedMessage from the reader. */
 export function decodeNestedMessage(reader: Reader): NestedMessage {
-  const result: Partial<NestedMessage> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: NestedMessage = {
+    name: '',
+    value: 0,
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -580,7 +625,7 @@ export function decodeNestedMessage(reader: Reader): NestedMessage {
     }
   }
 
-  return result as NestedMessage;
+  return result;
 }
 
 /** Marshals a NestedMessage to bytes. */
@@ -631,7 +676,11 @@ export function fromJSON_NestedMessage(json: string): NestedMessage {
     }
   }
 
-  const msg: Partial<NestedMessage> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: NestedMessage = {
+    name: '',
+    value: 0,
+  };
 
   // Decode fields
 
@@ -646,7 +695,7 @@ export function fromJSON_NestedMessage(json: string): NestedMessage {
   }
 
 
-  return msg as NestedMessage;
+  return msg;
 }
 
 
@@ -670,12 +719,12 @@ export function encodeComplexTypes(writer: Writer, msg: ComplexTypes): void {
   // Field 2: optional_nested
   if (msg.optionalNested !== undefined && msg.optionalNested !== null) {
     writer.writeTag(2, WireType.Bytes);
-    if (msg.optionalNested !== null) { { const __sub = new Writer(); encodeNestedMessage(__sub, msg.optionalNested); writer.writeLengthPrefixedBytes(__sub.bytes()); } };
+    if (msg.optionalNested !== null) { { const __cp = writer.beginMessage(); encodeNestedMessage(writer, msg.optionalNested); writer.endMessage(__cp); } };
   }
 
   // Field 3: required_nested
   writer.writeTag(3, WireType.Bytes);
-  { const __sub = new Writer(); encodeNestedMessage(__sub, msg.requiredNested); writer.writeLengthPrefixedBytes(__sub.bytes()); };
+  { const __cp = writer.beginMessage(); encodeNestedMessage(writer, msg.requiredNested); writer.endMessage(__cp); };
 
   // Field 4: nested_list
   if (msg.nestedList !== undefined && msg.nestedList !== null && msg.nestedList.length > 0) {
@@ -696,7 +745,18 @@ export function encodeComplexTypes(writer: Writer, msg: ComplexTypes): void {
 
 /** Decodes a ComplexTypes from the reader. */
 export function decodeComplexTypes(reader: Reader): ComplexTypes {
-  const result: Partial<ComplexTypes> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: ComplexTypes = {
+    status: 0 as Status,
+    optionalNested: null,
+    requiredNested: ({} as NestedMessage),
+    nestedList: [],
+    stringIntMap: new Map(),
+    intStringMap: new Map(),
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -726,7 +786,7 @@ export function decodeComplexTypes(reader: Reader): ComplexTypes {
     }
   }
 
-  return result as ComplexTypes;
+  return result;
 }
 
 /** Marshals a ComplexTypes to bytes. */
@@ -837,7 +897,15 @@ export function fromJSON_ComplexTypes(json: string): ComplexTypes {
     }
   }
 
-  const msg: Partial<ComplexTypes> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: ComplexTypes = {
+    status: 0 as Status,
+    optionalNested: null,
+    requiredNested: ({} as NestedMessage),
+    nestedList: [],
+    stringIntMap: new Map(),
+    intStringMap: new Map(),
+  };
 
   // Decode fields
 
@@ -912,7 +980,7 @@ export function fromJSON_ComplexTypes(json: string): ComplexTypes {
   }
 
 
-  return msg as ComplexTypes;
+  return msg;
 }
 
 
@@ -1005,7 +1073,23 @@ export function encodeEdgeCases(writer: Writer, msg: EdgeCases): void {
 
 /** Decodes a EdgeCases from the reader. */
 export function decodeEdgeCases(reader: Reader): EdgeCases {
-  const result: Partial<EdgeCases> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: EdgeCases = {
+    zeroInt: 0,
+    negativeOne: 0,
+    maxInt32: 0,
+    minInt32: 0,
+    maxInt64: 0n,
+    minInt64: 0n,
+    maxUint32: 0,
+    maxUint64: 0n,
+    emptyString: '',
+    unicodeString: '',
+    emptyBytes: new Uint8Array(0),
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -1050,7 +1134,7 @@ export function decodeEdgeCases(reader: Reader): EdgeCases {
     }
   }
 
-  return result as EdgeCases;
+  return result;
 }
 
 /** Marshals a EdgeCases to bytes. */
@@ -1146,7 +1230,20 @@ export function fromJSON_EdgeCases(json: string): EdgeCases {
     }
   }
 
-  const msg: Partial<EdgeCases> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: EdgeCases = {
+    zeroInt: 0,
+    negativeOne: 0,
+    maxInt32: 0,
+    minInt32: 0,
+    maxInt64: 0n,
+    minInt64: 0n,
+    maxUint32: 0,
+    maxUint64: 0n,
+    emptyString: '',
+    unicodeString: '',
+    emptyBytes: new Uint8Array(0),
+  };
 
   // Decode fields
 
@@ -1206,7 +1303,7 @@ export function fromJSON_EdgeCases(json: string): EdgeCases {
   }
 
 
-  return msg as EdgeCases;
+  return msg;
 }
 
 
@@ -1264,7 +1361,18 @@ export function encodeAllFieldNumbers(writer: Writer, msg: AllFieldNumbers): voi
 
 /** Decodes a AllFieldNumbers from the reader. */
 export function decodeAllFieldNumbers(reader: Reader): AllFieldNumbers {
-  const result: Partial<AllFieldNumbers> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: AllFieldNumbers = {
+    field1: 0,
+    field15: 0,
+    field16: 0,
+    field127: 0,
+    field128: 0,
+    field1000: 0,
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -1294,7 +1402,7 @@ export function decodeAllFieldNumbers(reader: Reader): AllFieldNumbers {
     }
   }
 
-  return result as AllFieldNumbers;
+  return result;
 }
 
 /** Marshals a AllFieldNumbers to bytes. */
@@ -1365,7 +1473,15 @@ export function fromJSON_AllFieldNumbers(json: string): AllFieldNumbers {
     }
   }
 
-  const msg: Partial<AllFieldNumbers> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: AllFieldNumbers = {
+    field1: 0,
+    field15: 0,
+    field16: 0,
+    field127: 0,
+    field128: 0,
+    field1000: 0,
+  };
 
   // Decode fields
 
@@ -1400,7 +1516,7 @@ export function fromJSON_AllFieldNumbers(json: string): AllFieldNumbers {
   }
 
 
-  return msg as AllFieldNumbers;
+  return msg;
 }
 
 

@@ -358,6 +358,26 @@ func (c *goContext) encodeValue(t schema.TypeRef, varName string, isPointer bool
 	}
 }
 
+// mapKeySortPool returns the (get, put) names of the pooled
+// sorted-keys helpers for the given key type, or ("", "", false) if no
+// pool is available. Pools exist for the three high-frequency key
+// types: string, int64, uint64.
+func mapKeySortPool(keyType schema.TypeRef) (string, string, bool) {
+	scalar, ok := keyType.(*schema.ScalarType)
+	if !ok {
+		return "", "", false
+	}
+	switch scalar.Name {
+	case "string":
+		return "GetSortedStringKeys", "PutStringKeys", true
+	case "int64":
+		return "GetSortedInt64Keys", "PutInt64Keys", true
+	case "uint64":
+		return "GetSortedUint64Keys", "PutUint64Keys", true
+	}
+	return "", "", false
+}
+
 // mapKeySortHelper returns the name of the cramberry runtime helper that
 // produces sorted keys for the given map-key type, in the canonical order
 // expected by the wire format.

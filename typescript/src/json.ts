@@ -230,9 +230,31 @@ export function compareUtf8(a: string, b: string): number {
 /**
  * Sorts map keys lexicographically by UTF-8 byte order.
  * This ensures deterministic JSON output for maps.
+ *
+ * Decorate-sort-undecorate: each key is encoded once into a Uint8Array,
+ * then we sort permutation indices using those bytes. The previous
+ * naive `sort(compareUtf8)` re-encoded both keys on every comparison,
+ * paying O(n log n) TextEncoder calls and Uint8Array allocations.
+ * For the modal n=2..10 case this is the same big-O but ~2-3× lower
+ * constant; for n>=100 it's the difference between thousands of
+ * encodes and dozens.
  */
 export function sortMapKeysLexicographic(keys: string[]): string[] {
-  return [...keys].sort(compareUtf8);
+  const n = keys.length;
+  if (n <= 1) return keys.slice();
+  const bytes: Uint8Array[] = new Array(n);
+  for (let i = 0; i < n; i++) bytes[i] = __sortKeyEncoder.encode(keys[i]);
+  const idx: number[] = new Array(n);
+  for (let i = 0; i < n; i++) idx[i] = i;
+  idx.sort((i, j) => {
+    const a = bytes[i], b = bytes[j];
+    const m = Math.min(a.length, b.length);
+    for (let k = 0; k < m; k++) if (a[k] !== b[k]) return a[k] - b[k];
+    return a.length - b.length;
+  });
+  const result: string[] = new Array(n);
+  for (let i = 0; i < n; i++) result[i] = keys[idx[i]];
+  return result;
 }
 
 /**

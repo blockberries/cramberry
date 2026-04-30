@@ -334,43 +334,45 @@ func (c *rustContext) rustZeroCheck(f *schema.Field) string {
 	return ""
 }
 
-// rustWriteValueForSubWriter generates write code using sub_writer instead of writer
-func (c *rustContext) rustWriteValueForSubWriter(t schema.TypeRef, value string) string {
+// rustWriteValueInline generates write code that targets the outer
+// `writer` directly (no sub-Writer). Used inside begin_message /
+// end_message wrappers where the body is encoded into the parent buffer.
+func (c *rustContext) rustWriteValueInline(t schema.TypeRef, value string) string {
 	switch typ := t.(type) {
 	case *schema.ScalarType:
 		switch typ.Name {
 		case "bool":
-			return fmt.Sprintf("sub_writer.write_bool(*%s)", value)
+			return fmt.Sprintf("writer.write_bool(*%s)", value)
 		case "int8", "int16":
-			return fmt.Sprintf("sub_writer.write_svarint(*%s as i32)", value)
+			return fmt.Sprintf("writer.write_svarint(*%s as i32)", value)
 		case "int32", "int":
-			return fmt.Sprintf("sub_writer.write_svarint(*%s)", value)
+			return fmt.Sprintf("writer.write_svarint(*%s)", value)
 		case "uint8", "uint16":
-			return fmt.Sprintf("sub_writer.write_varint(*%s as u32)", value)
+			return fmt.Sprintf("writer.write_varint(*%s as u32)", value)
 		case "uint32", "uint":
-			return fmt.Sprintf("sub_writer.write_varint(*%s)", value)
+			return fmt.Sprintf("writer.write_varint(*%s)", value)
 		case "int64":
-			return fmt.Sprintf("sub_writer.write_svarint64(*%s)", value)
+			return fmt.Sprintf("writer.write_svarint64(*%s)", value)
 		case "uint64":
-			return fmt.Sprintf("sub_writer.write_varint64(*%s)", value)
+			return fmt.Sprintf("writer.write_varint64(*%s)", value)
 		case "float32":
-			return fmt.Sprintf("sub_writer.write_float32(*%s)", value)
+			return fmt.Sprintf("writer.write_float32(*%s)", value)
 		case "float64":
-			return fmt.Sprintf("sub_writer.write_float64(*%s)", value)
+			return fmt.Sprintf("writer.write_float64(*%s)", value)
 		case "string":
-			return fmt.Sprintf("sub_writer.write_string(%s)", value)
+			return fmt.Sprintf("writer.write_string(%s)", value)
 		case "bytes":
-			return fmt.Sprintf("sub_writer.write_length_prefixed_bytes(%s)", value)
+			return fmt.Sprintf("writer.write_length_prefixed_bytes(%s)", value)
 		default:
-			return fmt.Sprintf("sub_writer.write_string(%s)", value)
+			return fmt.Sprintf("writer.write_string(%s)", value)
 		}
 	case *schema.NamedType:
 		if c.isNamedEnum(typ) {
-			return fmt.Sprintf("sub_writer.write_svarint(*%s as i32)", value)
+			return fmt.Sprintf("writer.write_svarint(*%s as i32)", value)
 		}
-		return fmt.Sprintf("encode_%s(&mut sub_writer, %s)", ToSnakeCase(typ.Name), value)
+		return fmt.Sprintf("encode_%s(writer, %s)", ToSnakeCase(typ.Name), value)
 	default:
-		return fmt.Sprintf("sub_writer.write_string(&format!(\"{:?}\", %s))", value)
+		return fmt.Sprintf("writer.write_string(&format!(\"{:?}\", %s))", value)
 	}
 }
 
@@ -380,14 +382,15 @@ func (c *rustContext) rustWriteValue(t schema.TypeRef, value string, repeated bo
 		if arr, ok := t.(*schema.ArrayType); ok {
 			elemType = arr.Element
 		}
-		elemWrite := c.rustWriteValueForSubWriter(elemType, "elem")
+		elemWrite := c.rustWriteValueInline(elemType, "elem")
 		return fmt.Sprintf(`{
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(%s.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(%s.len() as u32)?;
         for elem in &%s {
             %s?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }`, value, value, elemWrite)
 	}
 
@@ -428,16 +431,21 @@ func (c *rustContext) rustWriteValue(t schema.TypeRef, value string, repeated bo
 		// encoded body in a length-prefixed payload. SkipValue(WireType::Bytes)
 		// otherwise misreads the first body byte as a length and corrupts
 		// subsequent decoding for any field a future schema doesn't know.
+		//
+		// Use begin_message / end_message to encode straight into the
+		// parent's buffer instead of allocating a fresh sub-Writer per
+		// nested call (saves a Vec<u8> allocation per nesting level).
 		return fmt.Sprintf(`{
-        let mut __sub = Writer::new();
-        encode_%s(&mut __sub, &%s)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_%s(writer, &%s)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }`, ToSnakeCase(typ.Name), value)
 	case *schema.ArrayType:
 		return c.rustWriteValue(typ.Element, value, true)
 	case *schema.MapType:
-		keyWrite := c.rustWriteValueForSubWriter(typ.Key, "k")
-		valWrite := c.rustWriteValueForSubWriter(typ.Value, "v")
+		keyWrite := c.rustWriteValueInline(typ.Key, "k")
+		valWrite := c.rustWriteValueInline(typ.Value, "v")
 		// Sort keys for deterministic output. HashMap iteration in Rust uses
 		// a randomized hasher; the wire format requires the same canonical
 		// order as the Go reflection marshaller.
@@ -445,13 +453,14 @@ func (c *rustContext) rustWriteValue(t schema.TypeRef, value string, repeated bo
         use cramberry::CompareKeys;
         let mut __entries: Vec<_> = %s.iter().collect();
         __entries.sort_by(|a, b| a.0.cramberry_cmp(b.0));
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(__entries.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(__entries.len() as u32)?;
         for (k, v) in __entries {
             %s?;
             %s?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }`, value, keyWrite, valWrite)
 	case *schema.PointerType:
 		// `as_deref` on Option<Box<T>> yields Option<&T>, so `inner`
@@ -1063,16 +1072,16 @@ pub fn from_json_{{toSnake $msg.Name}}(json: &str) -> std::result::Result<{{rust
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-{{- range $msg.Fields}}
-        "{{jsonFieldName .}}",
-{{- end}}
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+{{- range $msg.Fields}}
+            "{{jsonFieldName .}}" => {},
+{{- end}}
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 

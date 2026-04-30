@@ -221,16 +221,16 @@ pub fn from_json_point(json: &str) -> std::result::Result<Point, String> {
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "x",
-        "y",
-        "z",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "x" => {},
+            "y" => {},
+            "z" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -348,15 +348,15 @@ pub fn from_json_timestamp(json: &str) -> std::result::Result<Timestamp, String>
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "seconds",
-        "nanos",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "seconds" => {},
+            "nanos" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -470,15 +470,15 @@ pub fn from_json_duration(json: &str) -> std::result::Result<Duration, String> {
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "seconds",
-        "nanos",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "seconds" => {},
+            "nanos" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -714,23 +714,23 @@ pub fn from_json_metrics(json: &str) -> std::result::Result<Metrics, String> {
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "count",
-        "sum",
-        "min",
-        "max",
-        "avg",
-        "p50",
-        "p95",
-        "p99",
-        "total_bytes",
-        "error_count",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "count" => {},
+            "sum" => {},
+            "min" => {},
+            "max" => {},
+            "avg" => {},
+            "p50" => {},
+            "p95" => {},
+            "p99" => {},
+            "total_bytes" => {},
+            "error_count" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -889,16 +889,16 @@ pub fn from_json_small_message(json: &str) -> std::result::Result<SmallMessage, 
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "id",
-        "name",
-        "active",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "id" => {},
+            "name" => {},
+            "active" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -991,9 +991,10 @@ pub fn encode_address(writer: &mut Writer, msg: &Address) -> Result<()> {
         {
         let __inner = msg.coordinates.as_ref().unwrap();
         {
-        let mut __sub = Writer::new();
-        encode_point(&mut __sub, &(*__inner))?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_point(writer, &(*__inner))?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }
     }?;
     }
@@ -1109,20 +1110,20 @@ pub fn from_json_address(json: &str) -> std::result::Result<Address, String> {
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "street1",
-        "street2",
-        "city",
-        "state",
-        "postal_code",
-        "country",
-        "coordinates",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "street1" => {},
+            "street2" => {},
+            "city" => {},
+            "state" => {},
+            "postal_code" => {},
+            "country" => {},
+            "coordinates" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -1235,9 +1236,10 @@ pub fn encode_contact_info(writer: &mut Writer, msg: &ContactInfo) -> Result<()>
         {
         let __inner = msg.mailing_address.as_ref().unwrap();
         {
-        let mut __sub = Writer::new();
-        encode_address(&mut __sub, &(*__inner))?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_address(writer, &(*__inner))?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }
     }?;
     }
@@ -1248,9 +1250,10 @@ pub fn encode_contact_info(writer: &mut Writer, msg: &ContactInfo) -> Result<()>
         {
         let __inner = msg.billing_address.as_ref().unwrap();
         {
-        let mut __sub = Writer::new();
-        encode_address(&mut __sub, &(*__inner))?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_address(writer, &(*__inner))?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }
     }?;
     }
@@ -1375,19 +1378,19 @@ pub fn from_json_contact_info(json: &str) -> std::result::Result<ContactInfo, St
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "email",
-        "phone",
-        "mobile",
-        "fax",
-        "mailing_address",
-        "billing_address",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "email" => {},
+            "phone" => {},
+            "mobile" => {},
+            "fax" => {},
+            "mailing_address" => {},
+            "billing_address" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -1514,9 +1517,10 @@ pub fn encode_person(writer: &mut Writer, msg: &Person) -> Result<()> {
         {
         let __inner = msg.date_of_birth.as_ref().unwrap();
         {
-        let mut __sub = Writer::new();
-        encode_timestamp(&mut __sub, &(*__inner))?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_timestamp(writer, &(*__inner))?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }
     }?;
     }
@@ -1524,9 +1528,10 @@ pub fn encode_person(writer: &mut Writer, msg: &Person) -> Result<()> {
     // Field 6: contact
     writer.write_tag(6, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_contact_info(&mut __sub, &msg.contact)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_contact_info(writer, &msg.contact)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 7: status
@@ -1536,9 +1541,10 @@ pub fn encode_person(writer: &mut Writer, msg: &Person) -> Result<()> {
     // Field 8: created_at
     writer.write_tag(8, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_timestamp(&mut __sub, &msg.created_at)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_timestamp(writer, &msg.created_at)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 9: updated_at
@@ -1547,9 +1553,10 @@ pub fn encode_person(writer: &mut Writer, msg: &Person) -> Result<()> {
         {
         let __inner = msg.updated_at.as_ref().unwrap();
         {
-        let mut __sub = Writer::new();
-        encode_timestamp(&mut __sub, &(*__inner))?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_timestamp(writer, &(*__inner))?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }
     }?;
     }
@@ -1706,22 +1713,22 @@ pub fn from_json_person(json: &str) -> std::result::Result<Person, String> {
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "id",
-        "first_name",
-        "last_name",
-        "middle_name",
-        "date_of_birth",
-        "contact",
-        "status",
-        "created_at",
-        "updated_at",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "id" => {},
+            "first_name" => {},
+            "last_name" => {},
+            "middle_name" => {},
+            "date_of_birth" => {},
+            "contact" => {},
+            "status" => {},
+            "created_at" => {},
+            "updated_at" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -1853,17 +1860,19 @@ pub fn encode_organization(writer: &mut Writer, msg: &Organization) -> Result<()
     // Field 5: headquarters
     writer.write_tag(5, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_address(&mut __sub, &msg.headquarters)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_address(writer, &msg.headquarters)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 6: contact
     writer.write_tag(6, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_contact_info(&mut __sub, &msg.contact)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_contact_info(writer, &msg.contact)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 7: status
@@ -1873,17 +1882,19 @@ pub fn encode_organization(writer: &mut Writer, msg: &Organization) -> Result<()
     // Field 8: founded_at
     writer.write_tag(8, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_timestamp(&mut __sub, &msg.founded_at)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_timestamp(writer, &msg.founded_at)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 9: created_at
     writer.write_tag(9, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_timestamp(&mut __sub, &msg.created_at)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_timestamp(writer, &msg.created_at)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // End marker
@@ -2030,22 +2041,22 @@ pub fn from_json_organization(json: &str) -> std::result::Result<Organization, S
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "id",
-        "name",
-        "legal_name",
-        "tax_id",
-        "headquarters",
-        "contact",
-        "status",
-        "founded_at",
-        "created_at",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "id" => {},
+            "name" => {},
+            "legal_name" => {},
+            "tax_id" => {},
+            "headquarters" => {},
+            "contact" => {},
+            "status" => {},
+            "founded_at" => {},
+            "created_at" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -2219,16 +2230,16 @@ pub fn from_json_tag(json: &str) -> std::result::Result<Tag, String> {
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "key",
-        "value",
-        "color",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "key" => {},
+            "value" => {},
+            "color" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -2324,9 +2335,10 @@ pub fn encode_attachment(writer: &mut Writer, msg: &Attachment) -> Result<()> {
     // Field 7: uploaded_at
     writer.write_tag(7, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_timestamp(&mut __sub, &msg.uploaded_at)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_timestamp(writer, &msg.uploaded_at)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // End marker
@@ -2440,20 +2452,20 @@ pub fn from_json_attachment(json: &str) -> std::result::Result<Attachment, Strin
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "id",
-        "filename",
-        "mime_type",
-        "size_bytes",
-        "checksum",
-        "url",
-        "uploaded_at",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "id" => {},
+            "filename" => {},
+            "mime_type" => {},
+            "size_bytes" => {},
+            "checksum" => {},
+            "url" => {},
+            "uploaded_at" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -2543,9 +2555,10 @@ pub fn encode_comment(writer: &mut Writer, msg: &Comment) -> Result<()> {
     // Field 4: created_at
     writer.write_tag(4, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_timestamp(&mut __sub, &msg.created_at)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_timestamp(writer, &msg.created_at)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 5: edited_at
@@ -2554,9 +2567,10 @@ pub fn encode_comment(writer: &mut Writer, msg: &Comment) -> Result<()> {
         {
         let __inner = msg.edited_at.as_ref().unwrap();
         {
-        let mut __sub = Writer::new();
-        encode_timestamp(&mut __sub, &(*__inner))?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_timestamp(writer, &(*__inner))?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }
     }?;
     }
@@ -2565,12 +2579,13 @@ pub fn encode_comment(writer: &mut Writer, msg: &Comment) -> Result<()> {
     if !msg.reactions.is_empty() {
         writer.write_tag(6, WireType::Bytes)?;
         {
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.reactions.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(msg.reactions.len() as u32)?;
         for elem in &msg.reactions {
-            sub_writer.write_svarint64(*elem)?;
+            writer.write_svarint64(*elem)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
     }
 
@@ -2698,19 +2713,19 @@ pub fn from_json_comment(json: &str) -> std::result::Result<Comment, String> {
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "id",
-        "author_id",
-        "content",
-        "created_at",
-        "edited_at",
-        "reactions",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "id" => {},
+            "author_id" => {},
+            "content" => {},
+            "created_at" => {},
+            "edited_at" => {},
+            "reactions" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -2832,12 +2847,13 @@ pub fn encode_document(writer: &mut Writer, msg: &Document) -> Result<()> {
     if !msg.tags.is_empty() {
         writer.write_tag(7, WireType::Bytes)?;
         {
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.tags.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(msg.tags.len() as u32)?;
         for elem in &msg.tags {
-            encode_tag(&mut sub_writer, elem)?;
+            encode_tag(writer, elem)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
     }
 
@@ -2845,12 +2861,13 @@ pub fn encode_document(writer: &mut Writer, msg: &Document) -> Result<()> {
     if !msg.attachments.is_empty() {
         writer.write_tag(8, WireType::Bytes)?;
         {
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.attachments.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(msg.attachments.len() as u32)?;
         for elem in &msg.attachments {
-            encode_attachment(&mut sub_writer, elem)?;
+            encode_attachment(writer, elem)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
     }
 
@@ -2858,12 +2875,13 @@ pub fn encode_document(writer: &mut Writer, msg: &Document) -> Result<()> {
     if !msg.comments.is_empty() {
         writer.write_tag(9, WireType::Bytes)?;
         {
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.comments.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(msg.comments.len() as u32)?;
         for elem in &msg.comments {
-            encode_comment(&mut sub_writer, elem)?;
+            encode_comment(writer, elem)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
     }
 
@@ -2873,34 +2891,37 @@ pub fn encode_document(writer: &mut Writer, msg: &Document) -> Result<()> {
         use cramberry::CompareKeys;
         let mut __entries: Vec<_> = msg.metadata.iter().collect();
         __entries.sort_by(|a, b| a.0.cramberry_cmp(b.0));
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(__entries.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(__entries.len() as u32)?;
         for (k, v) in __entries {
-            sub_writer.write_string(k)?;
-            sub_writer.write_string(v)?;
+            writer.write_string(k)?;
+            writer.write_string(v)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 11: collaborators
     if !msg.collaborators.is_empty() {
         writer.write_tag(11, WireType::Bytes)?;
         {
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.collaborators.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(msg.collaborators.len() as u32)?;
         for elem in &msg.collaborators {
-            sub_writer.write_svarint64(*elem)?;
+            writer.write_svarint64(*elem)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
     }
 
     // Field 12: created_at
     writer.write_tag(12, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_timestamp(&mut __sub, &msg.created_at)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_timestamp(writer, &msg.created_at)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 13: updated_at
@@ -2909,9 +2930,10 @@ pub fn encode_document(writer: &mut Writer, msg: &Document) -> Result<()> {
         {
         let __inner = msg.updated_at.as_ref().unwrap();
         {
-        let mut __sub = Writer::new();
-        encode_timestamp(&mut __sub, &(*__inner))?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_timestamp(writer, &(*__inner))?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }
     }?;
     }
@@ -2922,9 +2944,10 @@ pub fn encode_document(writer: &mut Writer, msg: &Document) -> Result<()> {
         {
         let __inner = msg.published_at.as_ref().unwrap();
         {
-        let mut __sub = Writer::new();
-        encode_timestamp(&mut __sub, &(*__inner))?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_timestamp(writer, &(*__inner))?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }
     }?;
     }
@@ -3200,27 +3223,27 @@ pub fn from_json_document(json: &str) -> std::result::Result<Document, String> {
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "id",
-        "title",
-        "content",
-        "author_id",
-        "status",
-        "priority",
-        "tags",
-        "attachments",
-        "comments",
-        "metadata",
-        "collaborators",
-        "created_at",
-        "updated_at",
-        "published_at",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "id" => {},
+            "title" => {},
+            "content" => {},
+            "author_id" => {},
+            "status" => {},
+            "priority" => {},
+            "tags" => {},
+            "attachments" => {},
+            "comments" => {},
+            "metadata" => {},
+            "collaborators" => {},
+            "created_at" => {},
+            "updated_at" => {},
+            "published_at" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -3473,17 +3496,17 @@ pub fn from_json_event_source(json: &str) -> std::result::Result<EventSource, St
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "service",
-        "instance",
-        "version",
-        "region",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "service" => {},
+            "instance" => {},
+            "version" => {},
+            "region" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -3572,17 +3595,19 @@ pub fn encode_event(writer: &mut Writer, msg: &Event) -> Result<()> {
     // Field 5: source
     writer.write_tag(5, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_event_source(&mut __sub, &msg.source)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_event_source(writer, &msg.source)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 6: timestamp
     writer.write_tag(6, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_timestamp(&mut __sub, &msg.timestamp)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_timestamp(writer, &msg.timestamp)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 7: attributes
@@ -3591,13 +3616,14 @@ pub fn encode_event(writer: &mut Writer, msg: &Event) -> Result<()> {
         use cramberry::CompareKeys;
         let mut __entries: Vec<_> = msg.attributes.iter().collect();
         __entries.sort_by(|a, b| a.0.cramberry_cmp(b.0));
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(__entries.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(__entries.len() as u32)?;
         for (k, v) in __entries {
-            sub_writer.write_string(k)?;
-            sub_writer.write_string(v)?;
+            writer.write_string(k)?;
+            writer.write_string(v)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 8: payload
@@ -3802,23 +3828,23 @@ pub fn from_json_event(json: &str) -> std::result::Result<Event, String> {
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "id",
-        "type",
-        "entity_type",
-        "entity_id",
-        "source",
-        "timestamp",
-        "attributes",
-        "payload",
-        "correlation_id",
-        "causation_id",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "id" => {},
+            "type" => {},
+            "entity_type" => {},
+            "entity_id" => {},
+            "source" => {},
+            "timestamp" => {},
+            "attributes" => {},
+            "payload" => {},
+            "correlation_id" => {},
+            "causation_id" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -3935,9 +3961,10 @@ pub fn encode_log_entry(writer: &mut Writer, msg: &LogEntry) -> Result<()> {
     // Field 1: timestamp
     writer.write_tag(1, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_timestamp(&mut __sub, &msg.timestamp)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_timestamp(writer, &msg.timestamp)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 2: level
@@ -3961,9 +3988,10 @@ pub fn encode_log_entry(writer: &mut Writer, msg: &LogEntry) -> Result<()> {
     // Field 5: source
     writer.write_tag(5, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_event_source(&mut __sub, &msg.source)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_event_source(writer, &msg.source)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 6: fields
@@ -3972,13 +4000,14 @@ pub fn encode_log_entry(writer: &mut Writer, msg: &LogEntry) -> Result<()> {
         use cramberry::CompareKeys;
         let mut __entries: Vec<_> = msg.fields.iter().collect();
         __entries.sort_by(|a, b| a.0.cramberry_cmp(b.0));
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(__entries.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(__entries.len() as u32)?;
         for (k, v) in __entries {
-            sub_writer.write_string(k)?;
-            sub_writer.write_string(v)?;
+            writer.write_string(k)?;
+            writer.write_string(v)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 7: stack_trace
@@ -4165,22 +4194,22 @@ pub fn from_json_log_entry(json: &str) -> std::result::Result<LogEntry, String> 
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "timestamp",
-        "level",
-        "logger",
-        "msg",
-        "source",
-        "fields",
-        "stack_trace",
-        "trace_id",
-        "span_id",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "timestamp" => {},
+            "level" => {},
+            "logger" => {},
+            "msg" => {},
+            "source" => {},
+            "fields" => {},
+            "stack_trace" => {},
+            "trace_id" => {},
+            "span_id" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -4346,9 +4375,10 @@ pub fn encode_user_profile(writer: &mut Writer, msg: &UserProfile) -> Result<()>
     // Field 7: personal_info
     writer.write_tag(7, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_person(&mut __sub, &msg.personal_info)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_person(writer, &msg.personal_info)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 8: account_status
@@ -4359,12 +4389,13 @@ pub fn encode_user_profile(writer: &mut Writer, msg: &UserProfile) -> Result<()>
     if !msg.roles.is_empty() {
         writer.write_tag(9, WireType::Bytes)?;
         {
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.roles.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(msg.roles.len() as u32)?;
         for elem in &msg.roles {
-            sub_writer.write_string(elem)?;
+            writer.write_string(elem)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
     }
 
@@ -4372,12 +4403,13 @@ pub fn encode_user_profile(writer: &mut Writer, msg: &UserProfile) -> Result<()>
     if !msg.permissions.is_empty() {
         writer.write_tag(10, WireType::Bytes)?;
         {
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.permissions.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(msg.permissions.len() as u32)?;
         for elem in &msg.permissions {
-            sub_writer.write_string(elem)?;
+            writer.write_string(elem)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
     }
 
@@ -4387,13 +4419,14 @@ pub fn encode_user_profile(writer: &mut Writer, msg: &UserProfile) -> Result<()>
         use cramberry::CompareKeys;
         let mut __entries: Vec<_> = msg.preferences.iter().collect();
         __entries.sort_by(|a, b| a.0.cramberry_cmp(b.0));
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(__entries.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(__entries.len() as u32)?;
         for (k, v) in __entries {
-            sub_writer.write_string(k)?;
-            sub_writer.write_string(v)?;
+            writer.write_string(k)?;
+            writer.write_string(v)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 12: settings
@@ -4402,25 +4435,27 @@ pub fn encode_user_profile(writer: &mut Writer, msg: &UserProfile) -> Result<()>
         use cramberry::CompareKeys;
         let mut __entries: Vec<_> = msg.settings.iter().collect();
         __entries.sort_by(|a, b| a.0.cramberry_cmp(b.0));
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(__entries.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(__entries.len() as u32)?;
         for (k, v) in __entries {
-            sub_writer.write_string(k)?;
-            sub_writer.write_string(v)?;
+            writer.write_string(k)?;
+            writer.write_string(v)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 13: organizations
     if !msg.organizations.is_empty() {
         writer.write_tag(13, WireType::Bytes)?;
         {
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.organizations.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(msg.organizations.len() as u32)?;
         for elem in &msg.organizations {
-            encode_organization(&mut sub_writer, elem)?;
+            encode_organization(writer, elem)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
     }
 
@@ -4428,12 +4463,13 @@ pub fn encode_user_profile(writer: &mut Writer, msg: &UserProfile) -> Result<()>
     if !msg.documents.is_empty() {
         writer.write_tag(14, WireType::Bytes)?;
         {
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.documents.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(msg.documents.len() as u32)?;
         for elem in &msg.documents {
-            encode_document(&mut sub_writer, elem)?;
+            encode_document(writer, elem)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
     }
 
@@ -4441,37 +4477,41 @@ pub fn encode_user_profile(writer: &mut Writer, msg: &UserProfile) -> Result<()>
     if !msg.recent_activity.is_empty() {
         writer.write_tag(15, WireType::Bytes)?;
         {
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.recent_activity.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(msg.recent_activity.len() as u32)?;
         for elem in &msg.recent_activity {
-            encode_event(&mut sub_writer, elem)?;
+            encode_event(writer, elem)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
     }
 
     // Field 16: usage_metrics
     writer.write_tag(16, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_metrics(&mut __sub, &msg.usage_metrics)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_metrics(writer, &msg.usage_metrics)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 17: created_at
     writer.write_tag(17, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_timestamp(&mut __sub, &msg.created_at)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_timestamp(writer, &msg.created_at)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 18: last_login_at
     writer.write_tag(18, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_timestamp(&mut __sub, &msg.last_login_at)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_timestamp(writer, &msg.last_login_at)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 19: deleted_at
@@ -4480,9 +4520,10 @@ pub fn encode_user_profile(writer: &mut Writer, msg: &UserProfile) -> Result<()>
         {
         let __inner = msg.deleted_at.as_ref().unwrap();
         {
-        let mut __sub = Writer::new();
-        encode_timestamp(&mut __sub, &(*__inner))?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_timestamp(writer, &(*__inner))?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }
     }?;
     }
@@ -4831,32 +4872,32 @@ pub fn from_json_user_profile(json: &str) -> std::result::Result<UserProfile, St
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "id",
-        "username",
-        "email",
-        "display_name",
-        "bio",
-        "avatar_url",
-        "personal_info",
-        "account_status",
-        "roles",
-        "permissions",
-        "preferences",
-        "settings",
-        "organizations",
-        "documents",
-        "recent_activity",
-        "usage_metrics",
-        "created_at",
-        "last_login_at",
-        "deleted_at",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "id" => {},
+            "username" => {},
+            "email" => {},
+            "display_name" => {},
+            "bio" => {},
+            "avatar_url" => {},
+            "personal_info" => {},
+            "account_status" => {},
+            "roles" => {},
+            "permissions" => {},
+            "preferences" => {},
+            "settings" => {},
+            "organizations" => {},
+            "documents" => {},
+            "recent_activity" => {},
+            "usage_metrics" => {},
+            "created_at" => {},
+            "last_login_at" => {},
+            "deleted_at" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -5046,12 +5087,13 @@ pub fn encode_batch_request(writer: &mut Writer, msg: &BatchRequest) -> Result<(
     if !msg.items.is_empty() {
         writer.write_tag(2, WireType::Bytes)?;
         {
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.items.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(msg.items.len() as u32)?;
         for elem in &msg.items {
-            encode_small_message(&mut sub_writer, elem)?;
+            encode_small_message(writer, elem)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
     }
 
@@ -5061,21 +5103,23 @@ pub fn encode_batch_request(writer: &mut Writer, msg: &BatchRequest) -> Result<(
         use cramberry::CompareKeys;
         let mut __entries: Vec<_> = msg.headers.iter().collect();
         __entries.sort_by(|a, b| a.0.cramberry_cmp(b.0));
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(__entries.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(__entries.len() as u32)?;
         for (k, v) in __entries {
-            sub_writer.write_string(k)?;
-            sub_writer.write_string(v)?;
+            writer.write_string(k)?;
+            writer.write_string(v)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 4: submitted_at
     writer.write_tag(4, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_timestamp(&mut __sub, &msg.submitted_at)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_timestamp(writer, &msg.submitted_at)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 5: timeout
@@ -5084,9 +5128,10 @@ pub fn encode_batch_request(writer: &mut Writer, msg: &BatchRequest) -> Result<(
         {
         let __inner = msg.timeout.as_ref().unwrap();
         {
-        let mut __sub = Writer::new();
-        encode_duration(&mut __sub, &(*__inner))?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_duration(writer, &(*__inner))?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }
     }?;
     }
@@ -5245,19 +5290,19 @@ pub fn from_json_batch_request(json: &str) -> std::result::Result<BatchRequest, 
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "request_id",
-        "items",
-        "headers",
-        "submitted_at",
-        "timeout",
-        "priority",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "request_id" => {},
+            "items" => {},
+            "headers" => {},
+            "submitted_at" => {},
+            "timeout" => {},
+            "priority" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -5351,12 +5396,13 @@ pub fn encode_batch_response(writer: &mut Writer, msg: &BatchResponse) -> Result
     if !msg.results.is_empty() {
         writer.write_tag(2, WireType::Bytes)?;
         {
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.results.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(msg.results.len() as u32)?;
         for elem in &msg.results {
-            encode_small_message(&mut sub_writer, elem)?;
+            encode_small_message(writer, elem)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
     }
 
@@ -5364,37 +5410,41 @@ pub fn encode_batch_response(writer: &mut Writer, msg: &BatchResponse) -> Result
     if !msg.errors.is_empty() {
         writer.write_tag(3, WireType::Bytes)?;
         {
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.errors.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(msg.errors.len() as u32)?;
         for elem in &msg.errors {
-            sub_writer.write_string(elem)?;
+            writer.write_string(elem)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
     }
 
     // Field 4: processing_metrics
     writer.write_tag(4, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_metrics(&mut __sub, &msg.processing_metrics)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_metrics(writer, &msg.processing_metrics)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 5: processing_time
     writer.write_tag(5, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_duration(&mut __sub, &msg.processing_time)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_duration(writer, &msg.processing_time)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 6: completed_at
     writer.write_tag(6, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_timestamp(&mut __sub, &msg.completed_at)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_timestamp(writer, &msg.completed_at)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // End marker
@@ -5529,19 +5579,19 @@ pub fn from_json_batch_response(json: &str) -> std::result::Result<BatchResponse
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "request_id",
-        "results",
-        "errors",
-        "processing_metrics",
-        "processing_time",
-        "completed_at",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "request_id" => {},
+            "results" => {},
+            "errors" => {},
+            "processing_metrics" => {},
+            "processing_time" => {},
+            "completed_at" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 

@@ -313,26 +313,26 @@ pub fn from_json_scalar_types(json: &str) -> std::result::Result<ScalarTypes, St
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "bool_val",
-        "int8_val",
-        "int16_val",
-        "int32_val",
-        "int64_val",
-        "uint8_val",
-        "uint16_val",
-        "uint32_val",
-        "uint64_val",
-        "float32_val",
-        "float64_val",
-        "string_val",
-        "bytes_val",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "bool_val" => {},
+            "int8_val" => {},
+            "int16_val" => {},
+            "int32_val" => {},
+            "int64_val" => {},
+            "uint8_val" => {},
+            "uint16_val" => {},
+            "uint32_val" => {},
+            "uint64_val" => {},
+            "float32_val" => {},
+            "float64_val" => {},
+            "string_val" => {},
+            "bytes_val" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -416,12 +416,13 @@ pub fn encode_repeated_types(writer: &mut Writer, msg: &RepeatedTypes) -> Result
     if !msg.strings.is_empty() {
         writer.write_tag(1, WireType::Bytes)?;
         {
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.strings.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(msg.strings.len() as u32)?;
         for elem in &msg.strings {
-            sub_writer.write_string(elem)?;
+            writer.write_string(elem)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
     }
 
@@ -429,12 +430,13 @@ pub fn encode_repeated_types(writer: &mut Writer, msg: &RepeatedTypes) -> Result
     if !msg.ints.is_empty() {
         writer.write_tag(2, WireType::Bytes)?;
         {
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.ints.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(msg.ints.len() as u32)?;
         for elem in &msg.ints {
-            sub_writer.write_svarint64(*elem)?;
+            writer.write_svarint64(*elem)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
     }
 
@@ -442,12 +444,13 @@ pub fn encode_repeated_types(writer: &mut Writer, msg: &RepeatedTypes) -> Result
     if !msg.bools.is_empty() {
         writer.write_tag(3, WireType::Bytes)?;
         {
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.bools.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(msg.bools.len() as u32)?;
         for elem in &msg.bools {
-            sub_writer.write_bool(*elem)?;
+            writer.write_bool(*elem)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
     }
 
@@ -566,16 +569,16 @@ pub fn from_json_repeated_types(json: &str) -> std::result::Result<RepeatedTypes
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "strings",
-        "ints",
-        "bools",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "strings" => {},
+            "ints" => {},
+            "bools" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -640,13 +643,14 @@ pub fn encode_map_types(writer: &mut Writer, msg: &MapTypes) -> Result<()> {
         use cramberry::CompareKeys;
         let mut __entries: Vec<_> = msg.string_map.iter().collect();
         __entries.sort_by(|a, b| a.0.cramberry_cmp(b.0));
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(__entries.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(__entries.len() as u32)?;
         for (k, v) in __entries {
-            sub_writer.write_string(k)?;
-            sub_writer.write_string(v)?;
+            writer.write_string(k)?;
+            writer.write_string(v)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 2: int_map
@@ -655,13 +659,14 @@ pub fn encode_map_types(writer: &mut Writer, msg: &MapTypes) -> Result<()> {
         use cramberry::CompareKeys;
         let mut __entries: Vec<_> = msg.int_map.iter().collect();
         __entries.sort_by(|a, b| a.0.cramberry_cmp(b.0));
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(__entries.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(__entries.len() as u32)?;
         for (k, v) in __entries {
-            sub_writer.write_string(k)?;
-            sub_writer.write_svarint64(*v)?;
+            writer.write_string(k)?;
+            writer.write_svarint64(*v)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 3: int_keyed
@@ -670,13 +675,14 @@ pub fn encode_map_types(writer: &mut Writer, msg: &MapTypes) -> Result<()> {
         use cramberry::CompareKeys;
         let mut __entries: Vec<_> = msg.int_keyed.iter().collect();
         __entries.sort_by(|a, b| a.0.cramberry_cmp(b.0));
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(__entries.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(__entries.len() as u32)?;
         for (k, v) in __entries {
-            sub_writer.write_svarint(*k)?;
-            sub_writer.write_string(v)?;
+            writer.write_svarint(*k)?;
+            writer.write_string(v)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 4: uint_keyed
@@ -685,13 +691,14 @@ pub fn encode_map_types(writer: &mut Writer, msg: &MapTypes) -> Result<()> {
         use cramberry::CompareKeys;
         let mut __entries: Vec<_> = msg.uint_keyed.iter().collect();
         __entries.sort_by(|a, b| a.0.cramberry_cmp(b.0));
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(__entries.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(__entries.len() as u32)?;
         for (k, v) in __entries {
-            sub_writer.write_varint64(*k)?;
-            sub_writer.write_string(v)?;
+            writer.write_varint64(*k)?;
+            writer.write_string(v)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // End marker
@@ -870,17 +877,17 @@ pub fn from_json_map_types(json: &str) -> std::result::Result<MapTypes, String> 
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "string_map",
-        "int_map",
-        "int_keyed",
-        "uint_keyed",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "string_map" => {},
+            "int_map" => {},
+            "int_keyed" => {},
+            "uint_keyed" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -1040,16 +1047,16 @@ pub fn from_json_address(json: &str) -> std::result::Result<Address, String> {
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "street",
-        "city",
-        "zip",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "street" => {},
+            "city" => {},
+            "zip" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -1105,21 +1112,23 @@ pub fn encode_person(writer: &mut Writer, msg: &Person) -> Result<()> {
     // Field 3: address
     writer.write_tag(3, WireType::Bytes)?;
     {
-        let mut __sub = Writer::new();
-        encode_address(&mut __sub, &msg.address)?;
-        writer.write_length_prefixed_bytes(__sub.as_bytes())
+        let __cp = writer.begin_message();
+        encode_address(writer, &msg.address)?;
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
 
     // Field 4: emails
     if !msg.emails.is_empty() {
         writer.write_tag(4, WireType::Bytes)?;
         {
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.emails.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(msg.emails.len() as u32)?;
         for elem in &msg.emails {
-            sub_writer.write_string(elem)?;
+            writer.write_string(elem)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
     }
 
@@ -1221,17 +1230,17 @@ pub fn from_json_person(json: &str) -> std::result::Result<Person, String> {
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "name",
-        "age",
-        "address",
-        "emails",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "name" => {},
+            "age" => {},
+            "address" => {},
+            "emails" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -1371,16 +1380,16 @@ pub fn from_json_required_fields(json: &str) -> std::result::Result<RequiredFiel
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "id",
-        "name",
-        "optional_field",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "id" => {},
+            "name" => {},
+            "optional_field" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -1535,16 +1544,16 @@ pub fn from_json_optional_pointer(json: &str) -> std::result::Result<OptionalPoi
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "value",
-        "number",
-        "blob",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "value" => {},
+            "number" => {},
+            "blob" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -1608,12 +1617,13 @@ pub fn encode_enum_test(writer: &mut Writer, msg: &EnumTest) -> Result<()> {
     if !msg.statuses.is_empty() {
         writer.write_tag(2, WireType::Bytes)?;
         {
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.statuses.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(msg.statuses.len() as u32)?;
         for elem in &msg.statuses {
-            sub_writer.write_svarint(*elem as i32)?;
+            writer.write_svarint(*elem as i32)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
     }
 
@@ -1711,15 +1721,15 @@ pub fn from_json_enum_test(json: &str) -> std::result::Result<EnumTest, String> 
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "status",
-        "statuses",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "status" => {},
+            "statuses" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -1819,13 +1829,13 @@ pub fn from_json_empty_message(json: &str) -> std::result::Result<EmptyMessage, 
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 
@@ -1876,12 +1886,13 @@ pub fn encode_all_zero_values(writer: &mut Writer, msg: &AllZeroValues) -> Resul
     if !msg.empty_array.is_empty() {
         writer.write_tag(4, WireType::Bytes)?;
         {
-        let mut sub_writer = Writer::new();
-        sub_writer.write_varint(msg.empty_array.len() as u32)?;
+        let __cp = writer.begin_message();
+        writer.write_varint(msg.empty_array.len() as u32)?;
         for elem in &msg.empty_array {
-            sub_writer.write_string(elem)?;
+            writer.write_string(elem)?;
         }
-        writer.write_length_prefixed_bytes(sub_writer.as_bytes())
+        writer.end_message(__cp);
+        Ok::<(), cramberry::Error>(())
     }?;
     }
 
@@ -1979,17 +1990,17 @@ pub fn from_json_all_zero_values(json: &str) -> std::result::Result<AllZeroValue
     let obj = parsed.as_object()
         .ok_or_else(|| "expected JSON object".to_string())?;
 
-    // Check for unknown fields (strict mode)
-    let allowed_fields: std::collections::HashSet<&str> = [
-        "zero_int",
-        "zero_string",
-        "zero_bool",
-        "empty_array",
-    ].iter().copied().collect();
-
+    // Check for unknown fields (strict mode). Use a match on a static
+    // slice instead of a HashSet — for the typical small field count
+    // (<20) the linear scan is faster and avoids the per-call HashSet
+    // allocation that the previous codegen emitted.
     for key in obj.keys() {
-        if !allowed_fields.contains(key.as_str()) {
-            return Err(format!("unknown field: {}", key));
+        match key.as_str() {
+            "zero_int" => {},
+            "zero_string" => {},
+            "zero_bool" => {},
+            "empty_array" => {},
+            other => return Err(format!("unknown field: {}", other)),
         }
     }
 

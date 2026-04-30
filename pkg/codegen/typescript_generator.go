@@ -65,6 +65,7 @@ func (c *tsContext) funcMap() template.FuncMap {
 	return template.FuncMap{
 		"tsType":           c.tsType,
 		"tsFieldType":      c.tsFieldType,
+		"tsFieldDefault":   c.tsFieldDefault,
 		"tsEnumType":       c.tsEnumType,
 		"tsMessageType":    c.tsMessageType,
 		"tsInterfaceType":  c.tsInterfaceType,
@@ -168,6 +169,59 @@ func (c *tsContext) tsMessageType(m *schema.Message) string {
 
 func (c *tsContext) tsInterfaceType(i *schema.Interface) string {
 	return c.Options.TypePrefix + ToPascalCase(i.Name) + c.Options.TypeSuffix
+}
+
+// tsFieldDefault returns a TypeScript expression for the default value
+// of a field, used to initialize the decode result struct with a
+// stable hidden class. Without this, the previous decoder built a
+// Partial<T> {} and added fields one at a time in tag-arrival order,
+// which caused V8 to build a different hidden-class transition tree
+// per ordering and deopt downstream consumers.
+func (c *tsContext) tsFieldDefault(f *schema.Field) string {
+	if f.Repeated {
+		return "[]"
+	}
+	if _, isPtr := f.Type.(*schema.PointerType); isPtr {
+		return "null"
+	}
+	if _, isMap := f.Type.(*schema.MapType); isMap {
+		return "new Map()"
+	}
+	switch typ := f.Type.(type) {
+	case *schema.ScalarType:
+		switch typ.Name {
+		case "bool":
+			return "false"
+		case "int64", "uint64":
+			return "0n"
+		case "string":
+			return "''"
+		case "bytes", "byte":
+			return "new Uint8Array(0)"
+		case "complex64", "complex128":
+			return "{ real: 0, imag: 0 }"
+		default:
+			return "0"
+		}
+	case *schema.NamedType:
+		if c.isNamedEnum(typ) {
+			// Enum: 0 is the default integer value (Status.UNKNOWN etc.)
+			return "0 as " + c.tsTypeInternal(typ, false)
+		}
+		if IsNamedInterface(c.Schema, c.Options.ImportedSchemas, typ) {
+			// Interfaces are nullable; null is the only sound default.
+			return "null as unknown as " + c.tsTypeInternal(typ, false)
+		}
+		// Nested message — placeholder cast. The decoder overwrites
+		// this whenever the field is present; if not present, the
+		// caller observes an empty object cast to the message type.
+		// Hidden-class stability for the *outer* message is what
+		// matters here.
+		return "({} as " + c.tsTypeInternal(typ, false) + ")"
+	case *schema.ArrayType:
+		return "[]"
+	}
+	return "undefined as unknown as " + c.tsFieldType(f)
 }
 
 func (c *tsContext) tsFieldName(f *schema.Field) string {
@@ -382,7 +436,12 @@ func (c *tsContext) tsWriteValue(t schema.TypeRef, value string, repeated bool) 
 		// schema that doesn't recognize the field can't skip it cleanly:
 		// the SkipValue(WireType.Bytes) path reads the first body byte as a
 		// length and corrupts subsequent decoding.
-		return fmt.Sprintf("{ const __sub = new Writer(); encode%s(__sub, %s); writer.writeLengthPrefixedBytes(__sub.bytes()); }", ToPascalCase(typ.Name), value)
+		//
+		// Encode straight into the parent's buffer via beginMessage /
+		// endMessage; the sub-Writer pattern allocated a 1KB Uint8Array
+		// + DataView per nested call, which dwarfs the actual body size
+		// for typical messages.
+		return fmt.Sprintf("{ const __cp = writer.beginMessage(); encode%s(writer, %s); writer.endMessage(__cp); }", ToPascalCase(typ.Name), value)
 	case *schema.ArrayType:
 		return c.tsWriteValue(typ.Element, value, true)
 	case *schema.MapType:
@@ -865,12 +924,12 @@ import type { ReaderOptions } from '@cramberry/runtime';
 
 // Helper functions for encoding/decoding
 function writeArray<T>(writer: Writer, arr: T[], writeElem: (w: Writer, v: T) => void): void {
-  const subWriter = new Writer();
-  subWriter.writeVarint(arr.length);
+  const cp = writer.beginMessage();
+  writer.writeVarint(arr.length);
   for (const elem of arr) {
-    writeElem(subWriter, elem);
+    writeElem(writer, elem);
   }
-  writer.writeLengthPrefixedBytes(subWriter.bytes());
+  writer.endMessage(cp);
 }
 
 function readArray<T>(reader: Reader, readElem: (r: Reader) => T): T[] {
@@ -917,18 +976,18 @@ function compareMapKeys(a: unknown, b: unknown): number {
 }
 
 function writeMap<K, V>(writer: Writer, map: Map<K, V> | Record<string, V>, writeKey: (w: Writer, k: K) => void, writeVal: (w: Writer, v: V) => void): void {
-  const subWriter = new Writer();
+  const cp = writer.beginMessage();
   const entries = map instanceof Map ? Array.from(map.entries()) : Object.entries(map);
   // Sort by key for deterministic output. Map iteration order is
   // implementation-defined and varies per insertion order; the wire format
   // requires a canonical order matching the Go reflection marshaller.
   entries.sort((a, b) => compareMapKeys(a[0], b[0]));
-  subWriter.writeVarint(entries.length);
+  writer.writeVarint(entries.length);
   for (const [k, v] of entries) {
-    writeKey(subWriter, k as K);
-    writeVal(subWriter, v as V);
+    writeKey(writer, k as K);
+    writeVal(writer, v as V);
   }
-  writer.writeLengthPrefixedBytes(subWriter.bytes());
+  writer.endMessage(cp);
 }
 
 function readMap<K, V>(reader: Reader, readKey: (r: Reader) => K, readVal: (r: Reader) => V): Map<K, V> {
@@ -990,7 +1049,15 @@ export function encode{{tsMessageType $msg}}(writer: Writer, msg: {{tsMessageTyp
 
 /** Decodes a {{tsMessageType $msg}} from the reader. */
 export function decode{{tsMessageType $msg}}(reader: Reader): {{tsMessageType $msg}} {
-  const result: Partial<{{tsMessageType $msg}}> = {};
+  // Initialize all fields up front so V8 builds a single stable
+  // hidden class. The previous Partial-and-fill pattern produced a
+  // different hidden-class transition tree per input ordering, which
+  // deopted downstream consumers.
+  const result: {{tsMessageType $msg}} = {
+{{- range $msg.Fields}}
+    {{tsFieldName .}}: {{tsFieldDefault .}},
+{{- end}}
+  };
 
   while (true) {
     const { fieldNumber, wireType } = reader.readTag();
@@ -1007,7 +1074,7 @@ export function decode{{tsMessageType $msg}}(reader: Reader): {{tsMessageType $m
     }
   }
 
-  return result as {{tsMessageType $msg}};
+  return result;
 }
 
 /** Marshals a {{tsMessageType $msg}} to bytes. */
@@ -1054,14 +1121,19 @@ export function fromJSON_{{tsMessageType $msg}}(json: string): {{tsMessageType $
     }
   }
 
-  const msg: Partial<{{tsMessageType $msg}}> = {};
+  // Initialize with defaults for V8 hidden-class stability (see decode helper).
+  const msg: {{tsMessageType $msg}} = {
+{{- range $msg.Fields}}
+    {{tsFieldName .}}: {{tsFieldDefault .}},
+{{- end}}
+  };
 
   // Decode fields
 {{range $msg.Fields}}
 {{jsonDecodeField .}}
 {{- end}}
 
-  return msg as {{tsMessageType $msg}};
+  return msg;
 }
 {{end}}
 {{end}}

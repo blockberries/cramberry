@@ -203,22 +203,20 @@ impl Registry {
             .ok_or_else(|| Error::TypeNotRegistered(name.to_string().into_boxed_str()))?;
         let reg = inner.by_id.get(&type_id).unwrap();
 
-        // Write field tag with Bytes wire type
+        // Write field tag with Bytes wire type, then encode straight
+        // into `writer` using nested begin_message/end_message — saves
+        // the two sub-Writer allocations the previous implementation
+        // used.
         writer.write_tag(field_number, WireType::Bytes)?;
 
-        // Create a temporary writer for the type ref content
-        let mut type_ref_writer = Writer::new();
-        type_ref_writer.write_varint(type_id)?;
+        let outer_cp = writer.begin_message();
+        writer.write_varint(type_id)?;
 
-        // Create another temporary writer for the value
-        let mut value_writer = Writer::new();
-        (reg.encoder)(&mut value_writer, value)?;
+        let inner_cp = writer.begin_message();
+        (reg.encoder)(writer, value)?;
+        writer.end_message(inner_cp);
 
-        // Write length-prefixed value bytes to type_ref_writer
-        type_ref_writer.write_length_prefixed_bytes(value_writer.as_bytes())?;
-
-        // Write the entire type ref as length-prefixed bytes
-        writer.write_length_prefixed_bytes(type_ref_writer.as_bytes())?;
+        writer.end_message(outer_cp);
 
         Ok(())
     }

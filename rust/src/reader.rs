@@ -41,6 +41,7 @@ impl<'a> Reader<'a> {
     }
 
     /// Checks if there are enough bytes available.
+    #[inline]
     fn check_available(&self, needed: usize) -> Result<()> {
         if self.pos + needed > self.buffer.len() {
             return Err(Error::buffer_underflow(needed, self.remaining()));
@@ -49,6 +50,7 @@ impl<'a> Reader<'a> {
     }
 
     /// Reads a raw byte.
+    #[inline]
     pub fn read_byte(&mut self) -> Result<u8> {
         self.check_available(1)?;
         let value = self.buffer[self.pos];
@@ -57,6 +59,7 @@ impl<'a> Reader<'a> {
     }
 
     /// Reads raw bytes.
+    #[inline]
     pub fn read_bytes(&mut self, length: usize) -> Result<&'a [u8]> {
         self.check_available(length)?;
         let bytes = &self.buffer[self.pos..self.pos + length];

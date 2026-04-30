@@ -1,10 +1,24 @@
 import { WireType, TypeID, encodeTag, zigzagEncode, zigzagEncode64, END_MARKER } from "./types";
 
-const INITIAL_CAPACITY = 256;
+const INITIAL_CAPACITY = 1024;
 const GROWTH_FACTOR = 2;
+
+// Number of bytes reserved up front by beginMessage() for the length
+// prefix. 2 covers messages up to 16383 bytes (the modal nested-
+// message size); larger bodies retroactively grow the placeholder.
+const LENGTH_PLACEHOLDER = 2;
 
 // Module-level singleton to avoid repeated instantiation
 const textEncoder = new TextEncoder();
+
+/** uvarintSize returns the number of bytes a u32 takes in LEB128. */
+function uvarintSize(v: number): number {
+  if (v < 1 << 7) return 1;
+  if (v < 1 << 14) return 2;
+  if (v < 1 << 21) return 3;
+  if (v < 1 << 28) return 4;
+  return 5;
+}
 
 /**
  * Writer encodes Cramberry data into a binary buffer.
@@ -74,6 +88,75 @@ export class Writer {
    */
   writeEndMarker(): void {
     this.writeByte(END_MARKER);
+  }
+
+  /**
+   * Begins a length-prefixed message. Reserves a small placeholder for
+   * the length (2 bytes — covers messages up to 16383 bytes, which is
+   * the modal nested-message size); endMessage() back-patches the
+   * actual varint length and shifts the body if the reservation was
+   * too tight.
+   *
+   * Returns a checkpoint that must be passed to endMessage(). The
+   * returned offset points to the start of the placeholder, NOT the
+   * start of the body (body starts at checkpoint + 2).
+   *
+   * Replaces the `new Writer(); ...; writer.writeLengthPrefixedBytes(sub.bytes())`
+   * pattern that allocated a fresh sub-Writer per nested message /
+   * array / map field. With back-patch we encode straight into the
+   * parent's buffer; allocations drop to ~zero per nested level.
+   */
+  beginMessage(): number {
+    this.ensureCapacity(LENGTH_PLACEHOLDER);
+    const checkpoint = this.pos;
+    this.buffer[this.pos++] = 0;
+    this.buffer[this.pos++] = 0;
+    return checkpoint;
+  }
+
+  /**
+   * Finishes a length-prefixed message. `checkpoint` must be the value
+   * previously returned by beginMessage().
+   */
+  endMessage(checkpoint: number): void {
+    const msgStart = checkpoint + LENGTH_PLACEHOLDER;
+    const msgLen = this.pos - msgStart;
+    const lenSize = uvarintSize(msgLen);
+
+    if (lenSize === LENGTH_PLACEHOLDER) {
+      // Length fits exactly in the placeholder; encode in place.
+      this.encodeVarintAt(checkpoint, msgLen);
+      return;
+    }
+    if (lenSize < LENGTH_PLACEHOLDER) {
+      // Common: 1-byte varint (msgLen < 128). Shift body left by 1 and truncate.
+      const shift = LENGTH_PLACEHOLDER - lenSize;
+      this.buffer.copyWithin(checkpoint + lenSize, msgStart, this.pos);
+      this.pos -= shift;
+      this.encodeVarintAt(checkpoint, msgLen);
+      return;
+    }
+    // Rare: msgLen >= 16384, length needs 3+ varint bytes. Grow the
+    // placeholder retroactively and memmove the body right.
+    const extra = lenSize - LENGTH_PLACEHOLDER;
+    this.ensureCapacity(extra);
+    this.buffer.copyWithin(msgStart + extra, msgStart, this.pos);
+    this.pos += extra;
+    this.encodeVarintAt(checkpoint, msgLen);
+  }
+
+  /**
+   * Writes a varint of `value` directly at `offset`. Used by
+   * endMessage() to back-patch the length prefix without going through
+   * pos/ensureCapacity (caller already reserved the bytes).
+   */
+  private encodeVarintAt(offset: number, value: number): void {
+    let v = value;
+    while (v > 0x7f) {
+      this.buffer[offset++] = (v & 0x7f) | 0x80;
+      v >>>= 7;
+    }
+    this.buffer[offset] = v;
   }
 
   /**
@@ -271,17 +354,45 @@ export class Writer {
    * all reasonable inputs.
    */
   writeString(value: string): void {
-    const bytes = textEncoder.encode(value);
-    this.writeVarint64(BigInt(bytes.length));
-    this.writeBytes(bytes);
+    // Single-pass encode: reserve worst-case (3 bytes per UTF-16 unit
+    // + 5-byte length placeholder), encode straight into the buffer
+    // via TextEncoder.encodeInto, then back-patch the actual length.
+    // Avoids the (encoded Uint8Array) + (set into buffer) double-copy
+    // and the BigInt(length) overhead of the previous implementation.
+    const maxBytes = value.length * 3;
+    this.ensureCapacity(maxBytes + 5);
+    const written = textEncoder.encodeInto(value, this.buffer.subarray(this.pos + 5)).written ?? 0;
+    const lenSize = uvarintSize(written);
+    if (lenSize === 5) {
+      // Length already at offset, body already at offset + 5.
+      this.encodeVarintAt(this.pos, written);
+      this.pos += 5 + written;
+      return;
+    }
+    // Shift the body left to close the gap between the length prefix
+    // and the encoded bytes.
+    this.buffer.copyWithin(this.pos + lenSize, this.pos + 5, this.pos + 5 + written);
+    this.encodeVarintAt(this.pos, written);
+    this.pos += lenSize + written;
   }
 
   /**
    * Writes length-prefixed bytes. See `writeString` for the
-   * 64-bit-length-prefix rationale.
+   * fast-path rationale; same Number-arithmetic optimization for the
+   * length prefix.
    */
   writeLengthPrefixedBytes(data: Uint8Array): void {
-    this.writeVarint64(BigInt(data.length));
+    const len = data.length;
+    // Length is a JS Number (Uint8Array.length is a safe integer); use
+    // the 32-bit varint path even when the value technically fits in
+    // 64 bits — Go and Rust accept any canonical varint up to 10
+    // bytes, but writeVarint's RangeError throws above 2^32 so we
+    // fall back to writeVarint64 for that pathological case.
+    if (len <= 0xffffffff) {
+      this.writeVarint(len);
+    } else {
+      this.writeVarint64(BigInt(len));
+    }
     this.writeBytes(data);
   }
 
@@ -369,13 +480,13 @@ export class Writer {
   /**
    * Writes a tagged field with a type reference value.
    * Type references are encoded as Bytes with type ID prefix.
+   * Uses beginMessage/endMessage to avoid the sub-Writer allocation.
    */
   writeTypeRefField(fieldNumber: number, typeId: TypeID, data: Uint8Array): void {
     this.writeTag(fieldNumber, WireType.Bytes);
-    // Write type ID + data as length-prefixed bytes
-    const typeRefWriter = new Writer();
-    typeRefWriter.writeVarint(typeId);
-    typeRefWriter.writeLengthPrefixedBytes(data);
-    this.writeLengthPrefixedBytes(typeRefWriter.bytes());
+    const cp = this.beginMessage();
+    this.writeVarint(typeId);
+    this.writeLengthPrefixedBytes(data);
+    this.endMessage(cp);
   }
 }

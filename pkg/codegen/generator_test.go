@@ -880,7 +880,7 @@ func TestJSONCommaUsesPositionNotTag(t *testing.T) {
 	preamble := out[start:first]
 	// First field's name must not be emitted with a leading comma. The
 	// fused emit format is `,"foo":` so any field whose own emit string
-	// starts with `,` is signalling "non-first".
+	// starts with `,` is signaling "non-first".
 	if strings.Contains(preamble, `buf.WriteString(`+"`"+`,"alpha":`+"`)") {
 		t.Errorf("first field emits a leading comma; preamble:\n%s", preamble)
 	}

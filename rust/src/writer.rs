@@ -14,6 +14,7 @@ const CANONICAL_NAN_64: u64 = 0x7FF8_0000_0000_0000;
 ///   - any NaN value collapses to `CANONICAL_NAN_32`,
 ///   - `-0.0` becomes `+0.0`,
 ///   - all other values pass through unchanged.
+#[inline]
 pub(crate) fn canonicalize_f32_bits(v: f32) -> u32 {
     let bits = v.to_bits();
     if bits & 0x7F80_0000 == 0x7F80_0000 && bits & 0x007F_FFFF != 0 {
@@ -26,6 +27,7 @@ pub(crate) fn canonicalize_f32_bits(v: f32) -> u32 {
 }
 
 /// Returns the canonical bit representation of an f64. See `canonicalize_f32_bits`.
+#[inline]
 pub(crate) fn canonicalize_f64_bits(v: f64) -> u64 {
     let bits = v.to_bits();
     if bits & 0x7FF0_0000_0000_0000 == 0x7FF0_0000_0000_0000
@@ -39,7 +41,28 @@ pub(crate) fn canonicalize_f64_bits(v: f64) -> u64 {
     bits
 }
 
-const INITIAL_CAPACITY: usize = 256;
+const INITIAL_CAPACITY: usize = 1024;
+
+/// Number of bytes reserved up front by `begin_message` for the length
+/// prefix. 2 covers messages up to 16383 bytes (the modal nested-
+/// message size); larger bodies retroactively grow the placeholder in
+/// `end_message`.
+const LENGTH_PLACEHOLDER: usize = 2;
+
+/// Returns the number of bytes a u64 takes in LEB128 (1..=10).
+#[inline]
+fn uvarint_size(v: u64) -> usize {
+    if v < 1 << 7 { return 1; }
+    if v < 1 << 14 { return 2; }
+    if v < 1 << 21 { return 3; }
+    if v < 1 << 28 { return 4; }
+    if v < 1 << 35 { return 5; }
+    if v < 1 << 42 { return 6; }
+    if v < 1 << 49 { return 7; }
+    if v < 1 << 56 { return 8; }
+    if v < 1 << 63 { return 9; }
+    10
+}
 
 /// Writer encodes Cramberry data into a binary buffer.
 pub struct Writer {
@@ -90,6 +113,7 @@ impl Writer {
     /// `write_tag(0, ...)` is a programming error and used to silently
     /// emit no bytes (so the next value byte was decoded as a
     /// mis-shaped tag). Now it errors.
+    #[inline]
     pub fn write_tag(&mut self, field_number: u32, wire_type: WireType) -> Result<()> {
         if field_number == 0 {
             return Err(Error::InvalidFieldNumber(field_number));
@@ -101,24 +125,86 @@ impl Writer {
     }
 
     /// Writes the end marker (0x00) to signal end of struct fields.
+    #[inline]
     pub fn write_end_marker(&mut self) -> Result<()> {
         self.buffer.push(END_MARKER);
         Ok(())
     }
 
+    /// Begins a length-prefixed message. Reserves a small placeholder
+    /// for the length prefix; `end_message` back-patches the actual
+    /// varint length and shifts the body if the placeholder was too
+    /// tight.
+    ///
+    /// Returns a checkpoint that must be passed to `end_message`. The
+    /// returned offset points to the start of the placeholder, NOT
+    /// the start of the body (body starts at checkpoint + 2).
+    ///
+    /// Replaces the `let mut sub = Writer::new(); ...; writer.write_length_prefixed_bytes(sub.as_bytes())`
+    /// pattern that allocated a fresh sub-Writer (`Vec<u8>` with 1 KB
+    /// capacity) per nested message / array / map field. With back-
+    /// patch we encode straight into the parent's buffer; allocations
+    /// drop to ~zero per nested level.
+    pub fn begin_message(&mut self) -> usize {
+        let checkpoint = self.buffer.len();
+        self.buffer.push(0);
+        self.buffer.push(0);
+        checkpoint
+    }
+
+    /// Finishes a length-prefixed message. `checkpoint` must be the
+    /// value previously returned by `begin_message`.
+    pub fn end_message(&mut self, checkpoint: usize) {
+        let msg_start = checkpoint + LENGTH_PLACEHOLDER;
+        let msg_len = self.buffer.len() - msg_start;
+        let len_size = uvarint_size(msg_len as u64);
+
+        if len_size == LENGTH_PLACEHOLDER {
+            self.encode_varint_at(checkpoint, msg_len as u64);
+            return;
+        }
+        if len_size < LENGTH_PLACEHOLDER {
+            // Common: 1-byte varint (msg_len < 128). Shift body left
+            // by (placeholder - len_size) and truncate.
+            let shift = LENGTH_PLACEHOLDER - len_size;
+            self.buffer.copy_within(msg_start..msg_start + msg_len, checkpoint + len_size);
+            self.buffer.truncate(self.buffer.len() - shift);
+            self.encode_varint_at(checkpoint, msg_len as u64);
+            return;
+        }
+        // Rare: msg_len >= 16384, length needs 3+ varint bytes. Grow
+        // the placeholder retroactively and memmove the body right.
+        let extra = len_size - LENGTH_PLACEHOLDER;
+        self.buffer.resize(self.buffer.len() + extra, 0);
+        self.buffer.copy_within(msg_start..msg_start + msg_len, msg_start + extra);
+        self.encode_varint_at(checkpoint, msg_len as u64);
+    }
+
+    fn encode_varint_at(&mut self, mut offset: usize, mut value: u64) {
+        while value > 0x7f {
+            self.buffer[offset] = (value as u8 & 0x7f) | 0x80;
+            value >>= 7;
+            offset += 1;
+        }
+        self.buffer[offset] = value as u8;
+    }
+
     /// Writes a raw byte.
+    #[inline]
     pub fn write_byte(&mut self, value: u8) -> Result<()> {
         self.buffer.push(value);
         Ok(())
     }
 
     /// Writes raw bytes.
+    #[inline]
     pub fn write_bytes(&mut self, data: &[u8]) -> Result<()> {
         self.buffer.extend_from_slice(data);
         Ok(())
     }
 
     /// Writes an unsigned varint (LEB128).
+    #[inline]
     pub fn write_varint(&mut self, mut value: u32) -> Result<()> {
         while value > 0x7f {
             self.buffer.push((value as u8 & 0x7f) | 0x80);
@@ -129,6 +215,7 @@ impl Writer {
     }
 
     /// Writes an unsigned 64-bit varint (LEB128).
+    #[inline]
     pub fn write_varint64(&mut self, mut value: u64) -> Result<()> {
         while value > 0x7f {
             self.buffer.push((value as u8 & 0x7f) | 0x80);
@@ -139,36 +226,43 @@ impl Writer {
     }
 
     /// Writes a signed varint using ZigZag encoding.
+    #[inline]
     pub fn write_svarint(&mut self, value: i32) -> Result<()> {
         self.write_varint(zigzag_encode_32(value))
     }
 
     /// Writes a signed 64-bit varint using ZigZag encoding.
+    #[inline]
     pub fn write_svarint64(&mut self, value: i64) -> Result<()> {
         self.write_varint64(zigzag_encode_64(value))
     }
 
     /// Writes a boolean.
+    #[inline]
     pub fn write_bool(&mut self, value: bool) -> Result<()> {
         self.write_byte(if value { 1 } else { 0 })
     }
 
     /// Writes a 32-bit signed integer.
+    #[inline]
     pub fn write_int32(&mut self, value: i32) -> Result<()> {
         self.write_svarint(value)
     }
 
     /// Writes a 64-bit signed integer.
+    #[inline]
     pub fn write_int64(&mut self, value: i64) -> Result<()> {
         self.write_svarint64(value)
     }
 
     /// Writes a 32-bit unsigned integer.
+    #[inline]
     pub fn write_uint32(&mut self, value: u32) -> Result<()> {
         self.write_varint(value)
     }
 
     /// Writes a 64-bit unsigned integer.
+    #[inline]
     pub fn write_uint64(&mut self, value: u64) -> Result<()> {
         self.write_varint64(value)
     }
@@ -178,6 +272,7 @@ impl Writer {
     /// NaN bit patterns are canonicalized to `0x7FC00000` (quiet NaN, no
     /// payload) and `-0.0` is normalized to `+0.0` so that two values that
     /// compare equal always produce identical wire bytes.
+    #[inline]
     pub fn write_float32(&mut self, value: f32) -> Result<()> {
         let bits = canonicalize_f32_bits(value);
         self.buffer.extend_from_slice(&bits.to_le_bytes());
@@ -188,6 +283,7 @@ impl Writer {
     ///
     /// NaN bit patterns are canonicalized to `0x7FF8000000000000` (quiet NaN,
     /// no payload) and `-0.0` is normalized to `+0.0`.
+    #[inline]
     pub fn write_float64(&mut self, value: f64) -> Result<()> {
         let bits = canonicalize_f64_bits(value);
         self.buffer.extend_from_slice(&bits.to_le_bytes());

@@ -172,8 +172,18 @@ impl<R: Read> StreamReader<R> {
             )));
         }
 
-        let mut data = vec![0u8; length];
-        self.inner.read_exact(&mut data).map_err(Error::from)?;
+        // Avoid zeroing length bytes up front: with `Read::take`-then-
+        // `read_to_end`, the Vec grows lazily as bytes arrive without a
+        // pre-fill memset. For megabyte-scale messages this saves
+        // bandwidth-bound work.
+        let mut data: Vec<u8> = Vec::with_capacity(length);
+        let n = std::io::Read::by_ref(&mut self.inner)
+            .take(length as u64)
+            .read_to_end(&mut data)
+            .map_err(Error::from)?;
+        if n != length {
+            return Err(Error::UnexpectedEof);
+        }
         Ok(data)
     }
 
