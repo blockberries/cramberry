@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Extended (parity fixture — recursive types)
+
+The codegen-parity fixture now also exercises a recursive type
+(`message Tree { string label; repeated Tree children }`). A
+small 4-node tree (root → [left → [leftleaf], right]) round-trips
+byte-identically across all four runtimes:
+
+    Go reflection == Go codegen == Rust codegen == TS codegen
+
+Recursive types stress every code path that has to forward-declare
+or self-reference a generated type definition (Rust struct that
+contains `Vec<Self>`, Go's `[]Tree` field on `Tree`, TS interface
+referencing itself). All four generators handle it cleanly. No
+drift.
+
 ### Extended (parity fixture surface — omit-empty + multi-byte lengths)
 
 The codegen-parity fixture now also exercises:

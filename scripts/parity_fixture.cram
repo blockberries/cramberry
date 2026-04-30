@@ -22,6 +22,14 @@ message Address {
   string city = 2;
 }
 
+// Recursive type — message contains a list of itself. Each generator
+// must emit a type definition that can hold its own instances; the
+// parity-check confirms a small tree round-trips byte-identically.
+message Tree {
+  string label = 1;
+  repeated Tree children = 2;
+}
+
 message Sample {
   bool active = 1;
   int32 count = 2;
@@ -52,4 +60,5 @@ message Sample {
   bytes empty_bytes = 25;
   int64 zero_count = 26;
   float64 zero_ratio = 27;
+  Tree forest = 28;
 }

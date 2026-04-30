@@ -94,6 +94,15 @@ func fixture() *Sample {
 			100: "hundred",
 		},
 		Office: office,
+		Forest: Tree{
+			Label: "root",
+			Children: []Tree{
+				{Label: "left", Children: []Tree{
+					{Label: "leftleaf"},
+				}},
+				{Label: "right"},
+			},
+		},
 	}
 }
 
@@ -216,6 +225,20 @@ fn main() {
         empty_bytes: Vec::new(),
         zero_count:  0,
         zero_ratio:  0.0,
+        // Small recursive tree:
+        //   root
+        //   ├── left
+        //   │   └── leftleaf
+        //   └── right
+        forest: Tree {
+            label: "root".to_string(),
+            children: vec![
+                Tree { label: "left".to_string(),  children: vec![
+                    Tree { label: "leftleaf".to_string(), children: vec![] },
+                ]},
+                Tree { label: "right".to_string(), children: vec![] },
+            ],
+        },
     };
     let mut w = Writer::new();
     encode_sample(&mut w, &s).unwrap();
@@ -297,6 +320,15 @@ const s = {
         [100, "hundred"],
     ]),
     office: { street: "1 Hacker Way", city: "Menlo Park" },
+    forest: {
+        label: "root",
+        children: [
+            { label: "left",  children: [
+                { label: "leftleaf", children: [] },
+            ]},
+            { label: "right", children: [] },
+        ],
+    },
 };
 const w = new Writer();
 encodeSample(w, s);
