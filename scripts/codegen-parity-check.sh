@@ -176,7 +176,14 @@ func main() {
 }
 EOF
 
-(cd "$WORK/go" && go mod tidy >/dev/null 2>&1 && go build -o probe ./cmd >/dev/null)
+# Tee stderr to a tmp log so set -e failures (silent under >/dev/null 2>&1)
+# surface in CI output instead of producing a zero-context exit.
+goerr="$WORK/go-build.log"
+if ! (cd "$WORK/go" && go mod tidy && go build -o probe ./cmd) >"$goerr" 2>&1; then
+    echo "FAIL  Go probe build" >&2
+    sed 's/^/  /' "$goerr" >&2
+    exit 1
+fi
 GO_OUT="$("$WORK/go/probe")"
 GO_CODEGEN_BYTES="$(echo "$GO_OUT" | awk '/^CODEGEN / {print $2}')"
 GO_REFLECT_BYTES="$(echo "$GO_OUT" | awk '/^REFLECT / {print $2}')"
@@ -283,7 +290,12 @@ fn main() {
 }
 EOF
 
-(cd "$WORK/rust" && RUSTFLAGS="-A unused_imports -A unused_mut -A unused_variables -A unused_assignments -A unreachable_patterns -A unused_parens" cargo build --bin probe --quiet)
+rserr="$WORK/rust-build.log"
+if ! (cd "$WORK/rust" && RUSTFLAGS="-A unused_imports -A unused_mut -A unused_variables -A unused_assignments -A unreachable_patterns -A unused_parens" cargo build --bin probe --quiet) >"$rserr" 2>&1; then
+    echo "FAIL  Rust probe build" >&2
+    sed 's/^/  /' "$rserr" >&2
+    exit 1
+fi
 RUST_OUT="$("$WORK/rust/target/debug/probe")"
 RUST_BYTES="$(echo "$RUST_OUT" | awk '/^BYTES / {print $2}')"
 RUST_JSON="$(echo "$RUST_OUT" | awk '/^JSON / { $1=""; sub(/^ /, ""); print }')"
@@ -312,7 +324,12 @@ cat > "$WORK/ts/package.json" <<EOF
   }
 }
 EOF
-(cd "$WORK/ts" && npm install --silent --no-audit --no-fund >/dev/null 2>&1)
+tserr="$WORK/ts-install.log"
+if ! (cd "$WORK/ts" && npm install --silent --no-audit --no-fund) >"$tserr" 2>&1; then
+    echo "FAIL  TS probe npm install" >&2
+    sed 's/^/  /' "$tserr" >&2
+    exit 1
+fi
 
 # Drop a probe ESM file that imports the generated module + the runtime.
 genfile="$(ls "$WORK/ts"/*.ts | head -1)"

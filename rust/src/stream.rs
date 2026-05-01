@@ -109,7 +109,9 @@ impl<W: Write> StreamWriter<W> {
     /// This will flush any buffered data before returning the inner writer.
     /// Returns an error if flushing fails.
     pub fn into_inner(self) -> Result<W> {
-        self.inner.into_inner().map_err(|e| Error::from(e.into_error()))
+        self.inner
+            .into_inner()
+            .map_err(|e| Error::from(e.into_error()))
     }
 
     /// Writes a varint to the stream.
@@ -268,7 +270,7 @@ impl<R: Read> StreamReader<R> {
 
         for i in 0..10 {
             match self.inner.read(&mut buf) {
-                Ok(0) if i == 0 => return Ok(None), // EOF at start
+                Ok(0) if i == 0 => return Ok(None),        // EOF at start
                 Ok(0) => return Err(Error::UnexpectedEof), // EOF mid-varint
                 Ok(_) => {
                     let b = buf[0];

@@ -189,8 +189,7 @@ impl<'a> Reader<'a> {
             return Err(Error::buffer_underflow(1, 0));
         }
 
-        let result = decode_tag(remaining)
-            .ok_or_else(|| Error::InvalidWireType(remaining[0]))?;
+        let result = decode_tag(remaining).ok_or_else(|| Error::InvalidWireType(remaining[0]))?;
 
         self.pos += result.bytes_read;
         Ok(FieldTag::new(result.field_number, result.wire_type))

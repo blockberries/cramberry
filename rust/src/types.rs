@@ -93,7 +93,6 @@ impl FieldTag {
             result
         }
     }
-
 }
 
 /// Result of decoding a compact tag.
@@ -306,7 +305,11 @@ mod tests {
             ] {
                 let tag = FieldTag::new(field, wire_type);
                 let encoded = tag.encode_compact();
-                assert!(encoded.len() >= 2, "Field {} should be extended format", field);
+                assert!(
+                    encoded.len() >= 2,
+                    "Field {} should be extended format",
+                    field
+                );
 
                 let decoded = decode_tag(&encoded).unwrap();
                 assert_eq!(decoded.field_number, field);

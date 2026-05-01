@@ -51,9 +51,17 @@ pub use registry::{Decoder, Encoder, Registry};
 pub use sort::CompareKeys;
 pub use stream::{StreamReader, StreamWriter};
 pub use types::{
-    decode_tag, FieldTag, TagResult, TypeId, WireType,
+    decode_tag,
+    FieldTag,
+    TagResult,
+    TypeId,
+    WireType,
     // Tag format constants
-    END_MARKER, MAX_COMPACT_FIELD_NUM, TAG_EXTENDED_BIT, TAG_FIELD_NUM_SHIFT, TAG_WIRE_TYPE_MASK,
+    END_MARKER,
+    MAX_COMPACT_FIELD_NUM,
+    TAG_EXTENDED_BIT,
+    TAG_FIELD_NUM_SHIFT,
+    TAG_WIRE_TYPE_MASK,
     TAG_WIRE_TYPE_SHIFT,
 };
 pub use writer::Writer;
