@@ -195,9 +195,11 @@ pub fn decode_base64(s: &str) -> Result<Vec<u8>, String> {
 /// Parses an i64 from a JSON value (string or number).
 pub fn parse_i64_from_json(value: &serde_json::Value) -> Result<i64, String> {
     match value {
-        serde_json::Value::String(s) => s.parse::<i64>()
+        serde_json::Value::String(s) => s
+            .parse::<i64>()
             .map_err(|e| format!("failed to parse i64: {}", e)),
-        serde_json::Value::Number(n) => n.as_i64()
+        serde_json::Value::Number(n) => n
+            .as_i64()
             .ok_or_else(|| "number out of i64 range".to_string()),
         _ => Err("expected string or number for i64".to_string()),
     }
@@ -206,9 +208,11 @@ pub fn parse_i64_from_json(value: &serde_json::Value) -> Result<i64, String> {
 /// Parses a u64 from a JSON value (string or number).
 pub fn parse_u64_from_json(value: &serde_json::Value) -> Result<u64, String> {
     match value {
-        serde_json::Value::String(s) => s.parse::<u64>()
+        serde_json::Value::String(s) => s
+            .parse::<u64>()
             .map_err(|e| format!("failed to parse u64: {}", e)),
-        serde_json::Value::Number(n) => n.as_u64()
+        serde_json::Value::Number(n) => n
+            .as_u64()
             .ok_or_else(|| "number out of u64 range".to_string()),
         _ => Err("expected string or number for u64".to_string()),
     }
@@ -217,13 +221,13 @@ pub fn parse_u64_from_json(value: &serde_json::Value) -> Result<u64, String> {
 /// Parses an i32 from a JSON value (string or number).
 pub fn parse_i32_from_json(value: &serde_json::Value) -> Result<i32, String> {
     match value {
-        serde_json::Value::String(s) => s.parse::<i32>()
+        serde_json::Value::String(s) => s
+            .parse::<i32>()
             .map_err(|e| format!("failed to parse i32: {}", e)),
-        serde_json::Value::Number(n) => n.as_i64()
+        serde_json::Value::Number(n) => n
+            .as_i64()
             .ok_or_else(|| "not a number".to_string())
-            .and_then(|v| {
-                i32::try_from(v).map_err(|e| format!("i32 overflow: {}", e))
-            }),
+            .and_then(|v| i32::try_from(v).map_err(|e| format!("i32 overflow: {}", e))),
         _ => Err("expected string or number for i32".to_string()),
     }
 }
@@ -231,13 +235,13 @@ pub fn parse_i32_from_json(value: &serde_json::Value) -> Result<i32, String> {
 /// Parses a u32 from a JSON value (string or number).
 pub fn parse_u32_from_json(value: &serde_json::Value) -> Result<u32, String> {
     match value {
-        serde_json::Value::String(s) => s.parse::<u32>()
+        serde_json::Value::String(s) => s
+            .parse::<u32>()
             .map_err(|e| format!("failed to parse u32: {}", e)),
-        serde_json::Value::Number(n) => n.as_u64()
+        serde_json::Value::Number(n) => n
+            .as_u64()
             .ok_or_else(|| "not a number".to_string())
-            .and_then(|v| {
-                u32::try_from(v).map_err(|e| format!("u32 overflow: {}", e))
-            }),
+            .and_then(|v| u32::try_from(v).map_err(|e| format!("u32 overflow: {}", e))),
         _ => Err("expected string or number for u32".to_string()),
     }
 }
@@ -330,7 +334,10 @@ mod tests {
         assert_eq!(format_f64(0.0).unwrap(), "0");
         assert_eq!(format_f64(-0.0).unwrap(), "0");
         assert_eq!(format_f64(2.718281828459045).unwrap(), "2.7182818284590451");
-        assert_eq!(format_f64(-3.141592653589793).unwrap(), "-3.1415926535897931");
+        assert_eq!(
+            format_f64(-3.141592653589793).unwrap(),
+            "-3.1415926535897931"
+        );
         assert_eq!(format_f64(1.23e100).unwrap(), "1.2300000000000001e+100");
         assert_eq!(format_f64(1e-100).unwrap(), "1e-100");
         assert_eq!(format_f64(1e20).unwrap(), "1e+20");
@@ -375,7 +382,11 @@ mod tests {
 
     #[test]
     fn test_sort_map_keys_lexicographic() {
-        let mut keys = vec!["zebra".to_string(), "apple".to_string(), "banana".to_string()];
+        let mut keys = vec![
+            "zebra".to_string(),
+            "apple".to_string(),
+            "banana".to_string(),
+        ];
         sort_map_keys_lexicographic(&mut keys);
         assert_eq!(keys, vec!["apple", "banana", "zebra"]);
     }

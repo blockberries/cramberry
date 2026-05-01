@@ -18,7 +18,8 @@ pub type Decoder<T> = fn(&mut Reader) -> Result<T>;
 type AnyEncoder = Box<dyn Fn(&mut Writer, &dyn std::any::Any) -> Result<()> + Send + Sync>;
 
 /// Type-erased decoder.
-type AnyDecoder = Box<dyn Fn(&mut Reader) -> Result<Box<dyn std::any::Any + Send + Sync>> + Send + Sync>;
+type AnyDecoder =
+    Box<dyn Fn(&mut Reader) -> Result<Box<dyn std::any::Any + Send + Sync>> + Send + Sync>;
 
 /// Registration information for a type.
 ///
@@ -96,9 +97,9 @@ impl Registry {
     {
         let name_owned = name.to_string();
         let any_encoder: AnyEncoder = Box::new(move |writer, value| {
-            let typed = value.downcast_ref::<T>().ok_or_else(|| {
-                Error::custom(format!("Type mismatch for {}", name_owned))
-            })?;
+            let typed = value
+                .downcast_ref::<T>()
+                .ok_or_else(|| Error::custom(format!("Type mismatch for {}", name_owned)))?;
             encoder(writer, typed)
         });
 
@@ -153,7 +154,8 @@ impl Registry {
     /// Thread-safe: acquires read lock.
     pub fn get_type_id(&self, name: &str) -> Result<TypeId> {
         let inner = self.inner.read().unwrap();
-        inner.by_name
+        inner
+            .by_name
             .get(name)
             .copied()
             .ok_or_else(|| Error::TypeNotRegistered(name.to_string().into_boxed_str()))
@@ -163,7 +165,8 @@ impl Registry {
     /// Thread-safe: acquires read lock.
     pub fn get_type_name(&self, type_id: TypeId) -> Result<String> {
         let inner = self.inner.read().unwrap();
-        inner.by_id
+        inner
+            .by_id
             .get(&type_id)
             .map(|r| r.name.clone())
             .ok_or(Error::UnknownTypeId(type_id))
@@ -197,7 +200,8 @@ impl Registry {
         T: 'static,
     {
         let inner = self.inner.read().unwrap();
-        let type_id = inner.by_name
+        let type_id = inner
+            .by_name
             .get(name)
             .copied()
             .ok_or_else(|| Error::TypeNotRegistered(name.to_string().into_boxed_str()))?;
@@ -321,13 +325,15 @@ mod tests {
         registry.register("TestMessage", encode_test_message, decode_test_message);
 
         // Access from multiple threads
-        let handles: Vec<_> = (0..4).map(|_| {
-            let reg = Arc::clone(&registry);
-            thread::spawn(move || {
-                assert!(reg.is_registered("TestMessage"));
-                assert_eq!(reg.get_type_id("TestMessage").unwrap(), 128);
+        let handles: Vec<_> = (0..4)
+            .map(|_| {
+                let reg = Arc::clone(&registry);
+                thread::spawn(move || {
+                    assert!(reg.is_registered("TestMessage"));
+                    assert_eq!(reg.get_type_id("TestMessage").unwrap(), 128);
+                })
             })
-        }).collect();
+            .collect();
 
         for handle in handles {
             handle.join().unwrap();

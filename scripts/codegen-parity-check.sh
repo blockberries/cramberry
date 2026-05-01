@@ -21,10 +21,13 @@ WORK="$(mktemp -d -t cramberry-parity.XXXXXX)"
 trap 'rm -rf "$WORK"' EXIT
 
 mkdir -p "$WORK/go" "$WORK/rust/src"
+echo "[parity] step: generate Go" >&2
 "$BIN" generate -lang go                -out "$WORK/go" "$SCHEMA" >/dev/null
+echo "[parity] step: generate Rust" >&2
 "$BIN" generate -lang rust              -out "$WORK/rust/src" "$SCHEMA" >/dev/null
 
 # --- Go side ---
+echo "[parity] step: gofmt" >&2
 gofmt -w "$WORK/go"/*.go
 cat > "$WORK/go/go.mod" <<EOF
 module parity
@@ -176,8 +179,21 @@ func main() {
 }
 EOF
 
-(cd "$WORK/go" && go mod tidy >/dev/null 2>&1 && go build -o probe ./cmd >/dev/null)
-GO_OUT="$("$WORK/go/probe")"
+# Tee stderr to a tmp log so set -e failures (silent under >/dev/null 2>&1)
+# surface in CI output instead of producing a zero-context exit.
+echo "[parity] step: go build probe" >&2
+goerr="$WORK/go-build.log"
+if ! (cd "$WORK/go" && go mod tidy && go build -o probe ./cmd) >"$goerr" 2>&1; then
+    echo "FAIL  Go probe build" >&2
+    sed 's/^/  /' "$goerr" >&2
+    exit 1
+fi
+echo "[parity] step: run Go probe" >&2
+if ! GO_OUT="$("$WORK/go/probe" 2>&1)"; then
+    echo "FAIL  Go probe execution" >&2
+    sed 's/^/  /' <<<"$GO_OUT" >&2
+    exit 1
+fi
 GO_CODEGEN_BYTES="$(echo "$GO_OUT" | awk '/^CODEGEN / {print $2}')"
 GO_REFLECT_BYTES="$(echo "$GO_OUT" | awk '/^REFLECT / {print $2}')"
 GO_CODEGEN_JSON="$(echo "$GO_OUT" | awk '/^CODEGEN_JSON / { $1=""; sub(/^ /, ""); print }')"
@@ -283,8 +299,19 @@ fn main() {
 }
 EOF
 
-(cd "$WORK/rust" && RUSTFLAGS="-A unused_imports -A unused_mut -A unused_variables -A unused_assignments -A unreachable_patterns -A unused_parens" cargo build --bin probe --quiet)
-RUST_OUT="$("$WORK/rust/target/debug/probe")"
+echo "[parity] step: rust cargo build probe" >&2
+# Let stderr flow directly so any cargo error is visible in CI logs.
+if ! (cd "$WORK/rust" && RUSTFLAGS="-A unused_imports -A unused_mut -A unused_variables -A unused_assignments -A unreachable_patterns -A unused_parens" cargo build --bin probe --quiet); then
+    echo "FAIL  Rust probe build (see cargo errors above)" >&2
+    exit 1
+fi
+echo "[parity] step: run Rust probe" >&2
+if ! RUST_OUT="$("$WORK/rust/target/debug/probe" 2>&1)"; then
+    echo "FAIL  Rust probe execution" >&2
+    sed 's/^/  /' <<<"$RUST_OUT" >&2
+    exit 1
+fi
+echo "[parity] step: rust probe done" >&2
 RUST_BYTES="$(echo "$RUST_OUT" | awk '/^BYTES / {print $2}')"
 RUST_JSON="$(echo "$RUST_OUT" | awk '/^JSON / { $1=""; sub(/^ /, ""); print }')"
 
@@ -292,15 +319,19 @@ RUST_JSON="$(echo "$RUST_OUT" | awk '/^JSON / { $1=""; sub(/^ /, ""); print }')"
 # The TS generator emits `from '@cramberry/runtime'`. Node's ESM
 # resolver finds it via the package's "exports" field once the
 # package is installed (here via npm pack into a fresh project).
+echo "[parity] step: generate TS" >&2
 mkdir -p "$WORK/ts"
 "$BIN" generate -lang typescript -out "$WORK/ts" "$SCHEMA" >/dev/null
 
 # Build the TS runtime so the dist/ files referenced by the package
 # exports actually exist.
-(cd "$REPO_ROOT/typescript" && npm install --silent --no-audit --no-fund >/dev/null 2>&1 && npm run --silent build >/dev/null 2>&1) || {
-    echo "skip (TS): runtime build failed; install npm + run 'cd typescript && npm install' once" >&2
+echo "[parity] step: build TS runtime" >&2
+tsruntimeerr="$WORK/ts-runtime.log"
+if ! (cd "$REPO_ROOT/typescript" && npm install --silent --no-audit --no-fund && npm run --silent build) >"$tsruntimeerr" 2>&1; then
+    echo "skip (TS): runtime build failed" >&2
+    sed 's/^/  /' "$tsruntimeerr" >&2
     exit 0
-}
+fi
 
 cat > "$WORK/ts/package.json" <<EOF
 {
@@ -308,11 +339,19 @@ cat > "$WORK/ts/package.json" <<EOF
   "private": true,
   "type": "module",
   "dependencies": {
-    "@cramberry/runtime": "file:$REPO_ROOT/typescript"
+    "@cramberry/runtime": "file:$REPO_ROOT/typescript",
+    "tsx": "^4.0.0"
   }
 }
 EOF
-(cd "$WORK/ts" && npm install --silent --no-audit --no-fund >/dev/null 2>&1)
+echo "[parity] step: npm install TS probe" >&2
+tserr="$WORK/ts-install.log"
+if ! (cd "$WORK/ts" && npm install --silent --no-audit --no-fund) >"$tserr" 2>&1; then
+    echo "FAIL  TS probe npm install" >&2
+    sed 's/^/  /' "$tserr" >&2
+    exit 1
+fi
+echo "[parity] step: run TS probe" >&2
 
 # Drop a probe ESM file that imports the generated module + the runtime.
 genfile="$(ls "$WORK/ts"/*.ts | head -1)"
@@ -391,14 +430,20 @@ EOF
 # Use tsx (provided by the typescript/ workspace's installed deps) so
 # the .ts import resolves and Node finds @cramberry/runtime via the
 # package's "exports". The local node_modules linkage gives us dist/.
-TS_OUT="$(cd "$WORK/ts" && npx --no -- tsx probe.mjs 2>/dev/null)"
+# Run with stderr captured separately so probe errors are visible.
+TS_ERR="$WORK/ts-probe.log"
+if ! TS_OUT="$(cd "$WORK/ts" && npx --no -- tsx probe.mjs 2>"$TS_ERR")"; then
+    echo "FAIL  TS probe execution" >&2
+    sed 's/^/  /' "$TS_ERR" >&2
+    exit 1
+fi
 TS_BYTES="$(echo "$TS_OUT" | awk '/^BYTES / {print $2}')"
 TS_JSON="$(echo "$TS_OUT" | awk '/^JSON / { $1=""; sub(/^ /, ""); print }')"
-
 if [[ -z "$TS_BYTES" ]]; then
-    echo "skip (TS): probe produced no output (likely missing tsx in PATH)" >&2
-    TS_BYTES="(skipped)"
-    TS_JSON="(skipped)"
+    echo "FAIL  TS probe produced no BYTES line" >&2
+    echo "  stdout: $TS_OUT" >&2
+    sed 's/^/  stderr: /' "$TS_ERR" >&2
+    exit 1
 fi
 
 # --- Compare wire-format bytes ---
@@ -415,7 +460,7 @@ if [[ "$GO_CODEGEN_BYTES" != "$RUST_BYTES" ]]; then
     echo "  Rust: $RUST_BYTES"                       >&2
     fail=1
 fi
-if [[ "$TS_BYTES" != "(skipped)" ]] && [[ "$GO_CODEGEN_BYTES" != "$TS_BYTES" ]]; then
+if [[ "$GO_CODEGEN_BYTES" != "$TS_BYTES" ]]; then
     echo "FAIL  Go codegen != TS codegen (binary)"   >&2
     echo "  Go: $GO_CODEGEN_BYTES"                   >&2
     echo "  TS: $TS_BYTES"                           >&2
@@ -434,7 +479,7 @@ if [[ "$GO_CODEGEN_JSON" != "$RUST_JSON" ]]; then
     echo "  Rust: $RUST_JSON"                      >&2
     fail=1
 fi
-if [[ "$TS_JSON" != "(skipped)" ]] && [[ "$GO_CODEGEN_JSON" != "$TS_JSON" ]]; then
+if [[ "$GO_CODEGEN_JSON" != "$TS_JSON" ]]; then
     echo "FAIL  Go codegen != TS codegen (JSON)" >&2
     echo "  Go: $GO_CODEGEN_JSON"                >&2
     echo "  TS: $TS_JSON"                        >&2
@@ -442,11 +487,7 @@ if [[ "$TS_JSON" != "(skipped)" ]] && [[ "$GO_CODEGEN_JSON" != "$TS_JSON" ]]; th
 fi
 
 if [[ $fail -eq 0 ]]; then
-    if [[ "$TS_BYTES" == "(skipped)" ]]; then
-        echo "  OK  Go reflection == Go codegen == Rust codegen (TS skipped)"
-    else
-        echo "  OK  Go reflection == Go codegen == Rust codegen == TS codegen"
-    fi
+    echo "  OK  Go reflection == Go codegen == Rust codegen == TS codegen"
     echo "      bytes: $GO_CODEGEN_BYTES"
     echo "      json:  $GO_CODEGEN_JSON"
 fi

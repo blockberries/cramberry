@@ -199,7 +199,7 @@ ts-test: ## Run TypeScript unit tests
 
 ts-integration-test: ## Run TypeScript integration tests against Go-produced golden bytes
 	@echo "Running TypeScript integration tests..."
-	@cd test/integration/ts && npm test
+	@cd test/integration/ts && npm install --silent --no-audit --no-fund && npm test
 
 rust-build: ## Build Rust runtime
 	@echo "Building Rust runtime..."

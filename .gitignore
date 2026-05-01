@@ -56,3 +56,6 @@ internal/bench/ts/package-lock.json
 basic
 polymorphic
 streaming
+
+# Claude Code agent state
+.claude/

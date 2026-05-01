@@ -30,9 +30,7 @@ pub(crate) fn canonicalize_f32_bits(v: f32) -> u32 {
 #[inline]
 pub(crate) fn canonicalize_f64_bits(v: f64) -> u64 {
     let bits = v.to_bits();
-    if bits & 0x7FF0_0000_0000_0000 == 0x7FF0_0000_0000_0000
-        && bits & 0x000F_FFFF_FFFF_FFFF != 0
-    {
+    if bits & 0x7FF0_0000_0000_0000 == 0x7FF0_0000_0000_0000 && bits & 0x000F_FFFF_FFFF_FFFF != 0 {
         return CANONICAL_NAN_64;
     }
     if bits == 0x8000_0000_0000_0000 {
@@ -52,15 +50,33 @@ const LENGTH_PLACEHOLDER: usize = 2;
 /// Returns the number of bytes a u64 takes in LEB128 (1..=10).
 #[inline]
 fn uvarint_size(v: u64) -> usize {
-    if v < 1 << 7 { return 1; }
-    if v < 1 << 14 { return 2; }
-    if v < 1 << 21 { return 3; }
-    if v < 1 << 28 { return 4; }
-    if v < 1 << 35 { return 5; }
-    if v < 1 << 42 { return 6; }
-    if v < 1 << 49 { return 7; }
-    if v < 1 << 56 { return 8; }
-    if v < 1 << 63 { return 9; }
+    if v < 1 << 7 {
+        return 1;
+    }
+    if v < 1 << 14 {
+        return 2;
+    }
+    if v < 1 << 21 {
+        return 3;
+    }
+    if v < 1 << 28 {
+        return 4;
+    }
+    if v < 1 << 35 {
+        return 5;
+    }
+    if v < 1 << 42 {
+        return 6;
+    }
+    if v < 1 << 49 {
+        return 7;
+    }
+    if v < 1 << 56 {
+        return 8;
+    }
+    if v < 1 << 63 {
+        return 9;
+    }
     10
 }
 
@@ -167,7 +183,8 @@ impl Writer {
             // Common: 1-byte varint (msg_len < 128). Shift body left
             // by (placeholder - len_size) and truncate.
             let shift = LENGTH_PLACEHOLDER - len_size;
-            self.buffer.copy_within(msg_start..msg_start + msg_len, checkpoint + len_size);
+            self.buffer
+                .copy_within(msg_start..msg_start + msg_len, checkpoint + len_size);
             self.buffer.truncate(self.buffer.len() - shift);
             self.encode_varint_at(checkpoint, msg_len as u64);
             return;
@@ -176,7 +193,8 @@ impl Writer {
         // the placeholder retroactively and memmove the body right.
         let extra = len_size - LENGTH_PLACEHOLDER;
         self.buffer.resize(self.buffer.len() + extra, 0);
-        self.buffer.copy_within(msg_start..msg_start + msg_len, msg_start + extra);
+        self.buffer
+            .copy_within(msg_start..msg_start + msg_len, msg_start + extra);
         self.encode_varint_at(checkpoint, msg_len as u64);
     }
 
