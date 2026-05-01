@@ -339,7 +339,8 @@ cat > "$WORK/ts/package.json" <<EOF
   "private": true,
   "type": "module",
   "dependencies": {
-    "@cramberry/runtime": "file:$REPO_ROOT/typescript"
+    "@cramberry/runtime": "file:$REPO_ROOT/typescript",
+    "tsx": "^4.0.0"
   }
 }
 EOF
@@ -430,22 +431,19 @@ EOF
 # the .ts import resolves and Node finds @cramberry/runtime via the
 # package's "exports". The local node_modules linkage gives us dist/.
 # Run with stderr captured separately so probe errors are visible.
-TS_OUT=""
 TS_ERR="$WORK/ts-probe.log"
 if ! TS_OUT="$(cd "$WORK/ts" && npx --no -- tsx probe.mjs 2>"$TS_ERR")"; then
-    echo "[parity] TS probe failed (npx/tsx exit non-zero):" >&2
+    echo "FAIL  TS probe execution" >&2
     sed 's/^/  /' "$TS_ERR" >&2
-    TS_OUT=""
+    exit 1
 fi
-echo "[parity] step: TS probe complete (out=${#TS_OUT} bytes)" >&2
 TS_BYTES="$(echo "$TS_OUT" | awk '/^BYTES / {print $2}')"
 TS_JSON="$(echo "$TS_OUT" | awk '/^JSON / { $1=""; sub(/^ /, ""); print }')"
-echo "[parity] step: TS extraction done" >&2
-
 if [[ -z "$TS_BYTES" ]]; then
-    echo "skip (TS): probe produced no output (likely missing tsx in PATH)" >&2
-    TS_BYTES="(skipped)"
-    TS_JSON="(skipped)"
+    echo "FAIL  TS probe produced no BYTES line" >&2
+    echo "  stdout: $TS_OUT" >&2
+    sed 's/^/  stderr: /' "$TS_ERR" >&2
+    exit 1
 fi
 
 # --- Compare wire-format bytes ---
@@ -462,7 +460,7 @@ if [[ "$GO_CODEGEN_BYTES" != "$RUST_BYTES" ]]; then
     echo "  Rust: $RUST_BYTES"                       >&2
     fail=1
 fi
-if [[ "$TS_BYTES" != "(skipped)" ]] && [[ "$GO_CODEGEN_BYTES" != "$TS_BYTES" ]]; then
+if [[ "$GO_CODEGEN_BYTES" != "$TS_BYTES" ]]; then
     echo "FAIL  Go codegen != TS codegen (binary)"   >&2
     echo "  Go: $GO_CODEGEN_BYTES"                   >&2
     echo "  TS: $TS_BYTES"                           >&2
@@ -481,7 +479,7 @@ if [[ "$GO_CODEGEN_JSON" != "$RUST_JSON" ]]; then
     echo "  Rust: $RUST_JSON"                      >&2
     fail=1
 fi
-if [[ "$TS_JSON" != "(skipped)" ]] && [[ "$GO_CODEGEN_JSON" != "$TS_JSON" ]]; then
+if [[ "$GO_CODEGEN_JSON" != "$TS_JSON" ]]; then
     echo "FAIL  Go codegen != TS codegen (JSON)" >&2
     echo "  Go: $GO_CODEGEN_JSON"                >&2
     echo "  TS: $TS_JSON"                        >&2
@@ -489,11 +487,7 @@ if [[ "$TS_JSON" != "(skipped)" ]] && [[ "$GO_CODEGEN_JSON" != "$TS_JSON" ]]; th
 fi
 
 if [[ $fail -eq 0 ]]; then
-    if [[ "$TS_BYTES" == "(skipped)" ]]; then
-        echo "  OK  Go reflection == Go codegen == Rust codegen (TS skipped)"
-    else
-        echo "  OK  Go reflection == Go codegen == Rust codegen == TS codegen"
-    fi
+    echo "  OK  Go reflection == Go codegen == Rust codegen == TS codegen"
     echo "      bytes: $GO_CODEGEN_BYTES"
     echo "      json:  $GO_CODEGEN_JSON"
 fi
