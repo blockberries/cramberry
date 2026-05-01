@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (CI)
+
+- **Go test matrix**: `go.mod` requires `go 1.25.6` but CI matrix ran
+  1.23/1.24/1.25. Older toolchains auto-upgraded but their cover-tool
+  layout diverged ("no such tool covdata"). Drop 1.23/1.24 from the
+  matrix — `go.mod` is the source of truth for supported toolchain.
+- **Rust formatting**: `cargo fmt --all` over `rust/src/` (22 spots
+  across 7 files left unformatted by the v2.0.0 perf changes).
+- **`codegen-parity-check`**: the script's `>/dev/null 2>&1` redirects
+  caused build/install failures to produce a zero-context exit under
+  `set -e`. Capture stderr to per-step log files and dump them on
+  failure so future regressions surface the actual error.
+- **`codegen-parity-check` was vacuously passing TS**: `npx --no -- tsx`
+  refused to install `tsx` on CI (which had no globally-installed
+  binary), the empty `TS_OUT` silently took the "skip" branch, and the
+  parity check passed without ever exercising the TypeScript runtime.
+  Add `tsx` to the parity-ts probe `package.json` and turn the skip
+  path into a hard fail — all four runtimes are now genuinely required
+  to agree byte-for-byte.
+- **`ts-integration-test`**: Makefile target ran `npm test` without
+  first running `npm install`, so a fresh CI runner failed with
+  "missing vitest". Install dependencies before running the tests.
+- **Fuzz job**: `go test -fuzz` rejects multi-package selectors; walk
+  packages individually and dispatch each fuzz target to its owning
+  package, with anchored regex (`^Name$`) to prevent prefix collisions.
+
 ### Fixed (seventh review pass — JSON cross-runtime parity)
 
 Adding cross-language JSON byte-parity to `codegen-parity-check.sh`
