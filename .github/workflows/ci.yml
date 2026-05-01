@@ -242,13 +242,19 @@ jobs:
       - name: Run all Fuzz* targets
         run: |
           set -e
-          fuzzlist=$(go test -list='Fuzz.*' ./... 2>/dev/null | grep '^Fuzz' || true)
-          if [ -z "$fuzzlist" ]; then
-            echo "no fuzz targets found"
-            exit 0
-          fi
-          for f in $fuzzlist; do
-            echo "::group::$f"
-            go test -run='^$' -fuzz="$f" -fuzztime=30s ./... || exit 1
-            echo "::endgroup::"
+          # `go test -fuzz` only accepts a single package, so walk each
+          # package and run its fuzz targets individually.
+          found=0
+          for pkg in $(go list ./...); do
+            targets=$(go test -list='Fuzz.*' "$pkg" 2>/dev/null | grep '^Fuzz' || true)
+            [ -z "$targets" ] && continue
+            for f in $targets; do
+              found=1
+              echo "::group::$pkg :: $f"
+              go test -run='^$' -fuzz="^${f}$" -fuzztime=30s "$pkg"
+              echo "::endgroup::"
+            done
           done
+          if [ "$found" = "0" ]; then
+            echo "no fuzz targets found"
+          fi

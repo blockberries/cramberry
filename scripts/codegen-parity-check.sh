@@ -184,7 +184,11 @@ if ! (cd "$WORK/go" && go mod tidy && go build -o probe ./cmd) >"$goerr" 2>&1; t
     sed 's/^/  /' "$goerr" >&2
     exit 1
 fi
-GO_OUT="$("$WORK/go/probe")"
+if ! GO_OUT="$("$WORK/go/probe" 2>&1)"; then
+    echo "FAIL  Go probe execution" >&2
+    sed 's/^/  /' <<<"$GO_OUT" >&2
+    exit 1
+fi
 GO_CODEGEN_BYTES="$(echo "$GO_OUT" | awk '/^CODEGEN / {print $2}')"
 GO_REFLECT_BYTES="$(echo "$GO_OUT" | awk '/^REFLECT / {print $2}')"
 GO_CODEGEN_JSON="$(echo "$GO_OUT" | awk '/^CODEGEN_JSON / { $1=""; sub(/^ /, ""); print }')"
@@ -296,7 +300,11 @@ if ! (cd "$WORK/rust" && RUSTFLAGS="-A unused_imports -A unused_mut -A unused_va
     sed 's/^/  /' "$rserr" >&2
     exit 1
 fi
-RUST_OUT="$("$WORK/rust/target/debug/probe")"
+if ! RUST_OUT="$("$WORK/rust/target/debug/probe" 2>&1)"; then
+    echo "FAIL  Rust probe execution" >&2
+    sed 's/^/  /' <<<"$RUST_OUT" >&2
+    exit 1
+fi
 RUST_BYTES="$(echo "$RUST_OUT" | awk '/^BYTES / {print $2}')"
 RUST_JSON="$(echo "$RUST_OUT" | awk '/^JSON / { $1=""; sub(/^ /, ""); print }')"
 
