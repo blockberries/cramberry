@@ -21,10 +21,13 @@ WORK="$(mktemp -d -t cramberry-parity.XXXXXX)"
 trap 'rm -rf "$WORK"' EXIT
 
 mkdir -p "$WORK/go" "$WORK/rust/src"
+echo "[parity] step: generate Go" >&2
 "$BIN" generate -lang go                -out "$WORK/go" "$SCHEMA" >/dev/null
+echo "[parity] step: generate Rust" >&2
 "$BIN" generate -lang rust              -out "$WORK/rust/src" "$SCHEMA" >/dev/null
 
 # --- Go side ---
+echo "[parity] step: gofmt" >&2
 gofmt -w "$WORK/go"/*.go
 cat > "$WORK/go/go.mod" <<EOF
 module parity
@@ -178,12 +181,14 @@ EOF
 
 # Tee stderr to a tmp log so set -e failures (silent under >/dev/null 2>&1)
 # surface in CI output instead of producing a zero-context exit.
+echo "[parity] step: go build probe" >&2
 goerr="$WORK/go-build.log"
 if ! (cd "$WORK/go" && go mod tidy && go build -o probe ./cmd) >"$goerr" 2>&1; then
     echo "FAIL  Go probe build" >&2
     sed 's/^/  /' "$goerr" >&2
     exit 1
 fi
+echo "[parity] step: run Go probe" >&2
 if ! GO_OUT="$("$WORK/go/probe" 2>&1)"; then
     echo "FAIL  Go probe execution" >&2
     sed 's/^/  /' <<<"$GO_OUT" >&2
@@ -294,6 +299,7 @@ fn main() {
 }
 EOF
 
+echo "[parity] step: rust cargo build probe" >&2
 rserr="$WORK/rust-build.log"
 if ! (cd "$WORK/rust" && RUSTFLAGS="-A unused_imports -A unused_mut -A unused_variables -A unused_assignments -A unreachable_patterns -A unused_parens" cargo build --bin probe --quiet) >"$rserr" 2>&1; then
     echo "FAIL  Rust probe build" >&2
