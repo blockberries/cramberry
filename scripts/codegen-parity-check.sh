@@ -300,17 +300,18 @@ fn main() {
 EOF
 
 echo "[parity] step: rust cargo build probe" >&2
-rserr="$WORK/rust-build.log"
-if ! (cd "$WORK/rust" && RUSTFLAGS="-A unused_imports -A unused_mut -A unused_variables -A unused_assignments -A unreachable_patterns -A unused_parens" cargo build --bin probe --quiet) >"$rserr" 2>&1; then
-    echo "FAIL  Rust probe build" >&2
-    sed 's/^/  /' "$rserr" >&2
+# Let stderr flow directly so any cargo error is visible in CI logs.
+if ! (cd "$WORK/rust" && RUSTFLAGS="-A unused_imports -A unused_mut -A unused_variables -A unused_assignments -A unreachable_patterns -A unused_parens" cargo build --bin probe --quiet); then
+    echo "FAIL  Rust probe build (see cargo errors above)" >&2
     exit 1
 fi
+echo "[parity] step: run Rust probe" >&2
 if ! RUST_OUT="$("$WORK/rust/target/debug/probe" 2>&1)"; then
     echo "FAIL  Rust probe execution" >&2
     sed 's/^/  /' <<<"$RUST_OUT" >&2
     exit 1
 fi
+echo "[parity] step: rust probe done" >&2
 RUST_BYTES="$(echo "$RUST_OUT" | awk '/^BYTES / {print $2}')"
 RUST_JSON="$(echo "$RUST_OUT" | awk '/^JSON / { $1=""; sub(/^ /, ""); print }')"
 
