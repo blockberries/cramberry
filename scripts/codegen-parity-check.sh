@@ -319,15 +319,19 @@ RUST_JSON="$(echo "$RUST_OUT" | awk '/^JSON / { $1=""; sub(/^ /, ""); print }')"
 # The TS generator emits `from '@cramberry/runtime'`. Node's ESM
 # resolver finds it via the package's "exports" field once the
 # package is installed (here via npm pack into a fresh project).
+echo "[parity] step: generate TS" >&2
 mkdir -p "$WORK/ts"
 "$BIN" generate -lang typescript -out "$WORK/ts" "$SCHEMA" >/dev/null
 
 # Build the TS runtime so the dist/ files referenced by the package
 # exports actually exist.
-(cd "$REPO_ROOT/typescript" && npm install --silent --no-audit --no-fund >/dev/null 2>&1 && npm run --silent build >/dev/null 2>&1) || {
-    echo "skip (TS): runtime build failed; install npm + run 'cd typescript && npm install' once" >&2
+echo "[parity] step: build TS runtime" >&2
+tsruntimeerr="$WORK/ts-runtime.log"
+if ! (cd "$REPO_ROOT/typescript" && npm install --silent --no-audit --no-fund && npm run --silent build) >"$tsruntimeerr" 2>&1; then
+    echo "skip (TS): runtime build failed" >&2
+    sed 's/^/  /' "$tsruntimeerr" >&2
     exit 0
-}
+fi
 
 cat > "$WORK/ts/package.json" <<EOF
 {
@@ -339,12 +343,14 @@ cat > "$WORK/ts/package.json" <<EOF
   }
 }
 EOF
+echo "[parity] step: npm install TS probe" >&2
 tserr="$WORK/ts-install.log"
 if ! (cd "$WORK/ts" && npm install --silent --no-audit --no-fund) >"$tserr" 2>&1; then
     echo "FAIL  TS probe npm install" >&2
     sed 's/^/  /' "$tserr" >&2
     exit 1
 fi
+echo "[parity] step: run TS probe" >&2
 
 # Drop a probe ESM file that imports the generated module + the runtime.
 genfile="$(ls "$WORK/ts"/*.ts | head -1)"
