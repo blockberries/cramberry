@@ -429,9 +429,18 @@ EOF
 # Use tsx (provided by the typescript/ workspace's installed deps) so
 # the .ts import resolves and Node finds @cramberry/runtime via the
 # package's "exports". The local node_modules linkage gives us dist/.
-TS_OUT="$(cd "$WORK/ts" && npx --no -- tsx probe.mjs 2>/dev/null)"
+# Run with stderr captured separately so probe errors are visible.
+TS_OUT=""
+TS_ERR="$WORK/ts-probe.log"
+if ! TS_OUT="$(cd "$WORK/ts" && npx --no -- tsx probe.mjs 2>"$TS_ERR")"; then
+    echo "[parity] TS probe failed (npx/tsx exit non-zero):" >&2
+    sed 's/^/  /' "$TS_ERR" >&2
+    TS_OUT=""
+fi
+echo "[parity] step: TS probe complete (out=${#TS_OUT} bytes)" >&2
 TS_BYTES="$(echo "$TS_OUT" | awk '/^BYTES / {print $2}')"
 TS_JSON="$(echo "$TS_OUT" | awk '/^JSON / { $1=""; sub(/^ /, ""); print }')"
+echo "[parity] step: TS extraction done" >&2
 
 if [[ -z "$TS_BYTES" ]]; then
     echo "skip (TS): probe produced no output (likely missing tsx in PATH)" >&2
