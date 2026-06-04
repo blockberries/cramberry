@@ -4,7 +4,7 @@ import (
 	"math"
 	"unsafe"
 
-	"github.com/blockberries/cramberry/internal/wire"
+	"github.com/blockberries/cramberry/v2/internal/wire"
 )
 
 // Reader provides efficient binary decoding with position tracking.

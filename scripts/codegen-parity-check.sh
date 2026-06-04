@@ -34,8 +34,8 @@ module parity
 
 go 1.21
 
-require github.com/blockberries/cramberry v0.0.0
-replace github.com/blockberries/cramberry => $REPO_ROOT
+require github.com/blockberries/cramberry/v2 v2.0.0
+replace github.com/blockberries/cramberry/v2 => $REPO_ROOT
 EOF
 
 # Move the generated file's `package` declaration into the binary.
@@ -52,7 +52,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/blockberries/cramberry/pkg/cramberry"
+	"github.com/blockberries/cramberry/v2/pkg/cramberry"
 )
 
 func repeat(s string, n int) string { return strings.Repeat(s, n) }

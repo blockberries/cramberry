@@ -1,4 +1,4 @@
-module github.com/blockberries/cramberry
+module github.com/blockberries/cramberry/v2
 
 go 1.25.6
 

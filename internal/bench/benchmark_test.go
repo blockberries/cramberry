@@ -10,9 +10,9 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	cramgen "github.com/blockberries/cramberry/internal/bench/gen/cramberry"
-	pb "github.com/blockberries/cramberry/internal/bench/gen/protobuf"
-	"github.com/blockberries/cramberry/pkg/cramberry"
+	cramgen "github.com/blockberries/cramberry/v2/internal/bench/gen/cramberry"
+	pb "github.com/blockberries/cramberry/v2/internal/bench/gen/protobuf"
+	"github.com/blockberries/cramberry/v2/pkg/cramberry"
 )
 
 // ============================================================================

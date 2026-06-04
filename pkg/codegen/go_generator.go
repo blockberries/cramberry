@@ -6,7 +6,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/blockberries/cramberry/pkg/schema"
+	"github.com/blockberries/cramberry/v2/pkg/schema"
 )
 
 // GoGenerator generates Go code from schemas.
@@ -1724,7 +1724,7 @@ import (
 {{- if needsJSONImports}}
 
 {{end}}
-	"github.com/blockberries/cramberry/pkg/cramberry"
+	"github.com/blockberries/cramberry/v2/pkg/cramberry"
 {{- end}}
 {{- range $extImports}}
 	{{.Alias}} "{{.Path}}"

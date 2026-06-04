@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/blockberries/cramberry/internal/atomicfile"
+	"github.com/blockberries/cramberry/v2/internal/atomicfile"
 )
 
 // Loader loads and resolves schema files.

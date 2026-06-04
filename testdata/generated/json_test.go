@@ -7,8 +7,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/blockberries/cramberry/pkg/cramberry"
 	"strings"
+
+	"github.com/blockberries/cramberry/v2/pkg/cramberry"
 )
 
 type Status int32

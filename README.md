@@ -30,6 +30,15 @@ codec across the [Stealth blockchain stack](../README.md).
 
 ## Install
 
+As a library (note the `/v2` major-version suffix — required by Go modules
+for v2+):
+
+```bash
+go get github.com/blockberries/cramberry/v2/pkg/cramberry
+```
+
+The CLI, from source:
+
 ```bash
 cd cramberry && make install   # injects version / commit / build-date ldflags
 # or:
@@ -43,7 +52,7 @@ plumbs the version metadata through `-ldflags`.
 ## Usage
 
 ```go
-import "github.com/blockberries/cramberry/pkg/cramberry"
+import "github.com/blockberries/cramberry/v2/pkg/cramberry"
 
 type User struct {
     ID   uint64 `cramberry:"1"`

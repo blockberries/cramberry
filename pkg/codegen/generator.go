@@ -10,7 +10,7 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
-	"github.com/blockberries/cramberry/pkg/schema"
+	"github.com/blockberries/cramberry/v2/pkg/schema"
 )
 
 // Language represents a target code generation language.

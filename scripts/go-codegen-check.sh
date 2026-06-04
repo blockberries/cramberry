@@ -27,9 +27,9 @@ module cramberry-go-codegen-check/$name
 
 go 1.21
 
-require github.com/blockberries/cramberry v0.0.0
+require github.com/blockberries/cramberry/v2 v2.0.0
 
-replace github.com/blockberries/cramberry => $REPO_ROOT
+replace github.com/blockberries/cramberry/v2 => $REPO_ROOT
 EOF
 
     if (cd "$out" && go mod tidy >/dev/null 2>&1 && go build ./... 2>&1) ; then

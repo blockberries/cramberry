@@ -121,7 +121,7 @@ func TestExtractorConfig(t *testing.T) {
 
 // TestExtractToString tests extraction from a simple test package.
 func TestExtractToString(t *testing.T) {
-	result, err := ExtractToString([]string{"github.com/blockberries/cramberry/pkg/extract/testdata"}, DefaultConfig())
+	result, err := ExtractToString([]string{"github.com/blockberries/cramberry/v2/pkg/extract/testdata"}, DefaultConfig())
 	if err != nil {
 		t.Fatalf("ExtractToString() error = %v", err)
 	}
@@ -158,7 +158,7 @@ func TestExtractWithPrivate(t *testing.T) {
 		IncludePrivate:   true,
 		DetectInterfaces: true,
 	}
-	result, err := ExtractToString([]string{"github.com/blockberries/cramberry/pkg/extract/testdata"}, cfg)
+	result, err := ExtractToString([]string{"github.com/blockberries/cramberry/v2/pkg/extract/testdata"}, cfg)
 	if err != nil {
 		t.Fatalf("ExtractToString() error = %v", err)
 	}
@@ -175,7 +175,7 @@ func TestExtractWithPatterns(t *testing.T) {
 		IncludePatterns:  []string{"User*"},
 		DetectInterfaces: true,
 	}
-	result, err := ExtractToString([]string{"github.com/blockberries/cramberry/pkg/extract/testdata"}, cfg)
+	result, err := ExtractToString([]string{"github.com/blockberries/cramberry/v2/pkg/extract/testdata"}, cfg)
 	if err != nil {
 		t.Fatalf("ExtractToString() error = %v", err)
 	}
@@ -195,7 +195,7 @@ func TestExtractWithExclude(t *testing.T) {
 		ExcludePatterns:  []string{"Admin"},
 		DetectInterfaces: true,
 	}
-	result, err := ExtractToString([]string{"github.com/blockberries/cramberry/pkg/extract/testdata"}, cfg)
+	result, err := ExtractToString([]string{"github.com/blockberries/cramberry/v2/pkg/extract/testdata"}, cfg)
 	if err != nil {
 		t.Fatalf("ExtractToString() error = %v", err)
 	}
@@ -214,7 +214,7 @@ func TestExtractor(t *testing.T) {
 	extractor := NewExtractor()
 	cfg := &ExtractorConfig{
 		Config:   DefaultConfig(),
-		Patterns: []string{"github.com/blockberries/cramberry/pkg/extract/testdata"},
+		Patterns: []string{"github.com/blockberries/cramberry/v2/pkg/extract/testdata"},
 		Package:  "custompackage",
 	}
 
@@ -264,7 +264,7 @@ func TestParseTypeIDFromDoc(t *testing.T) {
 }
 
 func TestUintBasedEnumDetection(t *testing.T) {
-	result, err := ExtractToString([]string{"github.com/blockberries/cramberry/pkg/extract/testdata"}, DefaultConfig())
+	result, err := ExtractToString([]string{"github.com/blockberries/cramberry/v2/pkg/extract/testdata"}, DefaultConfig())
 	if err != nil {
 		t.Fatalf("ExtractToString() error = %v", err)
 	}
@@ -356,7 +356,7 @@ func TestEmptyInterfaceDetection(t *testing.T) {
 	// Test that empty interfaces are NOT included by default
 	t.Run("ExcludedByDefault", func(t *testing.T) {
 		cfg := DefaultConfig()
-		result, err := ExtractToString([]string{"github.com/blockberries/cramberry/pkg/extract/testdata"}, cfg)
+		result, err := ExtractToString([]string{"github.com/blockberries/cramberry/v2/pkg/extract/testdata"}, cfg)
 		if err != nil {
 			t.Fatalf("ExtractToString() error = %v", err)
 		}
@@ -378,7 +378,7 @@ func TestEmptyInterfaceDetection(t *testing.T) {
 			IncludeEmptyInterfaces: true,
 			DetectInterfaces:       true,
 		}
-		result, err := ExtractToString([]string{"github.com/blockberries/cramberry/pkg/extract/testdata"}, cfg)
+		result, err := ExtractToString([]string{"github.com/blockberries/cramberry/v2/pkg/extract/testdata"}, cfg)
 		if err != nil {
 			t.Fatalf("ExtractToString() error = %v", err)
 		}
@@ -454,7 +454,7 @@ func TestTypeIDAutoAssignment(t *testing.T) {
 // map iteration leaks into the .cram file and produces churn diffs across
 // runs. This test catches a regression to that bug.
 func TestExtractDeterministicOutput(t *testing.T) {
-	const target = "github.com/blockberries/cramberry/pkg/extract/testdata"
+	const target = "github.com/blockberries/cramberry/v2/pkg/extract/testdata"
 
 	first, err := ExtractToString([]string{target}, DefaultConfig())
 	if err != nil {

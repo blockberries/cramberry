@@ -4,7 +4,7 @@
 package benchmark
 
 import (
-	"github.com/blockberries/cramberry/pkg/cramberry"
+	"github.com/blockberries/cramberry/v2/pkg/cramberry"
 )
 
 // Status represents entity status.
