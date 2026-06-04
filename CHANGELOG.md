@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (streaming)
+
+- **`NewMessageIteratorWithOptions(r, opts)`**: construct a
+  `MessageIterator` with custom `Options` so untrusted network endpoints
+  can pass `Options{Limits: SecureLimits}` (or a custom `Limits` with
+  `MaxMessageSize` set) and reject oversized length-prefixed frames
+  before any allocation. The existing `NewMessageIterator` is unchanged
+  and still uses `DefaultLimits` (64 MB per frame).
+
+### Fixed (codegen)
+
+- **Go generator emitted unused imports for message-less schemas**: a
+  schema with only interfaces (no messages) generated `"strings"` (and,
+  in some cases, `"encoding/json"`/`"fmt"`) imports even though no
+  `strings.Builder`-using JSON helper is ever produced. The unused
+  import tripped Go's strict "imported and not used" check and broke
+  downstream builds. JSON imports are now gated on the schema having
+  messages or interfaces, and `strings` on it having messages. Added a
+  regression test for the interface-only case.
+
 ### Fixed (CI)
 
 - **Go test matrix**: `go.mod` requires `go 1.25.6` but CI matrix ran
