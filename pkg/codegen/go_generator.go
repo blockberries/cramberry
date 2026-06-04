@@ -64,6 +64,8 @@ func (c *goContext) funcMap() template.FuncMap {
 		"isPointerField":       c.isPointerField,
 		"isNilCheckable":       c.isNilCheckable,
 		"needsCramberryImport": c.needsCramberryImport,
+		"needsJSONImports":     c.needsJSONImports,
+		"needsStringsImport":   c.needsStringsImport,
 		"hasOptionalPointer":   c.hasOptionalPointer,
 		"externalImports":      c.externalImports,
 		"comment":              GoComment,
@@ -1057,6 +1059,27 @@ func (c *goContext) needsCramberryImport() bool {
 	return false
 }
 
+// needsJSONImports reports whether the generated file actually uses
+// `encoding/json` and `fmt`. JSON helpers are emitted per-message and per-
+// interface dispatcher, so a schema with neither does not need them — emitting
+// them would trip Go's strict "imported and not used" check.
+func (c *goContext) needsJSONImports() bool {
+	if !c.Options.GenerateJSON {
+		return false
+	}
+	return len(c.Schema.Messages) > 0 || len(c.Schema.Interfaces) > 0
+}
+
+// needsStringsImport reports whether the generated file uses the `strings`
+// package. Only per-message JSON helpers (`strings.Builder` in ToJSON) pull
+// it in; interface dispatchers do not.
+func (c *goContext) needsStringsImport() bool {
+	if !c.Options.GenerateJSON {
+		return false
+	}
+	return len(c.Schema.Messages) > 0
+}
+
 // hasOptionalPointer reports whether any message has an explicit
 // schema-level pointer field (`*Type`). The Go generator's
 // `jsonDecodePointer` is the only emitter that uses
@@ -1688,15 +1711,19 @@ package {{goPackage}}
 {{$extImports := externalImports}}{{if or needsCramberryImport $extImports}}
 import (
 {{- if needsCramberryImport}}
-{{- if generateJSON}}
 {{- if hasOptionalPointer}}
 	"bytes"
 {{- end}}
+{{- if needsJSONImports}}
 	"encoding/json"
 	"fmt"
-	"strings"
-
 {{- end}}
+{{- if needsStringsImport}}
+	"strings"
+{{- end}}
+{{- if needsJSONImports}}
+
+{{end}}
 	"github.com/blockberries/cramberry/pkg/cramberry"
 {{- end}}
 {{- range $extImports}}

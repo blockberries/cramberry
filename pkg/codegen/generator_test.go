@@ -154,6 +154,38 @@ func TestGoGeneratorInterface(t *testing.T) {
 	}
 }
 
+// TestGoGeneratorInterfaceOnlySchemaNoStringsImport guards against a regression
+// where a schema with only interfaces (no messages) emitted "strings" as an
+// import even though no per-message JSON helper that uses strings.Builder is
+// ever generated. The unused import tripped Go's strict import check and
+// broke downstream builds. See raspberry A1 work for the original symptom.
+func TestGoGeneratorInterfaceOnlySchemaNoStringsImport(t *testing.T) {
+	s := &schema.Schema{
+		Package: &schema.Package{Name: "test"},
+		// No Messages. Interface dispatch helpers use json/fmt (kept) but
+		// never strings.Builder.
+		Interfaces: []*schema.Interface{
+			{
+				Name: "Animal",
+				Implementations: []*schema.Implementation{
+					{TypeID: 128, Type: &schema.NamedType{Name: "Dog"}},
+				},
+			},
+		},
+	}
+
+	gen := NewGoGenerator()
+	var buf bytes.Buffer
+	if err := gen.Generate(&buf, s, DefaultOptions()); err != nil {
+		t.Fatalf("generate error: %v", err)
+	}
+	out := buf.String()
+
+	if strings.Contains(out, "\"strings\"") {
+		t.Error("interface-only schema should not import \"strings\"; got:\n" + out)
+	}
+}
+
 func TestGoGeneratorModifiers(t *testing.T) {
 	s := &schema.Schema{
 		Package: &schema.Package{Name: "test"},
