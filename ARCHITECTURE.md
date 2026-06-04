@@ -172,6 +172,14 @@ and doesn't need a runtime registration.
 messages on a `io.Writer` / `io.Reader`. Used by glueberry for both
 encrypted and unencrypted streams.
 
+For untrusted endpoints, construct the reader/iterator with explicit
+`Options` — `NewStreamReaderWithOptions(r, opts)` /
+`NewMessageIteratorWithOptions(r, opts)` — and pass
+`Options{Limits: SecureLimits}` (or a custom `Limits`). Each
+length-prefixed frame is then checked against `MaxMessageSize` (see
+[Limits](#limits)) before any allocation. The default constructors use
+`DefaultLimits`, which permits 64 MB per frame.
+
 ## Pool & zero-copy
 
 - `GetWriter()` / `PutWriter(w)` use a `sync.Pool` of writers, but only

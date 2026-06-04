@@ -964,6 +964,18 @@ func NewMessageIterator(r io.Reader) *MessageIterator {
 	}
 }
 
+// NewMessageIteratorWithOptions creates an iterator for reading delimited
+// messages with the given Options. This is the preferred constructor for
+// untrusted network endpoints — pass Options{Limits: SecureLimits} (or a
+// custom Limits with MaxMessageSize set) to reject oversized
+// length-prefixed frames before any allocation occurs. The default
+// constructor uses DefaultLimits, which permits 64 MB per frame.
+func NewMessageIteratorWithOptions(r io.Reader, opts Options) *MessageIterator {
+	return &MessageIterator{
+		reader: NewStreamReaderWithOptions(r, opts),
+	}
+}
+
 // Next reads the next message and returns true if successful.
 // Returns false on EOF (clean or otherwise) or on error.
 //
