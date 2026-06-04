@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blockberries/cramberry/pkg/schema"
+	"github.com/blockberries/cramberry/v2/pkg/schema"
 )
 
 func TestRustGeneratorSimpleMessage(t *testing.T) {

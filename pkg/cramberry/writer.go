@@ -4,7 +4,7 @@ import (
 	"math"
 	"sync"
 
-	"github.com/blockberries/cramberry/internal/wire"
+	"github.com/blockberries/cramberry/v2/internal/wire"
 )
 
 // Writer provides efficient binary encoding with buffer management.

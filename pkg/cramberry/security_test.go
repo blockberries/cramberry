@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blockberries/cramberry/internal/wire"
+	"github.com/blockberries/cramberry/v2/internal/wire"
 )
 
 // =============================================================================

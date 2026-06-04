@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/blockberries/cramberry/pkg/schema"
+	"github.com/blockberries/cramberry/v2/pkg/schema"
 )
 
 // SchemaBuilder converts collected type information into a Cramberry schema.

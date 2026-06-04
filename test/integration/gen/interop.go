@@ -4,7 +4,7 @@
 package interop
 
 import (
-	"github.com/blockberries/cramberry/pkg/cramberry"
+	"github.com/blockberries/cramberry/v2/pkg/cramberry"
 )
 
 // Status enum for testing enum serialization.

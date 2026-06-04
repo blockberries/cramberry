@@ -1,7 +1,7 @@
 package cramberry
 
 import (
-	"github.com/blockberries/cramberry/internal/wire"
+	"github.com/blockberries/cramberry/v2/internal/wire"
 )
 
 // Wire format

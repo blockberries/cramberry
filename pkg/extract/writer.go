@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/blockberries/cramberry/internal/atomicfile"
-	"github.com/blockberries/cramberry/pkg/schema"
+	"github.com/blockberries/cramberry/v2/internal/atomicfile"
+	"github.com/blockberries/cramberry/v2/pkg/schema"
 )
 
 // Extractor extracts schemas from Go packages.

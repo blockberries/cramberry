@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/blockberries/cramberry/internal/wire"
+	"github.com/blockberries/cramberry/v2/internal/wire"
 )
 
 // ValidationError represents a schema validation error.

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/blockberries/cramberry/internal/wire"
+	"github.com/blockberries/cramberry/v2/internal/wire"
 )
 
 // Marshal encodes a Go value into cramberry binary format.

@@ -50,11 +50,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/blockberries/cramberry/internal/atomicfile"
-	"github.com/blockberries/cramberry/pkg/codegen"
-	"github.com/blockberries/cramberry/pkg/cramberry"
-	"github.com/blockberries/cramberry/pkg/extract"
-	"github.com/blockberries/cramberry/pkg/schema"
+	"github.com/blockberries/cramberry/v2/internal/atomicfile"
+	"github.com/blockberries/cramberry/v2/pkg/codegen"
+	"github.com/blockberries/cramberry/v2/pkg/cramberry"
+	"github.com/blockberries/cramberry/v2/pkg/extract"
+	"github.com/blockberries/cramberry/v2/pkg/schema"
 )
 
 func main() {

@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/blockberries/cramberry/pkg/cramberry"
+	"github.com/blockberries/cramberry/v2/pkg/cramberry"
 )
 
 // LogEntry represents a log message.

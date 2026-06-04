@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (packaging)
+
+- **Go module path missing the `/v2` major-version suffix**: the module
+  declared `github.com/blockberries/cramberry` while publishing v2.x
+  tags, so Go's Semantic Import Versioning refused to fetch it
+  (`go get github.com/blockberries/cramberry/...` could not resolve
+  v2.0.0/v2.1.0). The module is now `github.com/blockberries/cramberry/v2`
+  and every internal import, the codegen-emitted runtime import, the
+  `-ldflags -X` version paths (Makefile + release workflow), the
+  codegen-check/parity-check throwaway modules, and the docs use the
+  `/v2` path. No wire-format or API change — consumers import
+  `github.com/blockberries/cramberry/v2/pkg/cramberry`. The previously
+  published v2.0.0 and v2.1.0 tags remain unfetchable (their `go.mod`
+  predates this fix); use the first v2 tag cut after this change.
+
 ## [2.1.0] - 2026-06-04
 
 ### Added (streaming)
