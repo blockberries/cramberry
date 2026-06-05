@@ -75,7 +75,7 @@ func encodeValueWithRegistry(w *Writer, v reflect.Value, reg *Registry) error {
 	}
 
 	// Dereference pointers
-	for v.Kind() == reflect.Ptr {
+	for v.Kind() == reflect.Pointer {
 		if v.IsNil() {
 			w.WriteNil()
 			return w.Err()
@@ -480,7 +480,7 @@ func needsBodyLengthPrefix(v reflect.Value) bool {
 // needsBodyLengthPrefixForType is the type-only version used by the
 // per-field cache populated in parseStructInfo.
 func needsBodyLengthPrefixForType(t reflect.Type) bool {
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	switch t.Kind() {
@@ -536,7 +536,7 @@ func computeWireType(t reflect.Type) byte {
 		return WireFixed64 // 2x float32 = 8 bytes
 	case reflect.Complex128, reflect.String, reflect.Slice, reflect.Array, reflect.Map, reflect.Struct:
 		return WireBytes
-	case reflect.Ptr:
+	case reflect.Pointer:
 		// A pointer field uses the wire type of its pointee, NOT
 		// WireBytes. Treating *int32 as WireBytes would make
 		// reflection emit `tag(WireBytes) | length | svarint` while
@@ -743,7 +743,7 @@ func isOmittableZero(v reflect.Value) bool {
 		return v.Complex() == 0
 	case reflect.String:
 		return v.Len() == 0
-	case reflect.Ptr:
+	case reflect.Pointer:
 		return v.IsNil()
 	case reflect.Slice:
 		// []byte and other repeated scalar/composite slices: empty/nil
@@ -780,7 +780,7 @@ func isZeroValueWithDepth(v reflect.Value, depth int) bool {
 		return v.IsNil() || v.Len() == 0
 	case reflect.Array:
 		return v.Len() == 0
-	case reflect.Ptr, reflect.Interface:
+	case reflect.Pointer, reflect.Interface:
 		return v.IsNil()
 	case reflect.Struct:
 		// Only consider exported fields. The encoder skips unexported fields,

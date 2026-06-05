@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (CI)
+
+- **golangci-lint pinned to `v2.8.0`** (was `latest`). `latest` pulled in
+  a newer govet `inline` analyzer that flagged deprecated `reflect.Ptr`
+  usage the locally-installed linter did not, so CI diverged from
+  `make check`. Pinning restores reproducibility against the local
+  toolchain.
+- **`reflect.Ptr` → `reflect.Pointer`** across `marshal.go`,
+  `registry.go`, and `unmarshal.go` (15 sites). No behavior change —
+  `reflect.Ptr` is a deprecated alias for the same constant (the compiled
+  artifact is byte-identical).
+
 ## [2.1.1] - 2026-06-04
 
 ### Fixed (packaging)

@@ -13,7 +13,7 @@ func Unmarshal(data []byte, v any) error {
 // UnmarshalWithOptions decodes data with the specified options.
 func UnmarshalWithOptions(data []byte, v any, opts Options) error {
 	rv := reflect.ValueOf(v)
-	if rv.Kind() != reflect.Ptr {
+	if rv.Kind() != reflect.Pointer {
 		return ErrNotPointer
 	}
 	if rv.IsNil() {
@@ -34,7 +34,7 @@ func decodeValue(r *Reader, v reflect.Value) error {
 	}
 
 	// Handle pointers specially
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		return decodePointer(r, v)
 	}
 
@@ -463,7 +463,7 @@ func sizeValue(v reflect.Value, opts Options) int {
 	}
 
 	// Dereference pointers
-	for v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
+	for v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface {
 		if v.IsNil() {
 			return 1 // nil marker
 		}

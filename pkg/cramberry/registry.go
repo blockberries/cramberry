@@ -120,7 +120,7 @@ func (r *Registry) registerLocked(t reflect.Type, id TypeID) error {
 	}
 
 	// Get the concrete type (dereference pointers)
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 
@@ -204,7 +204,7 @@ func (r *Registry) RegisterImplementation(interfaceType, implType reflect.Type) 
 	defer r.mu.Unlock()
 
 	// Get concrete implementation type
-	for implType.Kind() == reflect.Ptr {
+	for implType.Kind() == reflect.Pointer {
 		implType = implType.Elem()
 	}
 
@@ -242,7 +242,7 @@ func (r *Registry) LookupType(t reflect.Type) (*TypeRegistration, bool) {
 	defer r.mu.RUnlock()
 
 	// Dereference pointers
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 
@@ -266,12 +266,12 @@ func (r *Registry) TypeIDFor(v any) TypeID {
 	}
 
 	rv := reflect.ValueOf(v)
-	if rv.Kind() == reflect.Ptr && rv.IsNil() {
+	if rv.Kind() == reflect.Pointer && rv.IsNil() {
 		return TypeIDNil
 	}
 
 	t := rv.Type()
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 
@@ -365,7 +365,7 @@ func RegisterOrGet[T any]() TypeID {
 // ID if the type is already registered.
 func (r *Registry) RegisterOrGetType(t reflect.Type) TypeID {
 	// Get the concrete type (dereference pointers)
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 
@@ -421,7 +421,7 @@ func RegisterOrGetWithID[T any](id TypeID) TypeID {
 // Panics if id is already in use by a different type. See RegisterOrGetWithID.
 func (r *Registry) RegisterOrGetTypeWithID(t reflect.Type, id TypeID) TypeID {
 	// Get the concrete type (dereference pointers)
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 

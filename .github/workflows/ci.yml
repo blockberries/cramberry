@@ -65,7 +65,10 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          # Pinned (not `latest`) so CI matches the version developers run
+          # locally; `latest` silently pulled in new analyzers that flagged
+          # code passing local lint, diverging CI from `make check`.
+          version: v2.8.0
           args: --timeout=5m
 
   # ---------------------------------------------------------------------
